@@ -536,8 +536,7 @@ async def get_admin_statistics(
             connection.close()
 
 
-
-@router.get("/admin/dashboard-stats", summary="Get admin dashboard statistics")
+@router.get("/dashboard-stats", summary="Get admin dashboard statistics")
 async def get_dashboard_stats(current_user: dict = Depends(require_admin)):
     """Get statistics for admin dashboard"""
     connection = None
@@ -614,7 +613,7 @@ async def get_dashboard_stats(current_user: dict = Depends(require_admin)):
             connection.close()
 
 
-@router.get("/admin/recent-activity", summary="Get recent platform activity")
+@router.get("/recent-activity", summary="Get recent platform activity")
 async def get_recent_activity(
     limit: int = 10,
     current_user: dict = Depends(require_admin)
@@ -733,70 +732,6 @@ async def get_recent_activity(
         if connection:
             connection.close()
 
-
-@router.get("/tasks/pending", summary="Get pending tasks")
-async def get_pending_tasks(
-    limit: int = 5,
-    current_user: dict = Depends(require_admin)
-):
-    """Get pending tasks for admin dashboard"""
-    connection = None
-    cursor = None
-    
-    try:
-        connection = get_db_connection()
-        cursor = connection.cursor(pymysql.cursors.DictCursor)
-        
-        cursor.execute("""
-            SELECT 
-                t.task_id,
-                t.task_title,
-                t.task_description,
-                t.priority,
-                t.status,
-                t.due_date,
-                t.created_at,
-                u.full_name as assigned_to_name,
-                c.full_name as client_name
-            FROM tasks t
-            LEFT JOIN users u ON t.assigned_to = u.user_id
-            LEFT JOIN users c ON t.client_id = c.user_id
-            WHERE t.status IN ('pending', 'in_progress')
-            ORDER BY 
-                CASE t.priority 
-                    WHEN 'urgent' THEN 1 
-                    WHEN 'high' THEN 2 
-                    WHEN 'medium' THEN 3 
-                    WHEN 'low' THEN 4 
-                END,
-                t.due_date ASC
-            LIMIT %s
-        """, (limit,))
-        
-        tasks = cursor.fetchall()
-        
-        # Convert datetime objects
-        for task in tasks:
-            if task.get('due_date'):
-                task['due_date'] = task['due_date'].isoformat()
-            if task.get('created_at'):
-                task['created_at'] = task['created_at'].isoformat()
-        
-        return {
-            "success": True,
-            "tasks": tasks
-        }
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch pending tasks: {str(e)}"
-        )
-    finally:
-        if cursor:
-            cursor.close()
-        if connection:
-            connection.close()
 
 
 # ============================================
