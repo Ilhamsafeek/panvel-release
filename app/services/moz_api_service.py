@@ -485,7 +485,7 @@ class MozAPIService:
             import json
             analysis = json.loads(response_content)
             
-            logger.info(f"✅ AI keyword analysis complete:")
+            logger.info(f" AI keyword analysis complete:")
             logger.info(f"   Keyword: {keyword}")
             logger.info(f"   Volume: {analysis.get('search_volume', 0):,}")
             logger.info(f"   Difficulty: {analysis.get('difficulty', 0)}/100")

@@ -1027,14 +1027,14 @@ async def create_audience_segment(
             segment.platform,
             json.dumps(segment.segment_criteria),
             segment.estimated_size,
-            json.dumps(segment.contacts_data) if segment.contacts_data else None,  # ✅ Save contacts_data as JSON
+            json.dumps(segment.contacts_data) if segment.contacts_data else None,  #  Save contacts_data as JSON
             current_user['user_id']
         ))
         
         segment_id = cursor.lastrowid
         connection.commit()
         
-        print(f"✅ Created segment {segment_id} with {segment.estimated_size} contacts")
+        print(f" Created segment {segment_id} with {segment.estimated_size} contacts")
         
         return {
             "success": True,
@@ -1244,14 +1244,14 @@ async def get_segment(
             WHERE s.segment_id = %s
         """
         cursor.execute(query, (segment_id,))
-        segment = cursor.fetchone()  # ✅ Already a dictionary!
+        segment = cursor.fetchone()  #  Already a dictionary!
         
         print(f"📦 Raw segment: {segment}")
         
         if not segment:
             raise HTTPException(status_code=404, detail="Segment not found")
         
-        # ✅ Parse JSON fields (segment is already a dict)
+        #  Parse JSON fields (segment is already a dict)
         try:
             if segment.get('segment_criteria') and isinstance(segment['segment_criteria'], str):
                 segment['segment_criteria'] = json.loads(segment['segment_criteria'])
@@ -1266,7 +1266,7 @@ async def get_segment(
                 if isinstance(segment['contacts_data'], str):
                     print(f"📞 Parsing contacts_data: {segment['contacts_data']}")
                     segment['contacts_data'] = json.loads(segment['contacts_data'])
-                    print(f"✅ Parsed to: {segment['contacts_data']}")
+                    print(f" Parsed to: {segment['contacts_data']}")
             else:
                 segment['contacts_data'] = []
         except Exception as e:
@@ -1277,7 +1277,7 @@ async def get_segment(
         if segment.get('created_at'):
             segment['created_at'] = segment['created_at'].isoformat()
         
-        print(f"✅ Returning segment with {len(segment.get('contacts_data', []))} contacts")
+        print(f" Returning segment with {len(segment.get('contacts_data', []))} contacts")
         
         return {
             "success": True,

@@ -247,7 +247,7 @@
         background: #e2e8f0;
     }
 
-   
+
 
     .calendar-day {
         background: white;
@@ -518,7 +518,7 @@
     }
 
     .modal-header {
-        padding: 2rem;
+        padding: 1rem;
         border-bottom: 2px solid #e2e8f0;
         display: flex;
         justify-content: space-between;
@@ -1445,7 +1445,7 @@
         letter-spacing: 0.5px;
     }
 
-   
+
 
     .calendar-day:hover {
         background: #f8fafc;
@@ -1747,6 +1747,143 @@
         display: inline-block;
     }
 </style>
+
+
+<style>
+    .platform-connect-card {
+        padding: 2rem 1rem;
+        text-align: center;
+        background: white;
+        border: 2px solid #e2e8f0;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .platform-connect-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 24px rgba(153, 38, 243, 0.15);
+        border-color: #9926F3;
+    }
+
+    .platform-connect-card h4 {
+        margin: 1rem 0 0.25rem 0;
+        font-size: 1.1rem;
+        color: #1e293b;
+    }
+
+    .platform-connect-card p {
+        margin: 0;
+        font-size: 0.9rem;
+        color: #64748b;
+    }
+
+    .connection-step {
+        animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .instruction-box {
+        padding: 1.5rem;
+        background: white;
+        border-left: 4px solid #9926F3;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+    }
+
+    .instruction-box h4 {
+        margin-top: 0;
+        color: #1e293b;
+        font-size: 1rem;
+    }
+
+    .instruction-box ol,
+    .instruction-box ul {
+        margin: 0.5rem 0;
+        padding-left: 1.5rem;
+    }
+
+    .instruction-box li {
+        margin: 0.5rem 0;
+        color: #475569;
+        line-height: 1.6;
+    }
+
+    .instruction-box code {
+        background: #f1f5f9;
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+        font-family: 'Courier New', monospace;
+        font-size: 0.9em;
+        color: #9926F3;
+    }
+
+    .warning-box {
+        padding: 1rem;
+        background: #fef3c7;
+        border-left: 4px solid #f59e0b;
+        border-radius: 8px;
+        margin: 1rem 0;
+    }
+
+    .warning-box p {
+        margin: 0;
+        color: #92400e;
+    }
+
+    .info-box {
+        padding: 1rem;
+        background: #dbeafe;
+        border-left: 4px solid #3b82f6;
+        border-radius: 8px;
+        margin: 1rem 0;
+    }
+
+    .info-box p {
+        margin: 0;
+        color: #1e40af;
+    }
+
+    /* Account Connection Modal - Centered */
+#accountConnectionModal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    z-index: 1001;
+    overflow-y: auto;
+}
+
+#accountConnectionModal.show,
+#accountConnectionModal[style*="display: flex"] {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+}
+
+#accountConnectionModal .modal-content {
+    margin: auto;
+}
+</style>
+
+
+
 {% endblock %}
 
 {% block content %}
@@ -1756,6 +1893,34 @@
         <div>
             <h1><i class="ti ti-calendar-event"></i> Social Media Command Center</h1>
             <p>Multi-platform scheduling with AI-powered best time recommendations</p>
+        </div>
+    </div>
+
+
+    <!-- Connected Accounts Section -->
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="card-header"
+            style="background: linear-gradient(135deg, #9926F3, #1DD8FC); color: white; padding: 1rem 1.5rem; border-radius: 12px 12px 0 0;">
+            <h3 style="margin: 0; font-size: 1.1rem;"><i class="ti ti-plug-connected"></i> Connected Social Media
+                Accounts</h3>
+        </div>
+        <div class="card-body" style="padding: 1.5rem;">
+            <div id="connectedAccountsDisplay" style="min-height: 50px;">
+                <p style="color: #64748b;">Loading connected accounts...</p>
+            </div>
+
+            <button class="btn btn-primary" onclick="openAccountConnectionModal()" style="margin-top: 1rem;">
+                <i class="ti ti-plus"></i> Connect New Account
+            </button>
+
+            <div
+                style="margin-top: 1rem; padding: 1rem; background: #f8fafc; border-radius: 8px; border-left: 4px solid #3b82f6;">
+                <p style="margin: 0; color: #475569; font-size: 0.9rem;">
+                    <i class="ti ti-info-circle"></i> <strong>Note:</strong> You need to connect your social media
+                    accounts to publish posts directly from PanvelIQ.
+                    Click "Connect New Account" to set up platform connections using OAuth.
+                </p>
+            </div>
         </div>
     </div>
 
@@ -1880,6 +2045,77 @@
             <div class="loading-state">
                 <div class="loader-spinner"></div>
                 <p>Loading posts...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- Account Connection Modal -->
+<div id="accountConnectionModal" class="modal">
+    <div class="modal-content" style="max-width: 700px;">
+        <div class="modal-header">
+            <h2 id="connectionModalTitle">
+                <i class="ti ti-plug-connected"></i> Connect Social Media Account
+            </h2>
+            <button class="modal-close" onclick="closeAccountConnectionModal()">
+                <i class="ti ti-x"></i>
+            </button>
+        </div>
+
+        <div class="modal-body" style="padding: 2rem;">
+            <!-- Platform Selection -->
+            <div id="platformSelectionStep" class="connection-step">
+                <h3 style="margin-bottom: 1.5rem; color: #1e293b;">Select Platform to Connect</h3>
+
+                <div class="platform-connection-grid"
+                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
+                    <div class="platform-connect-card" onclick="showPlatformInstructions('instagram')"
+                        data-platform="instagram">
+                        <i class="ti ti-brand-instagram" style="font-size: 3rem; color: #E1306C;"></i>
+                        <h4>Instagram</h4>
+                        <p>Business Account</p>
+                    </div>
+
+                    <div class="platform-connect-card" onclick="showPlatformInstructions('facebook')"
+                        data-platform="facebook">
+                        <i class="ti ti-brand-facebook" style="font-size: 3rem; color: #1877F2;"></i>
+                        <h4>Facebook</h4>
+                        <p>Page</p>
+                    </div>
+
+                    <div class="platform-connect-card" onclick="showPlatformInstructions('linkedin')"
+                        data-platform="linkedin">
+                        <i class="ti ti-brand-linkedin" style="font-size: 3rem; color: #0A66C2;"></i>
+                        <h4>LinkedIn</h4>
+                        <p>Profile/Company</p>
+                    </div>
+
+                    <div class="platform-connect-card" onclick="showPlatformInstructions('twitter')"
+                        data-platform="twitter">
+                        <i class="ti ti-brand-twitter" style="font-size: 3rem; color: #1DA1F2;"></i>
+                        <h4>Twitter/X</h4>
+                        <p>Account</p>
+                    </div>
+
+                    <div class="platform-connect-card" onclick="showPlatformInstructions('pinterest')"
+                        data-platform="pinterest">
+                        <i class="ti ti-brand-pinterest" style="font-size: 3rem; color: #E60023;"></i>
+                        <h4>Pinterest</h4>
+                        <p>Board</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Platform-Specific Instructions -->
+            <div id="platformInstructionsStep" class="connection-step" style="display: none;">
+                <button class="btn btn-secondary" onclick="backToPlatformSelection()" style="margin-bottom: 1rem;">
+                    <i class="ti ti-arrow-left"></i> Back to Platform Selection
+                </button>
+
+                <div id="instructionsContent"></div>
+
+             
             </div>
         </div>
     </div>
@@ -2040,10 +2276,10 @@
         </div>
     </div>
 </div>
+z
 
 
-
-<script src="/static/js/social-media.js"></script>
+<script src="/static/js/social-media-c.js"></script>
 
 <script>
     // Ensure functions are bound after DOM and script are loaded
@@ -2067,7 +2303,7 @@
     window.editPost = editPost;
     window.deletePost = deletePost;
     window.savePost = savePost;
-    // ... etc for other functions called from HTML
+    
 
 </script>
 

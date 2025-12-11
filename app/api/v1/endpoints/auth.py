@@ -179,7 +179,15 @@ async def register(user: UserCreate):
         
         connection.commit()
         user_id = cursor.lastrowid
-        
+
+        cursor.execute("""
+            UPDATE users SET status = 'pending', email_verified = FALSE 
+            WHERE user_id = %s
+        """, (user_id,))
+
+        otp_service = OTPService()
+        otp_service.generate_and_send_otp(email=user.email, purpose='email_verification')
+                
         return {
             "user_id": user_id,
             "email": user.email,
@@ -516,7 +524,7 @@ async def reset_password(request: ResetPasswordRequest):
         
         connection.commit()
         
-        print(f"✅ Password reset successful for user: {token_data['email']}")
+        print(f" Password reset successful for user: {token_data['email']}")
         
         # TODO: Send confirmation email
         # send_password_changed_email(token_data['email'], token_data['full_name'])

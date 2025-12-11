@@ -33,7 +33,20 @@ def get_db_connection():
             detail=f"Database connection failed: {str(e)}"
         )
 
-
+def decode_token(token: str) -> Optional[dict]:
+    """Decode and verify JWT token"""
+    try:
+        from jose import jwt, JWTError
+        payload = jwt.decode(
+            token, 
+            settings.SECRET_KEY, 
+            algorithms=[settings.ALGORITHM]
+        )
+        return payload
+    except JWTError as e:
+        print(f"Token decode error: {str(e)}")
+        return None
+        
 async def get_current_user(
     request: Request,
     token: Optional[str] = Depends(oauth2_scheme)

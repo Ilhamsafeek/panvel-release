@@ -1170,7 +1170,7 @@ async def startup_event():
     print(f"🔐 Login page: http://{settings.HOST}:{settings.PORT}/auth/login")
     print(f"📝 Register page: http://{settings.HOST}:{settings.PORT}/auth/register")
     print(f"📦 Package selection: http://{settings.HOST}:{settings.PORT}/onboarding/select-package")  # NEW
-    print(f"✅ Verification: http://{settings.HOST}:{settings.PORT}/onboarding/verification")  # NEW
+    print(f" Verification: http://{settings.HOST}:{settings.PORT}/onboarding/verification")  # NEW
     print(f"👨‍💼 Admin verifications: http://{settings.HOST}:{settings.PORT}/admin/onboarding-verifications")  # NEW
 
 

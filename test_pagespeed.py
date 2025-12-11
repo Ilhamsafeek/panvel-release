@@ -37,7 +37,7 @@ try:
         # Convert to 0-100 scale
         pagespeed_score = round(score * 100, 1)
         
-        print(f"\n✅ SUCCESS!")
+        print(f"\n SUCCESS!")
         print(f"PageSpeed Score: {pagespeed_score}/100")
         print(f"API is working correctly!")
     else:

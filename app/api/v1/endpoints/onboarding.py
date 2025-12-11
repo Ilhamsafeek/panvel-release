@@ -111,7 +111,7 @@ async def get_packages():
         cursor.execute(query)
         packages = cursor.fetchall()
         
-        print(f"✅ Found {len(packages)} packages")
+        print(f" Found {len(packages)} packages")
         
         if len(packages) == 0:
             return {
@@ -576,7 +576,7 @@ async def verify_onboarding(
                 (session['user_id'],)
             )
             
-            print(f"✅ User {session['user_id']} APPROVED - Status set to 'active'")
+            print(f" User {session['user_id']} APPROVED - Status set to 'active'")
             
         else:
             # REJECTION: Set user status to 'inactive'

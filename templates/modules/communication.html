@@ -2258,20 +2258,20 @@ jane@example.com"></textarea>
         const modal = document.getElementById('whatsappModal');
         const form = document.getElementById('whatsappForm');
 
-        // ✅ Reset form
+        //  Reset form
         form.reset();
 
-        // ✅ Clear edit mode data
+        //  Clear edit mode data
         delete form.dataset.editMode;
         delete form.dataset.campaignId;
 
-        // ✅ Clear recipient count
+        //  Clear recipient count
         const recipientCount = document.getElementById('wa_recipient_count');
         if (recipientCount) {
             recipientCount.textContent = '0 recipients selected. No segments yet? Click + to create one.';
         }
 
-        // ✅ Show modal
+        //  Show modal
         modal.classList.add('show');
     }
 
@@ -2279,25 +2279,25 @@ jane@example.com"></textarea>
         const modal = document.getElementById('emailModal');
         const form = document.getElementById('emailForm');
 
-        // ✅ Reset form
+        //  Reset form
         form.reset();
 
-        // ✅ Clear edit mode data
+        //  Clear edit mode data
         delete form.dataset.editMode;
         delete form.dataset.campaignId;
 
-        // ✅ Reset Quill editor
+        //  Reset Quill editor
         if (emailEditor) {
             emailEditor.setContents([]);
         }
 
-        // ✅ Clear recipient count
+        //  Clear recipient count
         const recipientCount = document.getElementById('email_recipient_count');
         if (recipientCount) {
             recipientCount.textContent = '0 recipients selected';
         }
 
-        // ✅ Show modal
+        //  Show modal
         modal.classList.add('show');
     }
 
@@ -2426,7 +2426,7 @@ jane@example.com"></textarea>
 
             console.log('🔍 Step 1: Selected segment ID:', segmentId);
 
-            // ✅ FETCH ACTUAL RECIPIENTS FROM SEGMENT
+            //  FETCH ACTUAL RECIPIENTS FROM SEGMENT
             const token = localStorage.getItem('access_token');
             const fetchUrl = `${API_BASE}/segments/${segmentId}`;
 
@@ -2480,22 +2480,22 @@ jane@example.com"></textarea>
 
                     if (contact.type === 'phone' && contact.value) {
                         phone = contact.value;
-                        console.log(`   ✅ Found phone via type/value: ${phone}`);
+                        console.log(`    Found phone via type/value: ${phone}`);
                     } else if (contact.phone) {
                         phone = contact.phone;
-                        console.log(`   ✅ Found phone via phone field: ${phone}`);
+                        console.log(`    Found phone via phone field: ${phone}`);
                     } else if (contact.Phone) {
                         phone = contact.Phone;
-                        console.log(`   ✅ Found phone via Phone field: ${phone}`);
+                        console.log(`    Found phone via Phone field: ${phone}`);
                     } else if (contact.mobile) {
                         phone = contact.mobile;
-                        console.log(`   ✅ Found phone via mobile field: ${phone}`);
+                        console.log(`    Found phone via mobile field: ${phone}`);
                     } else if (contact.Mobile) {
                         phone = contact.Mobile;
-                        console.log(`   ✅ Found phone via Mobile field: ${phone}`);
+                        console.log(`    Found phone via Mobile field: ${phone}`);
                     } else if (typeof contact === 'string' && !contact.includes('@')) {
                         phone = contact;
-                        console.log(`   ✅ Contact is string (phone): ${phone}`);
+                        console.log(`    Contact is string (phone): ${phone}`);
                     } else {
                         console.log(`   ❌ No phone found in contact`);
                     }
@@ -2508,8 +2508,8 @@ jane@example.com"></textarea>
                 console.log('❌ contacts_data is null/undefined');
             }
 
-            console.log('✅ FINAL: recipient_list:', recipientList);
-            console.log('✅ FINAL: recipient_list length:', recipientList.length);
+            console.log(' FINAL: recipient_list:', recipientList);
+            console.log(' FINAL: recipient_list length:', recipientList.length);
 
             if (recipientList.length === 0) {
                 showNotification('No phone numbers found in selected segment', 'error');
@@ -2579,7 +2579,7 @@ jane@example.com"></textarea>
                 campaign_name: document.getElementById('email_campaign_name').value,
                 subject_line: document.getElementById('email_subject').value,
                 email_body: emailEditor ? emailEditor.root.innerHTML : '',
-                segment_id: parseInt(segmentId),  // ✅ Send segment_id instead
+                segment_id: parseInt(segmentId),  //  Send segment_id instead
                 schedule_type: document.getElementById('email_schedule_type').value,
                 scheduled_at: document.getElementById('email_scheduled_at').value || null,
                 is_ab_test: document.getElementById('email_ab_test').checked
@@ -2660,7 +2660,7 @@ jane@example.com"></textarea>
             const result = await response.json();
 
             if (result.success) {
-                showNotification(`✅ Segment created with ${csvData.length} contacts!`, 'success');
+                showNotification(` Segment created with ${csvData.length} contacts!`, 'success');
                 closeModal('segmentModal');
                 loadAudienceSegments();
                 loadSegmentsForDropdown(); // Reload dropdowns

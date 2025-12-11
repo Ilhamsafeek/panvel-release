@@ -105,6 +105,7 @@
         text-align: center;
         cursor: pointer;
         transition: all 0.2s;
+        position: relative;
     }
 
     .platform-option:hover {
@@ -117,6 +118,47 @@
         background: linear-gradient(135deg, rgba(153, 38, 243, 0.1), rgba(29, 216, 252, 0.1));
     }
 
+
+    .platform-option.active::after {
+        content: "✓";
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        width: 20px;
+        height: 20px;
+        background: linear-gradient(135deg, #9926F3, #1DD8FC);
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        font-weight: bold;
+    }
+
+    .selected-platforms-info {
+        margin-top: 0.75rem;
+        padding: 0.75rem;
+        background: #f8fafc;
+        border-radius: 6px;
+        border: 1px solid #e2e8f0;
+        font-size: 0.875rem;
+        color: #64748b;
+        display: none;
+    }
+
+
+    .selected-platforms-info.show {
+        display: block;
+    }
+
+    .selected-platforms-info strong {
+        color: #9926F3;
+        font-weight: 600;
+    }
+
+
+
     .platform-option i {
         font-size: 1.5rem;
         margin-bottom: 0.5rem;
@@ -127,6 +169,20 @@
         font-size: 0.85rem;
         font-weight: 500;
         color: #334155;
+    }
+
+
+    .platform-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.25rem 0.5rem;
+        background: linear-gradient(135deg, rgba(153, 38, 243, 0.1), rgba(29, 216, 252, 0.1));
+        border-radius: 12px;
+        font-size: 0.75rem;
+        margin-right: 0.5rem;
+        margin-top: 0.25rem;
+        display: inline-block;
     }
 
     .content-type-selector {
@@ -453,6 +509,125 @@
         }
     }
 </style>
+
+
+<style>
+    .platform-option {
+        padding: 1rem;
+        border: 2px solid #e2e8f0;
+        border-radius: 8px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.2s;
+        position: relative;
+        /* IMPORTANT: Make sure clicks work */
+        pointer-events: auto !important;
+        user-select: none;
+    }
+
+    .platform-option:hover {
+        border-color: #9926F3;
+        background: #faf5ff;
+        transform: translateY(-2px);
+    }
+
+    .platform-option.active {
+        border-color: #9926F3;
+        background: linear-gradient(135deg, rgba(153, 38, 243, 0.15), rgba(29, 216, 252, 0.15));
+        box-shadow: 0 4px 12px rgba(153, 38, 243, 0.2);
+    }
+
+    /* Checkmark for selected platforms */
+    .platform-option.active::before {
+        content: "✓";
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        width: 24px;
+        height: 24px;
+        background: linear-gradient(135deg, #9926F3, #1DD8FC);
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.875rem;
+        font-weight: bold;
+        line-height: 24px;
+        text-align: center;
+    }
+
+    .platform-option i {
+        font-size: 1.75rem;
+        margin-bottom: 0.5rem;
+        display: block;
+        pointer-events: none;
+        /* Prevent icon from blocking clicks */
+    }
+
+    .platform-option span {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #334155;
+        display: block;
+        pointer-events: none;
+        /* Prevent text from blocking clicks */
+    }
+
+    /* Selected platforms info box */
+    .selected-platforms-info {
+        margin-top: 0.75rem;
+        padding: 0.75rem;
+        background: linear-gradient(135deg, rgba(153, 38, 243, 0.05), rgba(29, 216, 252, 0.05));
+        border-radius: 8px;
+        border: 1px solid #9926F3;
+        font-size: 0.875rem;
+        color: #334155;
+        display: none;
+        animation: slideDown 0.3s ease;
+    }
+
+    @keyframes slideDown {
+        from {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .selected-platforms-info.show {
+        display: block;
+    }
+
+    .selected-platforms-info strong {
+        color: #9926F3;
+        font-weight: 600;
+    }
+
+    .platform-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.375rem 0.75rem;
+        background: linear-gradient(135deg, rgba(153, 38, 243, 0.1), rgba(29, 216, 252, 0.1));
+        border: 1px solid rgba(153, 38, 243, 0.3);
+        border-radius: 16px;
+        font-size: 0.75rem;
+        margin-right: 0.5rem;
+        margin-top: 0.25rem;
+        color: #9926F3;
+        font-weight: 500;
+    }
+
+    .platform-badge i {
+        font-size: 1rem;
+        margin: 0;
+    }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -476,7 +651,7 @@
 
             <!-- Platform Selection -->
             <div class="form-group">
-                <label>Select Platform</label>
+                <label>Select Platforms</label>
                 <div class="platform-selector" id="platformSelector">
                     <div class="platform-option" data-platform="instagram">
                         <i class="ti ti-brand-instagram"></i>
@@ -498,8 +673,16 @@
                         <i class="ti ti-brand-pinterest"></i>
                         <span>Pinterest</span>
                     </div>
+                    <div class="platform-option" data-platform="youtube">
+                        <i class="ti ti-brand-youtube"></i>
+                        <span>YouTube</span>
+                    </div>
+                </div>
+                <div class="selected-platforms-info" id="selectedPlatformsInfo">
+                    <strong>Selected:</strong> <span id="selectedPlatformsList">None</span>
                 </div>
             </div>
+
 
             <!-- Content Type Selection -->
             <div class="form-group">
@@ -606,5 +789,132 @@
 {% endblock %}
 
 {% block extra_js %}
+
+<script>
+// CONTENT INTELLIGENCE - MULTIPLE PLATFORM SELECTION
+// This runs immediately, no waiting
+
+(function() {
+    'use strict';
+    
+    console.log('🚀 Initializing Platform Selector...');
+    
+    // Global state for selected platforms
+    window.selectedPlatforms = [];
+    
+    // Platform name mappings
+    const platformNames = {
+        instagram: { name: 'Instagram', icon: 'ti-brand-instagram' },
+        facebook: { name: 'Facebook', icon: 'ti-brand-facebook' },
+        linkedin: { name: 'LinkedIn', icon: 'ti-brand-linkedin' },
+        twitter: { name: 'Twitter', icon: 'ti-brand-twitter' },
+        pinterest: { name: 'Pinterest', icon: 'ti-brand-pinterest' },
+        youtube: { name: 'YouTube', icon: 'ti-brand-youtube' }
+    };
+    
+    // Initialize platform selector
+    function initPlatformSelector() {
+        const platformOptions = document.querySelectorAll('.platform-option');
+        
+        console.log('Found', platformOptions.length, 'platform options');
+        
+        if (platformOptions.length === 0) {
+            console.error('❌ No platform options found!');
+            return;
+        }
+        
+        platformOptions.forEach(function(option) {
+            // Remove any existing listeners
+            const newOption = option.cloneNode(true);
+            option.parentNode.replaceChild(newOption, option);
+            
+            // Add new listener
+            newOption.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const platform = this.getAttribute('data-platform');
+                console.log('🔘 Platform clicked:', platform);
+                
+                // Toggle active class
+                this.classList.toggle('active');
+                
+                // Update selected platforms array
+                const index = window.selectedPlatforms.indexOf(platform);
+                
+                if (this.classList.contains('active')) {
+                    // Add platform
+                    if (index === -1) {
+                        window.selectedPlatforms.push(platform);
+                        console.log('✅ Added:', platform);
+                    }
+                } else {
+                    // Remove platform
+                    if (index > -1) {
+                        window.selectedPlatforms.splice(index, 1);
+                        console.log('❌ Removed:', platform);
+                    }
+                }
+                
+                console.log('📋 Selected platforms:', window.selectedPlatforms);
+                
+                // Update display
+                updateSelectedDisplay();
+            });
+        });
+        
+        console.log('✅ Platform selector initialized');
+    }
+    
+    // Update selected platforms display
+    function updateSelectedDisplay() {
+        const infoDiv = document.getElementById('selectedPlatformsInfo');
+        const listSpan = document.getElementById('selectedPlatformsList');
+        
+        if (!infoDiv || !listSpan) {
+            console.error('❌ Info elements not found');
+            return;
+        }
+        
+        if (window.selectedPlatforms.length === 0) {
+            infoDiv.classList.remove('show');
+            listSpan.textContent = 'None';
+        } else {
+            infoDiv.classList.add('show');
+            
+            // Create badges
+            const badges = window.selectedPlatforms.map(function(platform) {
+                const info = platformNames[platform];
+                return '<span class="platform-badge">' +
+                       '<i class="' + info.icon + '"></i>' +
+                       info.name +
+                       '</span>';
+            }).join('');
+            
+            listSpan.innerHTML = badges;
+        }
+    }
+    
+    // Initialize when DOM is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initPlatformSelector);
+    } else {
+        initPlatformSelector();
+    }
+    
+    // Also try after a small delay to ensure everything is loaded
+    setTimeout(initPlatformSelector, 100);
+    
+})();
+
+// Make function available globally for generateContent()
+function getSelectedPlatforms() {
+    return window.selectedPlatforms || [];
+}
+
+console.log('✅ Platform selection script loaded');
+</script>
+
+
 <script src="/static/js/content.js"></script>
 {% endblock %}

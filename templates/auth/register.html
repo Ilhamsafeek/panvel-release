@@ -891,7 +891,7 @@
                     throw new Error(registerData.detail || 'Registration failed');
                 }
 
-                console.log('✅ Registration successful!');
+                console.log(' Registration successful!');
                 console.log('User ID:', registerData.user_id);
 
                 // Step 2: Automatically log in the user
@@ -920,12 +920,12 @@
                     return;
                 }
 
-                console.log('✅ Auto-login successful!');
+                console.log(' Auto-login successful!');
 
                 // Step 3: Store the access token
                 if (loginData.access_token) {
                     localStorage.setItem('access_token', loginData.access_token);
-                    console.log('✅ Token stored in localStorage');
+                    console.log(' Token stored in localStorage');
                     console.log('Token preview:', loginData.access_token.substring(0, 30) + '...');
                 } else {
                     throw new Error('No access token received');

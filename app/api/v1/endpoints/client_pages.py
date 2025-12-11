@@ -523,7 +523,7 @@ async def send_message(
         message_id = cursor.lastrowid
         connection.commit()
         
-        print(f"✅ Message sent: ID={message_id}, From={current_user['user_id']}, To={message.recipient_id}")
+        print(f" Message sent: ID={message_id}, From={current_user['user_id']}, To={message.recipient_id}")
         
         return {
             "status": "success",

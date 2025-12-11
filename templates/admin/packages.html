@@ -787,7 +787,7 @@
             const data = await response.json();
 
             if (response.ok) {
-                alert('✅ ' + (data.message || 'Package deleted successfully'));
+                alert(' ' + (data.message || 'Package deleted successfully'));
                 loadPackages(); // Reload the packages list
             } else {
                 // Show specific error message (e.g., if subscriptions exist)

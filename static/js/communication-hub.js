@@ -1054,7 +1054,7 @@ async function submitAudienceSegment() {
         const result = await response.json();
 
         if (result.success) {
-            showNotification(`✅ Segment created with ${csvData.length} contacts!`, 'success');
+            showNotification(` Segment created with ${csvData.length} contacts!`, 'success');
             closeModal('segmentModal');
             loadAudienceSegments();
             loadSegmentsForDropdown(); // Reload dropdowns

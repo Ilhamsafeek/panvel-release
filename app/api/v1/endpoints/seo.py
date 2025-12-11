@@ -521,7 +521,7 @@ async def check_pagespeed_real(url: str) -> float:
             # Convert to 0-100 scale
             pagespeed_score = round(score * 100, 1)
             
-            print(f"✅ PageSpeed Score for {url}: {pagespeed_score}/100")
+            print(f" PageSpeed Score for {url}: {pagespeed_score}/100")
             return pagespeed_score
         elif response.status_code == 400:
             raise HTTPException(
@@ -645,7 +645,7 @@ Return ONLY valid JSON.
         if len(audit_data.get('recommendations', [])) < 3:
             raise ValueError(f"Insufficient recommendations returned: {len(audit_data.get('recommendations', []))}. Expected at least 3.")
         
-        print(f"✅ Successfully generated audit with {len(audit_data['technical_issues'])} issues and {len(audit_data['recommendations'])} recommendations")
+        print(f" Successfully generated audit with {len(audit_data['technical_issues'])} issues and {len(audit_data['recommendations'])} recommendations")
         
         return audit_data
         

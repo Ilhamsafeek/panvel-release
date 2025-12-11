@@ -68,9 +68,9 @@ class Settings(BaseSettings):
     # SMTP Email Configuration
     SMTP_HOST: Optional[str] = None
     SMTP_PORT: int = 465
-    SMTP_USER: Optional[str] = None
+    SMTP_USERNAME: Optional[str] = None
     SMTP_PASSWORD: Optional[str] = None
-    FROM_EMAIL: str = "hello@panvel-iq.calim.ai"
+    SMTP_FROM_EMAIL: str = "hello@panvel-iq.calim.ai"
     FROM_NAME: str = "PanvelIQ"
     
     # WhatsApp
@@ -81,11 +81,6 @@ class Settings(BaseSettings):
     META_APP_ID: Optional[str] = None
     META_APP_SECRET: Optional[str] = None
     META_ACCESS_TOKEN: Optional[str] = None
-    
-    # LinkedIn
-    LINKEDIN_CLIENT_ID: Optional[str] = None
-    LINKEDIN_CLIENT_SECRET: Optional[str] = None
-    LINKEDIN_ACCESS_TOKEN: Optional[str] = None
     
     # Google Ads
     GOOGLE_ADS_CUSTOMER_ID: Optional[str] = None
@@ -154,6 +149,16 @@ class Settings(BaseSettings):
     # Admin Credentials
     ADMIN_EMAIL: str = "admin@panveliq.com"
     ADMIN_PASSWORD: str = "password"
+
+
+    FACEBOOK_APP_ID: str = ""
+    FACEBOOK_APP_SECRET: str = ""
+    LINKEDIN_CLIENT_ID: str = ""
+    LINKEDIN_CLIENT_SECRET: str = ""
+    TWITTER_CLIENT_ID: str = ""
+    TWITTER_CLIENT_SECRET: str = ""
+    PINTEREST_APP_ID: str = ""
+    PINTEREST_APP_SECRET: str = ""
     
     @property
     def cors_origins(self) -> list[str]:

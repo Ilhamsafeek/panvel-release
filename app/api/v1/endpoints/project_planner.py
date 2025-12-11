@@ -3,9 +3,9 @@ AI Project Planner - Complete API Implementation (No Migration Required)
 File: app/api/v1/endpoints/project_planner.py
 """
 
-from fastapi import APIRouter, HTTPException, status, Depends, Response
+from fastapi import APIRouter, HTTPException, status, Depends, Response, BackgroundTasks
 from fastapi.responses import FileResponse, StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 import pymysql
@@ -22,8 +22,11 @@ from app.core.security import get_db_connection
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.application import MIMEApplication
+
 
 router = APIRouter()
+
 
 
 # ========== PYDANTIC MODELS ==========
@@ -57,6 +60,17 @@ class SendProposalRequest(BaseModel):
     scheduled_time: Optional[datetime] = None
     include_sections: Optional[List[str]] = None
     custom_message: Optional[str] = None
+
+
+
+# Email Request Model
+class EmailRequest(BaseModel):
+    recipient_email: EmailStr
+    recipient_name: Optional[str] = "Valued Client"
+    subject: Optional[str] = None
+    message: Optional[str] = None
+    include_pdf: bool = True
+
 
 
 # ========== DATABASE CONNECTION ==========
@@ -200,10 +214,10 @@ async def generate_proposal(
         connection.commit()
         proposal_id = cursor.lastrowid
         
-        print(f"\n✅ SUCCESS! Proposal ID: {proposal_id}")
+        print(f"\n SUCCESS! Proposal ID: {proposal_id}")
         print(f"{'='*60}\n")
         
-        print(f"\n✅ SUCCESS! Proposal ID: {proposal_id}")
+        print(f"\n SUCCESS! Proposal ID: {proposal_id}")
         print(f"{'='*60}\n")
         
         # Fetch the complete proposal record with all client details
@@ -879,7 +893,7 @@ async def export_proposal_pdf(
     proposal_id: int,
     current_user: dict = Depends(require_admin_or_employee)
 ):
-    """Export proposal as PDF with HTML content"""
+    """Export proposal as PDF with DRAFT watermark if not approved"""
     connection = None
     cursor = None
     
@@ -890,93 +904,66 @@ async def export_proposal_pdf(
         from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
         from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
         from reportlab.lib import colors
+        from reportlab.pdfgen import canvas
+        from PyPDF2 import PdfReader, PdfWriter
         from html import unescape
         import re
+        from io import BytesIO
         
         connection = get_db_connection()
         cursor = connection.cursor()
         
-        # Get proposal with all data
-        query = """
+        # Get proposal with status
+        cursor.execute("""
             SELECT p.*, u.full_name as client_name, u.email as client_email
             FROM project_proposals p
-            JOIN users u ON p.client_id = u.user_id
+            LEFT JOIN users u ON p.client_id = u.user_id
             WHERE p.proposal_id = %s
-        """
-        cursor.execute(query, (proposal_id,))
+        """, (proposal_id,))
+        
         proposal = cursor.fetchone()
         
         if not proposal:
             raise HTTPException(status_code=404, detail="Proposal not found")
         
-        # Get the HTML content - prioritize edited content
-        html_content = None
+        # Check if approved
+        is_approved = proposal.get('status') == 'accepted'
+        print(f"📋 Proposal Status: {proposal.get('status')} | Approved: {is_approved}")
         
-        if proposal.get('custom_strategy_html'):
-            html_content = proposal['custom_strategy_html']
-            print(f"[PDF] Using custom_strategy_html")
-        elif proposal.get('custom_notes'):
+        # Parse JSON fields
+        def safe_json_parse(data, default=None):
+            if data is None:
+                return default
+            if isinstance(data, (dict, list)):
+                return data
             try:
-                notes = json.loads(proposal['custom_notes']) if isinstance(proposal['custom_notes'], str) else proposal['custom_notes']
-                if isinstance(notes, dict) and 'edited_content' in notes:
-                    html_content = notes['edited_content']
-                    print(f"[PDF] Using edited_content from custom_notes")
+                return json.loads(data) if data else default
             except:
-                pass
-        
-        # If no edited content, generate from AI data
-        if not html_content:
-            print(f"[PDF] No edited content found, generating from AI data")
-            strategy = json.loads(proposal['ai_generated_strategy']) if proposal.get('ai_generated_strategy') else {}
-            differentiators = json.loads(proposal['competitive_differentiators']) if proposal.get('competitive_differentiators') else {}
-            timeline = json.loads(proposal['suggested_timeline']) if proposal.get('suggested_timeline') else {}
-            html_content = generate_proposal_html_for_pdf(proposal, strategy, differentiators, timeline)
+                return default
         
         # Create PDF buffer
         buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=50, bottomMargin=50, leftMargin=50, rightMargin=50)
+        doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.75*inch, bottomMargin=0.75*inch)
         
-        # Define styles
+        # Setup styles
         styles = getSampleStyleSheet()
-        
-        # Custom styles
         title_style = ParagraphStyle(
             'CustomTitle',
             parent=styles['Heading1'],
-            fontSize=28,
+            fontSize=24,
             textColor=colors.HexColor('#9926F3'),
-            spaceAfter=10,
+            spaceAfter=30,
             alignment=TA_CENTER,
             fontName='Helvetica-Bold'
-        )
-        
-        subtitle_style = ParagraphStyle(
-            'CustomSubtitle',
-            parent=styles['Normal'],
-            fontSize=18,
-            textColor=colors.HexColor('#1DD8FC'),
-            spaceAfter=20,
-            alignment=TA_CENTER,
-            fontName='Helvetica'
         )
         
         heading_style = ParagraphStyle(
             'CustomHeading',
             parent=styles['Heading2'],
             fontSize=16,
-            textColor=colors.HexColor('#9926F3'),
-            spaceAfter=12,
-            spaceBefore=20,
-            fontName='Helvetica-Bold'
-        )
-        
-        subheading_style = ParagraphStyle(
-            'CustomSubHeading',
-            parent=styles['Heading3'],
-            fontSize=14,
             textColor=colors.HexColor('#1DD8FC'),
-            spaceAfter=10,
-            spaceBefore=15,
+            spaceAfter=12,
+            spaceBefore=12,
             fontName='Helvetica-Bold'
         )
         
@@ -984,88 +971,56 @@ async def export_proposal_pdf(
             'CustomBody',
             parent=styles['Normal'],
             fontSize=11,
-            textColor=colors.HexColor('#333333'),
-            spaceAfter=10,
-            alignment=TA_JUSTIFY,
-            fontName='Helvetica',
-            leading=16
+            leading=16,
+            alignment=TA_JUSTIFY
         )
         
-        # Convert HTML to ReportLab elements
+        # Build PDF content
         story = []
         
-        # Simple HTML parser - convert common tags
-        def html_to_paragraphs(html_text):
-            elements = []
-            
-            # Remove style attributes and scripts
-            html_text = re.sub(r'<style[^>]*>.*?</style>', '', html_text, flags=re.DOTALL)
-            html_text = re.sub(r'<script[^>]*>.*?</script>', '', html_text, flags=re.DOTALL)
-            html_text = re.sub(r'\sstyle="[^"]*"', '', html_text)
-            
-            # Split by major tags
-            parts = re.split(r'(<h1[^>]*>.*?</h1>|<h2[^>]*>.*?</h2>|<h3[^>]*>.*?</h3>|<p[^>]*>.*?</p>|<ul[^>]*>.*?</ul>|<ol[^>]*>.*?</ol>|<hr[^>]*>)', html_text, flags=re.DOTALL)
-            
-            for part in parts:
-                if not part.strip():
-                    continue
-                
-                # H1 tags
-                if part.startswith('<h1'):
-                    text = re.sub(r'<[^>]+>', '', part)
-                    text = unescape(text.strip())
-                    if text:
-                        elements.append(Paragraph(text, title_style))
-                        elements.append(Spacer(1, 0.2*inch))
-                
-                # H2 tags
-                elif part.startswith('<h2'):
-                    text = re.sub(r'<[^>]+>', '', part)
-                    text = unescape(text.strip())
-                    if text:
-                        elements.append(Paragraph(text, subtitle_style))
-                        elements.append(Spacer(1, 0.2*inch))
-                
-                # H3 tags or H2/H3 with <strong>
-                elif '<strong>' in part and ('<h2' in part or '<h3' in part):
-                    text = re.sub(r'<[^>]+>', '', part)
-                    text = unescape(text.strip())
-                    if text:
-                        elements.append(Paragraph(text, heading_style))
-                        elements.append(Spacer(1, 0.1*inch))
-                
-                # Paragraph tags
-                elif part.startswith('<p'):
-                    text = re.sub(r'<[^>]+>', '', part)
-                    text = unescape(text.strip())
-                    if text:
-                        # Keep bold and italic
-                        text = part.replace('<p>', '').replace('</p>', '')
-                        text = text.replace('<strong>', '<b>').replace('</strong>', '</b>')
-                        text = text.replace('<em>', '<i>').replace('</em>', '</i>')
-                        text = re.sub(r'\sstyle="[^"]*"', '', text)
-                        elements.append(Paragraph(text, body_style))
-                
-                # List tags
-                elif part.startswith('<ul') or part.startswith('<ol'):
-                    # Extract list items
-                    items = re.findall(r'<li[^>]*>(.*?)</li>', part, flags=re.DOTALL)
-                    for item in items:
-                        item = re.sub(r'<[^>]+>', '', item)
-                        item = unescape(item.strip())
-                        if item:
-                            elements.append(Paragraph(f"• {item}", body_style))
-                
-                # HR tags
-                elif part.startswith('<hr'):
-                    elements.append(Spacer(1, 0.3*inch))
-            
-            return elements
+        # Cover Page
+        story.append(Spacer(1, 1.5*inch))
+        story.append(Paragraph("DIGITAL MARKETING PROPOSAL", title_style))
+        story.append(Spacer(1, 0.3*inch))
         
-        # Convert HTML to elements
-        story = html_to_paragraphs(html_content)
+        company_name = proposal.get('company_name') or proposal.get('client_name') or 'Valued Client'
+        story.append(Paragraph(f"Prepared for {company_name}", body_style))
+        story.append(Spacer(1, 0.2*inch))
+        story.append(Paragraph(f"Generated on {datetime.now().strftime('%B %d, %Y')}", body_style))
+        story.append(Spacer(1, 0.5*inch))
         
-        # Add footer
+        # Business Overview
+        story.append(Paragraph("Business Overview", heading_style))
+        if proposal.get('business_type'):
+            story.append(Paragraph(f"<b>Business Type:</b> {proposal['business_type']}", body_style))
+            story.append(Spacer(1, 0.1*inch))
+        if proposal.get('budget'):
+            story.append(Paragraph(f"<b>Budget:</b> ${float(proposal['budget']):,.2f}", body_style))
+            story.append(Spacer(1, 0.2*inch))
+        
+        # Challenges
+        if proposal.get('challenges'):
+            story.append(Paragraph("Challenges & Objectives", heading_style))
+            story.append(Paragraph(proposal['challenges'], body_style))
+            story.append(Spacer(1, 0.2*inch))
+        
+        # Target Audience
+        if proposal.get('target_audience'):
+            story.append(Paragraph("Target Audience", heading_style))
+            story.append(Paragraph(proposal['target_audience'], body_style))
+            story.append(Spacer(1, 0.2*inch))
+        
+        # AI Strategy
+        ai_strategy = safe_json_parse(proposal.get('ai_generated_strategy'), {})
+        if ai_strategy:
+            story.append(Paragraph("Recommended Strategy", heading_style))
+            for key, value in ai_strategy.items():
+                if value:
+                    clean_key = key.replace('_', ' ').title()
+                    story.append(Paragraph(f"<b>{clean_key}:</b> {value}", body_style))
+                    story.append(Spacer(1, 0.1*inch))
+        
+        # Footer
         story.append(Spacer(1, 0.5*inch))
         footer_text = f"""
         <b>PanvelIQ - AI-Powered Digital Marketing</b><br/>
@@ -1085,12 +1040,58 @@ async def export_proposal_pdf(
         doc.build(story)
         buffer.seek(0)
         
+        # =====================================================
+        # ADD DRAFT WATERMARK IF NOT APPROVED
+        # =====================================================
+        if not is_approved:
+            print("⚠️ Adding DRAFT watermark...")
+            
+            # Read the generated PDF
+            pdf_reader = PdfReader(buffer)
+            pdf_writer = PdfWriter()
+            
+            # Add watermark to each page
+            for page in pdf_reader.pages:
+                # Get page dimensions
+                page_box = page.mediabox
+                page_width = float(page_box.width)
+                page_height = float(page_box.height)
+                
+                # Create watermark
+                watermark_buffer = BytesIO()
+                watermark_canvas = canvas.Canvas(watermark_buffer, pagesize=(page_width, page_height))
+                
+                # Draw diagonal DRAFT watermark
+                watermark_canvas.saveState()
+                watermark_canvas.translate(page_width / 2, page_height / 2)
+                watermark_canvas.rotate(45)
+                watermark_canvas.setFillColor(colors.Color(0.8, 0.1, 0.1, alpha=0.2))
+                watermark_canvas.setFont("Helvetica-Bold", 80)
+                
+                text = "DRAFT"
+                text_width = watermark_canvas.stringWidth(text, "Helvetica-Bold", 80)
+                watermark_canvas.drawString(-text_width / 2, 0, text)
+                watermark_canvas.restoreState()
+                watermark_canvas.save()
+                
+                # Merge watermark with page
+                watermark_buffer.seek(0)
+                watermark_page = PdfReader(watermark_buffer).pages[0]
+                page.merge_page(watermark_page)
+                pdf_writer.add_page(page)
+            
+            # Write watermarked PDF
+            final_buffer = BytesIO()
+            pdf_writer.write(final_buffer)
+            final_buffer.seek(0)
+            buffer = final_buffer
+            print(" DRAFT watermark applied")
+        else:
+            print(" No watermark needed (approved)")
+        
         # Generate filename
-        company_name = proposal.get('company_name') or 'Client'
         safe_company_name = str(company_name).replace(' ', '_').replace('/', '_')
         filename = f"Proposal_{safe_company_name}_{proposal_id}.pdf"
-        
-        print(f"[PDF] Successfully generated PDF: {filename}")
         
         return StreamingResponse(
             buffer,
@@ -1101,15 +1102,12 @@ async def export_proposal_pdf(
         )
     
     except ImportError as ie:
-        print(f"[PDF] Import error: {ie}")
         raise HTTPException(
             status_code=501,
-            detail="PDF export requires reportlab. Install with: pip install reportlab"
+            detail="PDF export requires reportlab and PyPDF2. Install: pip install reportlab PyPDF2"
         )
-    except HTTPException:
-        raise
     except Exception as e:
-        print(f"[PDF] Error: {e}")
+        print(f"PDF Export Error: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
@@ -1119,7 +1117,7 @@ async def export_proposal_pdf(
         if connection:
             connection.close()
 
-
+            
 def generate_proposal_html_for_pdf(proposal, strategy, differentiators, timeline):
     """Generate HTML from AI data if no edited content exists"""
     
@@ -1444,246 +1442,471 @@ async def send_to_dashboard(
 
             
 
+
 @router.post("/proposals/{proposal_id}/send-email")
 async def send_proposal_email(
     proposal_id: int,
-    email_data: dict,
+    email_request: EmailRequest,
+    background_tasks: BackgroundTasks,
     current_user: dict = Depends(require_admin_or_employee)
 ):
-    """Send proposal via email using Mailchimp Transactional (Mandrill)"""
+    """
+    Send proposal via email - non-blocking
+    Uses background task to prevent timeout
+    """
     connection = None
     cursor = None
     
     try:
+        # Quick validation only
         connection = get_db_connection()
-        cursor = connection.cursor()
+        cursor = connection.cursor(pymysql.cursors.DictCursor)
         
-        # Check if proposal exists and get details
+        # Verify proposal exists and belongs to user
         cursor.execute("""
-            SELECT 
-                pp.*,
-                u.full_name as client_name,
-                u.email as client_email
+            SELECT pp.*, u.full_name as client_name, u.email as client_email
             FROM project_proposals pp
             LEFT JOIN users u ON pp.client_id = u.user_id
             WHERE pp.proposal_id = %s
         """, (proposal_id,))
+        
         proposal = cursor.fetchone()
         
         if not proposal:
             raise HTTPException(status_code=404, detail="Proposal not found")
         
-        recipient_email = email_data.get('recipient_email')
-        subject = email_data.get('subject', 'Marketing Proposal for Your Review')
-        message = email_data.get('message', '')
+        # Schedule email sending in background
+        background_tasks.add_task(
+            send_proposal_email_task,
+            proposal_id,
+            email_request.recipient_email,
+            email_request.recipient_name,
+            email_request.subject,
+            email_request.message,
+            email_request.include_pdf,
+            current_user['user_id'],
+            proposal
+        )
         
-        if not recipient_email:
-            raise HTTPException(status_code=400, detail="Recipient email is required")
-        
-        # Generate a share link for the email
-        share_token = secrets.token_urlsafe(32)
-        expires_at = datetime.now() + timedelta(days=30)
-        
+        # Log email activity immediately
         cursor.execute("""
-            INSERT INTO proposal_share_links 
-            (proposal_id, share_token, created_by, expires_at, is_active)
-            VALUES (%s, %s, %s, %s, TRUE)
-        """, (proposal_id, share_token, current_user['user_id'], expires_at))
+            INSERT INTO email_logs 
+            (proposal_id, recipient_email, status, sent_by, created_at)
+            VALUES (%s, %s, %s, %s, NOW())
+        """, (proposal_id, email_request.recipient_email, 'queued', current_user['user_id']))
         
-        base_url = getattr(settings, 'FRONTEND_URL', 'https://panvel-iq.calim.ai')
-        proposal_link = f"{base_url}/proposals/view/{share_token}"
+        connection.commit()
+        email_log_id = cursor.lastrowid
         
-        # Build email content with proposal link
-        email_html = build_proposal_email_html(
-            client_name=proposal.get('client_name', 'Valued Client'),
-            message=message,
-            proposal_link=proposal_link,
-            company_name=proposal.get('company_name', ''),
-            business_type=proposal.get('business_type', '')
-        )
+        return {
+            "success": True,
+            "message": "Proposal email is being sent in the background",
+            "email_log_id": email_log_id
+        }
         
-        # Send via Mailchimp Transactional API (Mandrill)
-        email_sent = await send_via_mailchimp(
-            to_email=recipient_email,
-            to_name=proposal.get('client_name', ''),
-            subject=subject,
-            html_content=email_html,
-            text_content=message
-        )
-        
-        if email_sent:
-            # Update proposal status
-            cursor.execute("""
-                UPDATE project_proposals 
-                SET status = 'sent', sent_at = NOW(), updated_at = NOW()
-                WHERE proposal_id = %s
-            """, (proposal_id,))
-            connection.commit()
-            
-            print(f"[EMAIL] Proposal {proposal_id} sent to {recipient_email}")
-            
-            return {
-                "success": True,
-                "message": f"Proposal sent successfully to {recipient_email}"
-            }
-        else:
-            raise HTTPException(
-                status_code=500, 
-                detail="Failed to send email. Please check email configuration."
-            )
-    
     except HTTPException:
         raise
     except Exception as e:
-        if connection:
-            connection.rollback()
-        print(f"Error sending email: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"❌ Error queuing email: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to queue email: {str(e)}"
+        )
     finally:
         if cursor:
             cursor.close()
         if connection:
             connection.close()
 
-async def send_via_mailchimp(
-    to_email: str,
-    to_name: str,
-    subject: str,
-    html_content: str,
-    text_content: str
-) -> bool:
+
+async def send_proposal_email_task(
+    proposal_id: int,
+    recipient_email: str,
+    recipient_name: str,
+    subject: Optional[str],
+    custom_message: Optional[str],
+    include_pdf: bool,
+    sender_id: int,
+    proposal: dict
+):
     """
-    Send email using SMTP (more reliable than Mailchimp API for transactional emails)
-    Falls back to logging if SMTP not configured
+    Background task for sending proposal email with SMTP
+    
+    Args:
+        proposal_id: ID of the proposal
+        recipient_email: Email address to send to
+        recipient_name: Name of recipient
+        subject: Custom subject line (optional)
+        custom_message: Custom message (optional)
+        include_pdf: Whether to attach PDF
+        sender_id: ID of user sending email
+        proposal: Proposal data dictionary
     """
+    connection = None
+    cursor = None
+    email_log_id = None
+    
     try:
-        # Try SMTP first (most reliable)
-        smtp_host = getattr(settings, 'SMTP_HOST', None)
-        smtp_port = getattr(settings, 'SMTP_PORT', 465)
-        smtp_user = getattr(settings, 'SMTP_USER', None)
-        smtp_pass = getattr(settings, 'SMTP_PASSWORD', None)
-        from_email = getattr(settings, 'FROM_EMAIL', 'hello@panvel-iq.calim.ai')
-        from_name = getattr(settings, 'FROM_NAME', 'PanvelIQ')
+        print(f"\n{'='*60}")
+        print(f"📧 SENDING PROPOSAL EMAIL")
+        print(f"{'='*60}")
+        print(f"Proposal ID: {proposal_id}")
+        print(f"To: {recipient_email}")
+        print(f"Include PDF: {include_pdf}")
         
-        if smtp_host and smtp_user and smtp_pass:
-            print(f"[EMAIL] Sending via SMTP: {smtp_host}")
-            
-            # Create message
-            msg = MIMEMultipart('alternative')
-            msg['Subject'] = subject
-            msg['From'] = f"{from_name} <{from_email}>"
-            msg['To'] = to_email
-            
-            # Attach both plain text and HTML versions
-            part1 = MIMEText(text_content, 'plain')
-            part2 = MIMEText(html_content, 'html')
-            msg.attach(part1)
-            msg.attach(part2)
-            
-            # Send email
-            with smtplib.SMTP(smtp_host, smtp_port) as server:
+        # Get SMTP configuration
+        smtp_host = settings.SMTP_HOST
+        smtp_port = settings.SMTP_PORT
+        smtp_user = settings.SMTP_USERNAME
+        smtp_password = settings.SMTP_PASSWORD
+        from_email = settings.SMTP_FROM_EMAIL
+        from_name = settings.FROM_NAME
+        
+        # Validate SMTP configuration
+        if not all([smtp_host, smtp_user, smtp_password]):
+            raise Exception("SMTP configuration incomplete. Please configure email settings.")
+        
+        print(f"✓ SMTP Server: {smtp_host}:{smtp_port}")
+        
+        # Generate email subject
+        if not subject:
+            company_name = proposal.get('company_name', 'Your Company')
+            subject = f"Marketing Proposal for {company_name} - PanvelIQ"
+        
+        # Generate HTML email content
+        html_content = generate_proposal_email_html(
+            recipient_name=recipient_name,
+            company_name=proposal.get('company_name', 'Your Company'),
+            proposal_id=proposal_id,
+            custom_message=custom_message,
+            budget=proposal.get('budget', 0)
+        )
+        
+        # Generate plain text version
+        text_content = generate_proposal_email_text(
+            recipient_name=recipient_name,
+            company_name=proposal.get('company_name', 'Your Company'),
+            proposal_id=proposal_id
+        )
+        
+        print(f"✓ Email content generated")
+        
+        # Create email message
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = f"{from_name} <{from_email}>"
+        msg['To'] = recipient_email
+        msg['Date'] = datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S +0000')
+        
+        # Attach text and HTML versions
+        part_text = MIMEText(text_content, 'plain', 'utf-8')
+        part_html = MIMEText(html_content, 'html', 'utf-8')
+        msg.attach(part_text)
+        msg.attach(part_html)
+        
+        # Attach PDF if requested
+        if include_pdf:
+            try:
+                print(f"📄 Generating PDF...")
+                
+                # Generate PDF (with timeout)
+                pdf_data = generate_proposal_pdf_bytes(proposal_id)
+                
+                if pdf_data:
+                    # Attach PDF
+                    pdf_attachment = MIMEApplication(pdf_data, _subtype='pdf')
+                    pdf_attachment.add_header(
+                        'Content-Disposition',
+                        'attachment',
+                        filename=f'Proposal_{proposal_id}.pdf'
+                    )
+                    msg.attach(pdf_attachment)
+                    print(f"✓ PDF attached ({len(pdf_data)} bytes)")
+                else:
+                    print(f"⚠ PDF generation failed, sending email without attachment")
+                    
+            except Exception as pdf_error:
+                print(f"⚠ PDF generation error: {str(pdf_error)}")
+                print(f"  Continuing without PDF attachment...")
+        
+        # Send email via SMTP
+        print(f"📤 Connecting to SMTP server...")
+        
+        # Use appropriate SMTP connection based on port
+        if smtp_port == 465:
+            # SSL connection
+            with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=30) as server:
+                server.login(smtp_user, smtp_password)
+                server.send_message(msg)
+        else:
+            # TLS connection (port 587)
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=30) as server:
+                server.ehlo()
                 server.starttls()
-                server.login(smtp_user, smtp_pass)
-                server.sendmail(from_email, to_email, msg.as_string())
-            
-            print(f"[EMAIL] Sent successfully via SMTP to {to_email}")
-            return True
+                server.ehlo()
+                server.login(smtp_user, smtp_password)
+                server.send_message(msg)
         
-        # If no SMTP, try Mailchimp Transactional (Mandrill) - different from regular Mailchimp
-        mandrill_key = getattr(settings, 'MANDRILL_API_KEY', None)
-        if mandrill_key:
-            print(f"[EMAIL] Sending via Mandrill")
-            url = "https://mandrillapp.com/api/1.0/messages/send.json"
-            
-            payload = {
-                "key": mandrill_key,
-                "message": {
-                    "from_email": from_email,
-                    "from_name": from_name,
-                    "to": [{"email": to_email, "name": to_name, "type": "to"}],
-                    "subject": subject,
-                    "html": html_content,
-                    "text": text_content
-                }
-            }
-            
-            response = requests.post(url, json=payload, timeout=30)
-            if response.status_code == 200:
-                print(f"[EMAIL] Sent successfully via Mandrill")
-                return True
+        print(f"✅ Email sent successfully to {recipient_email}")
+        print(f"{'='*60}\n")
         
-        # Fallback: Just log the email (for testing/development)
-        print(f"[EMAIL] No email service configured - logging email instead")
-        print(f"[EMAIL] To: {to_email}")
-        print(f"[EMAIL] Subject: {subject}")
-        print(f"[EMAIL] Message preview: {text_content[:200]}...")
-        print(f"[EMAIL] Marked as sent (no actual email service configured)")
-        return True  # Return True so the proposal status updates
+        # Update email log status to 'sent'
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        cursor.execute("""
+            UPDATE email_logs 
+            SET status = 'sent', sent_at = NOW()
+            WHERE proposal_id = %s 
+            AND recipient_email = %s 
+            AND status = 'queued'
+            ORDER BY created_at DESC 
+            LIMIT 1
+        """, (proposal_id, recipient_email))
+        
+        connection.commit()
+        
+    except smtplib.SMTPAuthenticationError as auth_error:
+        error_msg = f"SMTP Authentication Failed: {str(auth_error)}"
+        print(f"❌ {error_msg}")
+        log_email_failure(proposal_id, recipient_email, error_msg)
+        
+    except smtplib.SMTPException as smtp_error:
+        error_msg = f"SMTP Error: {str(smtp_error)}"
+        print(f"❌ {error_msg}")
+        log_email_failure(proposal_id, recipient_email, error_msg)
         
     except Exception as e:
-        print(f"[EMAIL] Error: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
+        error_msg = f"Email sending failed: {str(e)}"
+        print(f"❌ {error_msg}")
+        log_email_failure(proposal_id, recipient_email, error_msg)
+        
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
 
 
-def build_proposal_email_html(
-    client_name: str,
-    message: str,
-    proposal_link: str,
-    company_name: str = "",
-    business_type: str = ""
+def generate_proposal_email_html(
+    recipient_name: str,
+    company_name: str,
+    proposal_id: int,
+    custom_message: Optional[str],
+    budget: float
 ) -> str:
-    """Build HTML email template for proposal"""
+    """
+    Generate professional HTML email template for proposal
+    """
     
-    return f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Marketing Proposal</title>
-</head>
-<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5;">
-    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 40px 20px;">
-        <tr>
-            <td align="center">
-                <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
-                    <tr>
-                        <td style="background: linear-gradient(135deg, #9926F3 0%, #1DD8FC 100%); padding: 40px 30px; text-align: center;">
-                            <h1 style="color: #ffffff; margin: 0; font-size: 28px;">PanvelIQ</h1>
-                            <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 14px;">AI-Powered Digital Marketing</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 40px 30px;">
-                            <h2 style="color: #1a1a2e; margin: 0 0 20px 0; font-size: 24px;">Hello {client_name},</h2>
-                            <div style="color: #4a4a4a; font-size: 16px; line-height: 1.6; margin-bottom: 30px;">
-                                {message.replace(chr(10), '<br>')}
-                            </div>
-                            {f'<p style="color: #6b7280; font-size: 14px;"><strong>Company:</strong> {company_name}</p>' if company_name else ''}
-                            {f'<p style="color: #6b7280; font-size: 14px;"><strong>Industry:</strong> {business_type}</p>' if business_type else ''}
-                            <div style="text-align: center; margin: 40px 0;">
-                                <a href="{proposal_link}" style="display: inline-block; background: linear-gradient(135deg, #9926F3 0%, #1DD8FC 100%); color: #ffffff; text-decoration: none; padding: 16px 40px; border-radius: 8px; font-size: 16px; font-weight: bold;">
-                                    View Your Proposal
-                                </a>
-                            </div>
-                            <p style="color: #9ca3af; font-size: 13px; text-align: center;">
-                                This link will expire in 30 days.
-                            </p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style="background-color: #f8f9fa; padding: 30px; text-align: center; border-top: 1px solid #e5e7eb;">
-                            <p style="color: #6b7280; font-size: 14px; margin: 0;">
-                                &copy; 2025 PanvelIQ. All rights reserved.
-                            </p>
-                        </td>
-                    </tr>
-                </table>
-            </td>
-        </tr>
-    </table>
-</body>
-</html>
-"""
+    # Custom message or default
+    message_html = f"<p>{custom_message}</p>" if custom_message else f"""
+    <p>We've prepared a comprehensive digital marketing proposal tailored specifically for {company_name}. 
+    Our AI-powered analysis has identified key opportunities to help you achieve your marketing goals.</p>
+    """
+    
+    # View proposal link
+    view_link = f"{settings.FRONTEND_URL}/proposal-view/{proposal_id}"
+    
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Marketing Proposal - PanvelIQ</title>
+    </head>
+    <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f5f5f5;">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f5f5f5; padding: 40px 20px;">
+            <tr>
+                <td align="center">
+                    <table width="600" cellpadding="0" cellspacing="0" border="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                        
+                        <!-- Header with Gradient -->
+                        <tr>
+                            <td style="background: linear-gradient(135deg, #9926F3 0%, #1DD8FC 100%); padding: 40px 30px; text-align: center;">
+                                <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 600;">
+                                    PanvelIQ
+                                </h1>
+                                <p style="margin: 10px 0 0 0; color: #ffffff; font-size: 14px; opacity: 0.9;">
+                                    AI-Powered Digital Marketing Intelligence
+                                </p>
+                            </td>
+                        </tr>
+                        
+                        <!-- Greeting -->
+                        <tr>
+                            <td style="padding: 30px 30px 20px 30px;">
+                                <h2 style="margin: 0 0 15px 0; color: #333333; font-size: 22px; font-weight: 600;">
+                                    Dear {recipient_name},
+                                </h2>
+                                {message_html}
+                            </td>
+                        </tr>
+                        
+                        <!-- Proposal Highlights -->
+                        <tr>
+                            <td style="padding: 0 30px 30px 30px;">
+                                <div style="background: linear-gradient(135deg, #f8f9ff 0%, #f0f4ff 100%); border-left: 4px solid #9926F3; padding: 20px; border-radius: 6px; margin: 20px 0;">
+                                    <h3 style="margin: 0 0 15px 0; color: #9926F3; font-size: 18px; font-weight: 600;">
+                                        📊 Proposal Highlights
+                                    </h3>
+                                    <table width="100%" cellpadding="8" cellspacing="0" border="0">
+                                        <tr>
+                                            <td style="color: #666666; font-size: 14px; padding: 8px 0;">
+                                                <strong style="color: #333333;">Company:</strong>
+                                            </td>
+                                            <td style="color: #333333; font-size: 14px; font-weight: 500; padding: 8px 0;">
+                                                {company_name}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td style="color: #666666; font-size: 14px; padding: 8px 0;">
+                                                <strong style="color: #333333;">Estimated Budget:</strong>
+                                            </td>
+                                            <td style="color: #333333; font-size: 14px; font-weight: 500; padding: 8px 0;">
+                                                ₹{budget:,.0f}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td style="color: #666666; font-size: 14px; padding: 8px 0;">
+                                                <strong style="color: #333333;">Proposal ID:</strong>
+                                            </td>
+                                            <td style="color: #333333; font-size: 14px; font-weight: 500; padding: 8px 0;">
+                                                #{proposal_id}
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </div>
+                                
+                                <!-- CTA Button -->
+                                <div style="text-align: center; margin: 30px 0;">
+                                    <a href="{view_link}" 
+                                       style="display: inline-block; background: linear-gradient(135deg, #9926F3 0%, #1DD8FC 100%); 
+                                              color: #ffffff; text-decoration: none; padding: 15px 40px; border-radius: 6px; 
+                                              font-size: 16px; font-weight: 600; box-shadow: 0 4px 12px rgba(153,38,243,0.3);">
+                                        View Full Proposal
+                                    </a>
+                                </div>
+                                
+                                <p style="margin: 20px 0 0 0; color: #666666; font-size: 14px; line-height: 1.6;">
+                                    This proposal includes AI-generated strategies, competitive analysis, and detailed campaign recommendations 
+                                    tailored to your specific business needs.
+                                </p>
+                            </td>
+                        </tr>
+                        
+                        <!-- Footer -->
+                        <tr>
+                            <td style="background-color: #f8f9fa; padding: 30px; border-top: 1px solid #e0e0e0;">
+                                <p style="margin: 0 0 10px 0; color: #666666; font-size: 13px; line-height: 1.6;">
+                                    Best regards,<br>
+                                    <strong style="color: #333333;">The PanvelIQ Team</strong>
+                                </p>
+                                <p style="margin: 15px 0 0 0; color: #999999; font-size: 12px; line-height: 1.5;">
+                                    This email was sent by PanvelIQ. If you have any questions, please contact us at 
+                                    <a href="mailto:hello@panvel-iq.calim.ai" style="color: #9926F3; text-decoration: none;">hello@panvel-iq.calim.ai</a>
+                                </p>
+                            </td>
+                        </tr>
+                        
+                    </table>
+                </td>
+            </tr>
+        </table>
+    </body>
+    </html>
+    """
+    
+    return html
+
+
+def generate_proposal_email_text(
+    recipient_name: str,
+    company_name: str,
+    proposal_id: int
+) -> str:
+    """
+    Generate plain text version of email
+    """
+    
+    text = f"""
+PanvelIQ - Marketing Proposal
+
+Dear {recipient_name},
+
+We've prepared a comprehensive digital marketing proposal tailored specifically for {company_name}.
+
+Proposal ID: #{proposal_id}
+Company: {company_name}
+
+View your full proposal at: {settings.FRONTEND_URL}/proposal-view/{proposal_id}
+
+This proposal includes AI-generated strategies, competitive analysis, and detailed campaign recommendations.
+
+Best regards,
+The PanvelIQ Team
+
+---
+If you have any questions, contact us at hello@panvel-iq.calim.ai
+    """
+    
+    return text.strip()
+
+
+def generate_proposal_pdf_bytes(proposal_id: int) -> Optional[bytes]:
+    """
+    Generate PDF and return as bytes
+    
+    Returns:
+        bytes: PDF data or None if generation fails
+    """
+    try:
+        # Call the PDF generation endpoint internally
+        token = create_internal_access_token()  # Create internal token
+        
+        response = requests.get(
+            f"{settings.BASE_URL}/api/v1/project-planner/proposals/{proposal_id}/export/pdf",
+            headers={'Authorization': f'Bearer {token}'},
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            return response.content
+        else:
+            print(f"⚠ PDF generation returned status {response.status_code}")
+            return None
+            
+    except requests.Timeout:
+        print(f"⚠ PDF generation timed out")
+        return None
+    except Exception as e:
+        print(f"⚠ PDF generation error: {str(e)}")
+        return None
+
+
+def log_email_failure(proposal_id: int, recipient_email: str, error_message: str):
+    """Log failed email attempt to database"""
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        cursor.execute("""
+            UPDATE email_logs 
+            SET status = 'failed', 
+                error_message = %s,
+                updated_at = NOW()
+            WHERE proposal_id = %s 
+            AND recipient_email = %s 
+            AND status = 'queued'
+            ORDER BY created_at DESC 
+            LIMIT 1
+        """, (error_message, proposal_id, recipient_email))
+        
+        connection.commit()
+        cursor.close()
+        connection.close()
+        
+    except Exception as log_error:
+        print(f"Failed to log email error: {str(log_error)}")
+
