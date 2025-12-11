@@ -37,6 +37,7 @@ class ProjectInput(BaseModel):
     lead_email: str
     company_name: str
     business_type: str
+    website_url: Optional[str] = None
     budget: float
     challenges: str
     target_audience: str
@@ -92,7 +93,6 @@ def column_exists(cursor, table_name, column_name):
 
 
 # ========== API ENDPOINTS ==========
-
 @router.post("/generate-proposal")
 async def generate_proposal(
     project_input: ProjectInput,
@@ -189,16 +189,20 @@ async def generate_proposal(
         else:
             lead_user_id = lead_user['user_id']
         
-        # Insert proposal
+        # Insert proposal with lead info
         cursor.execute("""
             INSERT INTO project_proposals 
-            (client_id, created_by, business_type, budget, challenges, 
-             target_audience, existing_presence, ai_generated_strategy, 
-             competitive_differentiators, suggested_timeline, status, company_name)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            (client_id, created_by, lead_name, lead_email, company_name, website_url, 
+             business_type, budget, challenges, target_audience, existing_presence, 
+             ai_generated_strategy, competitive_differentiators, suggested_timeline, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             lead_user_id,
             current_user['user_id'],
+            project_input.lead_name,           # ✅ ADDED
+            project_input.lead_email,          # ✅ ADDED
+            project_input.company_name,
+            project_input.website_url,
             project_input.business_type,
             project_input.budget,
             project_input.challenges,
@@ -207,31 +211,24 @@ async def generate_proposal(
             json.dumps(ai_strategy),
             json.dumps(differentiators),
             json.dumps(timeline),
-            'draft',
-            project_input.company_name
+            'draft'
         ))
         
         connection.commit()
         proposal_id = cursor.lastrowid
         
-        print(f"\n SUCCESS! Proposal ID: {proposal_id}")
+        print(f"\n✅ SUCCESS! Proposal ID: {proposal_id}")
         print(f"{'='*60}\n")
         
-        print(f"\n SUCCESS! Proposal ID: {proposal_id}")
-        print(f"{'='*60}\n")
+        # Fetch the complete proposal record
+        cursor.execute("""
+            SELECT pp.*, u.full_name as client_full_name, u.email as client_email
+            FROM project_proposals pp
+            LEFT JOIN users u ON pp.client_id = u.user_id
+            WHERE pp.proposal_id = %s
+        """, (proposal_id,))
         
-        # Fetch the complete proposal record with all client details
-        query = """
-            SELECT p.*, u.full_name as lead_name, u.email as lead_email
-            FROM project_proposals p
-            JOIN users u ON p.client_id = u.user_id
-            WHERE p.proposal_id = %s
-        """
-        cursor.execute(query, (proposal_id,))
         complete_proposal = cursor.fetchone()
-        
-        # Add company_name from input since it's not stored in database
-        complete_proposal['company_name'] = project_input.company_name
         
         # Parse JSON fields for frontend
         json_fields = ['existing_presence', 'ai_generated_strategy', 
@@ -263,6 +260,7 @@ async def generate_proposal(
         if connection:
             connection.close()
 
+            
 
 @router.put("/proposals/{proposal_id}/edit")
 async def edit_proposal(
@@ -469,98 +467,113 @@ async def get_proposal(
     proposal_id: int,
     current_user: dict = Depends(require_admin_or_employee)
 ):
-    """Get specific proposal with edited content support"""
-    connection = None
-    cursor = None
-    
+    """Get a single proposal with all details"""
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
         
-        query = """
-            SELECT p.*, u.full_name as client_name, u.email as client_email
-            FROM project_proposals p
-            JOIN users u ON p.client_id = u.user_id
-            WHERE p.proposal_id = %s
-        """
-        cursor.execute(query, (proposal_id,))
+        cursor.execute("""
+            SELECT 
+                pp.*,
+                creator.full_name as created_by_name
+            FROM project_proposals pp
+            LEFT JOIN users creator ON pp.created_by = creator.user_id
+            WHERE pp.proposal_id = %s
+        """, (proposal_id,))
+        
         proposal = cursor.fetchone()
         
         if not proposal:
             raise HTTPException(status_code=404, detail="Proposal not found")
         
-        # Convert timestamps
-        for field in ['created_at', 'updated_at', 'sent_at']:
-            if proposal.get(field):
-                proposal[field] = proposal[field].isoformat()
-        
-        # Parse JSON fields - IMPORTANT: Handle both string and dict types
+        # Parse JSON fields
         json_fields = ['existing_presence', 'ai_generated_strategy', 
                       'competitive_differentiators', 'suggested_timeline']
         
         for field in json_fields:
             if proposal.get(field):
-                try:
-                    # If it's already a dict, keep it
-                    if isinstance(proposal[field], dict):
-                        continue
-                    # If it's a string, parse it
-                    elif isinstance(proposal[field], str):
+                if isinstance(proposal[field], str):
+                    try:
                         proposal[field] = json.loads(proposal[field])
-                    # If it's bytes, decode then parse
-                    elif isinstance(proposal[field], bytes):
-                        proposal[field] = json.loads(proposal[field].decode('utf-8'))
-                except json.JSONDecodeError as e:
-                    print(f"❌ JSON Parse Error for {field}: {e}")
-                    print(f"   Raw value: {proposal[field][:200] if proposal[field] else 'None'}")
-                    proposal[field] = {}
-                except Exception as e:
-                    print(f"❌ Error parsing {field}: {e}")
-                    proposal[field] = {}
-            else:
-                proposal[field] = {}
-        
-        # Check for custom edited content
-        if proposal.get('custom_strategy_html'):
-            # New schema - dedicated column for edited HTML
-            proposal['edited_content'] = proposal['custom_strategy_html']
-            print(f"[GET PROPOSAL] Found edited content in custom_strategy_html")
-        elif proposal.get('custom_notes'):
-            # Old schema - check custom_notes for edited content
-            try:
-                notes = proposal['custom_notes']
-                if isinstance(notes, str):
-                    notes = json.loads(notes)
-                if isinstance(notes, dict) and 'edited_content' in notes:
-                    proposal['edited_content'] = notes['edited_content']
-                    print(f"[GET PROPOSAL] Found edited content in custom_notes")
-            except Exception as e:
-                print(f"Error parsing custom_notes for edited content: {e}")
-        
-        # Debug log
-        print(f"[GET PROPOSAL {proposal_id}] Parsed data:")
-        print(f"  Strategy keys: {list(proposal.get('ai_generated_strategy', {}).keys())}")
-        print(f"  Differentiators keys: {list(proposal.get('competitive_differentiators', {}).keys())}")
-        print(f"  Timeline keys: {list(proposal.get('suggested_timeline', {}).keys())}")
-        print(f"  Has edited content: {bool(proposal.get('edited_content'))}")
+                    except:
+                        proposal[field] = {}
         
         return {
             "success": True,
             "proposal": proposal
         }
-    
+        
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error getting proposal: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"Error fetching proposal: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if cursor:
             cursor.close()
         if connection:
             connection.close()
+
+
+@router.get("/proposals")
+async def get_proposals(
+    current_user: dict = Depends(require_admin_or_employee)
+):
+    """Get all proposals for current user"""
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # Query based on role
+        if current_user['role'] == 'client':
+            cursor.execute("""
+                SELECT 
+                    pp.*,
+                    creator.full_name as created_by_name
+                FROM project_proposals pp
+                LEFT JOIN users creator ON pp.created_by = creator.user_id
+                WHERE pp.client_id = %s
+                ORDER BY pp.created_at DESC
+            """, (current_user['user_id'],))
+        else:  # admin or employee
+            cursor.execute("""
+                SELECT 
+                    pp.*,
+                    creator.full_name as created_by_name
+                FROM project_proposals pp
+                LEFT JOIN users creator ON pp.created_by = creator.user_id
+                ORDER BY pp.created_at DESC
+            """)
+        
+        proposals = cursor.fetchall()
+        
+        # Parse JSON fields for each proposal
+        for proposal in proposals:
+            json_fields = ['existing_presence', 'ai_generated_strategy', 
+                          'competitive_differentiators', 'suggested_timeline']
+            
+            for field in json_fields:
+                if proposal.get(field):
+                    if isinstance(proposal[field], str):
+                        try:
+                            proposal[field] = json.loads(proposal[field])
+                        except:
+                            proposal[field] = {}
+        
+        return {
+            "success": True,
+            "proposals": proposals
+        }
+        
+    except Exception as e:
+        print(f"Error fetching proposals: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
 
 @router.post("/proposals/{proposal_id}/send")
 async def send_proposal(

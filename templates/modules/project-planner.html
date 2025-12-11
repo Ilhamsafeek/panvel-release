@@ -1382,21 +1382,23 @@
                                 </select>
                             </div>
 
-                            <div class="form-group">
-                                <label>Website URL *</label>
-                                <input type="url" id="websiteUrl" required>
-                            </div>
-                            <div class="form-group">
-                                <label>Facebook URL</label>
-                                <input type="url" id="facebookUrl">
-                            </div>
-                            <div class="form-group">
-                                <label>Instagram URL</label>
-                                <input type="url" id="instagramUrl">
+                           <div class="form-group">
+                                <label class="form-label">
+                                    <i class="ti ti-world"></i>
+                                    Website URL
+                                </label>
+                                <input type="url" id="websiteUrl" name="website_url" placeholder="https://example.com"
+                                    class="form-input" pattern="https?://.*"
+                                    title="Please enter a valid URL starting with http:// or https://">
+                                <small class="form-hint"
+                                    style="color: #666; font-size: 12px; margin-top: 4px; display: block;">
+                                    Format: https://example.com
+                                </small>
                             </div>
 
+
                             <!-- Budget -->
-                            <div class="form-group full-width">
+                            <div class="form-group">
                                 <label class="form-label">
                                     <i class="ti ti-currency-dollar"></i>
                                     Marketing Budget (INR) <span class="required">*</span>
@@ -1434,10 +1436,13 @@
                                     Existing Digital Presence
                                 </label>
                                 <div class="checkbox-group">
+
+
                                     <label class="checkbox-label">
                                         <input type="checkbox" name="existing_website" value="true">
                                         <span>Website</span>
                                     </label>
+
                                     <label class="checkbox-label">
                                         <input type="checkbox" name="existing_facebook" value="true">
                                         <span>Facebook</span>
@@ -1468,6 +1473,8 @@
                                     </label>
                                 </div>
                             </div>
+
+
                         </div>
 
                         <!-- Navigation -->
@@ -1795,5 +1802,5 @@ PanvelIQ Team</textarea>
 
 {% block extra_js %}
 <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
-<script src="/static/js/project-planner.js?v=3"></script>
+<script src="/static/js/project-planner.js?v=6"></script>
 {% endblock %}
