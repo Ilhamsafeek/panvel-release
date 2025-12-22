@@ -444,9 +444,9 @@
             <p>AI-powered visual content creation with DALL-E, Synthesia, and Canva</p>
         </div>
 
-        <button onclick="authorizeCanva()" class="btn btn-primary">
+        <button onclick="connectCanva()" class="btn-secondary" style="margin-bottom: 1rem;">
             <i class="ti ti-brand-canva"></i>
-            Authorize Canva
+            Connect Canva Account
         </button>
     </div>
 
@@ -852,21 +852,32 @@
 
 {% block extra_js %}
 <script>
-    // Add this JavaScript function
-async function authorizeCanva() {
-    try {
-        const response = await fetch('/api/v1/media-studio/canva/authorize');
-        const data = await response.json();
-        
-        if (data.authorization_url) {
-            // Open Canva authorization in new window
-            window.open(data.authorization_url, 'canva_auth', 'width=600,height=700');
-        }
-    } catch (error) {
-        console.error('Authorization error:', error);
-        alert('Failed to start Canva authorization');
+    async function connectCanva() {
+        const clientId = document.getElementById('designClient').value;
+
+
+
+        const token = localStorage.getItem('access_token');
+        const oauthUrl = `/api/v1/media-studio/canva/connect?token=${encodeURIComponent(token)}`;
+
+        const width = 600;
+        const height = 700;
+        const left = (screen.width / 2) - (width / 2);
+        const top = (screen.height / 2) - (height / 2);
+
+        window.open(
+            oauthUrl,
+            'Canva Authorization',
+            `width=${width},height=${height},left=${left},top=${top}`
+        );
+
+        // Listen for success
+        window.addEventListener('message', function (event) {
+            if (event.data && event.data.type === 'canva_connected') {
+                showNotification('✅ Canva connected successfully!', 'success');
+            }
+        });
     }
-}
 </script>
-<script src="/static/js/media-studio-new.js"></script>
+<script src="/static/js/media-studio-new.js?=2"></script>
 {% endblock %}

@@ -5,6 +5,7 @@ File: app/api/v1/endpoints/media_studio.py
 
 from fastapi import APIRouter, HTTPException, status, Depends
 from fastapi.responses import FileResponse
+from fastapi import Query, Request
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
 from datetime import datetime
@@ -16,6 +17,12 @@ import os
 import uuid
 import hashlib
 from openai import OpenAI
+
+import jwt
+from jwt import PyJWTError
+from fastapi.responses import RedirectResponse, HTMLResponse
+from urllib.parse import urlencode
+import secrets
 
 from app.core.config import settings
 from app.core.security import require_admin_or_employee, get_current_user
@@ -393,21 +400,44 @@ async def generate_ideogram_animation(
 
 
 # ========== CANVA DESIGN CREATION ==========
-
 async def create_canva_design(
+    client_id: int,
     design_type: str,
     title: str,
     content_elements: Optional[Dict] = None
 ) -> Dict[str, Any]:
-    """Create design using Canva API"""
+    """Create design using Canva API with OAuth token"""
+    
+    connection = None
+    cursor = None
     
     try:
+        # Get client's Canva access token from database
+        connection = get_db_connection()
+        cursor = connection.cursor(pymysql.cursors.DictCursor)
+        
+        cursor.execute("""
+            SELECT canva_access_token, canva_token_expires_at
+            FROM client_profiles
+            WHERE client_id = %s
+        """, (client_id,))
+        
+        client_data = cursor.fetchone()
+        
+        if not client_data or not client_data.get('canva_access_token'):
+            raise HTTPException(
+                status_code=400,
+                detail="Canva not connected. Please connect your Canva account first."
+            )
+        
+        access_token = client_data['canva_access_token']
+        
         print(f"[CANVA] Creating design: {title}")
         
         api_url = "https://api.canva.com/rest/v1/designs"
         
         headers = {
-            "Authorization": f"Bearer {settings.CANVA_API_KEY}",
+            "Authorization": f"Bearer {access_token}",  # ✅ CORRECT - Using OAuth token
             "Content-Type": "application/json"
         }
         
@@ -432,6 +462,7 @@ async def create_canva_design(
             "title": title
         }
         
+        import requests
         response = requests.post(api_url, headers=headers, json=payload, timeout=30)
         
         if response.status_code in [200, 201]:
@@ -456,12 +487,20 @@ async def create_canva_design(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             detail="Canva API timeout"
         )
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"[CANVA] Error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Canva design creation failed: {str(e)}"
         )
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
 
 
 # ========== API ENDPOINTS ==========
@@ -927,6 +966,7 @@ async def create_design(
     
     try:
         result = await create_canva_design(
+            client_id=request.client_id,  # ✅ ADD THIS
             design_type=request.design_type,
             title=request.title,
             content_elements=request.content_elements
@@ -976,6 +1016,256 @@ async def create_design(
             cursor.close()
         if connection:
             connection.close()
+
+
+
+# ========== CANVA OAUTH FLOW ==========
+@router.get("/canva/connect", summary="Initiate Canva OAuth")
+async def connect_canva(
+    client_id: int = Query(...),
+    token: Optional[str] = Query(None),
+    request: Request = None
+):
+    """Start Canva OAuth authorization flow"""
+    
+    import secrets
+    from urllib.parse import urlencode
+    import jwt
+    from jwt import PyJWTError
+    
+    # Get token from parameter or cookie
+    access_token = token or request.cookies.get('access_token')
+    
+    if not access_token:
+        return HTMLResponse("""
+            <html>
+                <body style="font-family: Arial; text-align: center; padding: 50px;">
+                    <h2>❌ Authentication Required</h2>
+                    <p>Please login to continue</p>
+                    <button onclick="window.close()">Close</button>
+                </body>
+            </html>
+        """, status_code=401)
+    
+    try:
+        # Decode and verify JWT token
+        payload = jwt.decode(
+            access_token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM]
+        )
+        
+        user_id = payload.get('user_id')
+        role = payload.get('role')
+        
+        # Verify user has admin or employee role
+        if role not in ['admin', 'employee']:
+            raise Exception("Insufficient permissions")
+        
+        # Generate state for CSRF protection
+        state = secrets.token_urlsafe(32)
+        
+        # Store state temporarily
+        oauth_states[state] = {
+            'client_id': client_id,
+            'user_id': user_id,
+            'timestamp': datetime.now()
+        }
+        
+        print(f"🔐 Canva OAuth initiated - Client: {client_id}, User: {user_id}, Role: {role}")
+        
+        # Build redirect URI
+        base_url = str(request.base_url).rstrip('/')
+        redirect_uri = settings.CANVA_REDIRECT_URI or f"{base_url}/api/v1/media-studio/canva/callback"
+        
+        print(f"📍 Redirect URI: {redirect_uri}")
+        
+        # Build authorization URL
+        auth_params = {
+            'client_id': settings.CANVA_CLIENT_ID,
+            'redirect_uri': redirect_uri,
+            'response_type': 'code',
+            'state': state,
+            'scope': 'design:content:read design:content:write design:meta:read asset:read'
+        }
+        
+        auth_url = f"https://www.canva.com/api/oauth/authorize?{urlencode(auth_params)}"
+        
+        print(f"🔄 Redirecting to Canva OAuth: {auth_url[:100]}...")
+        
+        return RedirectResponse(url=auth_url)
+        
+    except PyJWTError as e:
+        print(f"❌ JWT verification failed: {str(e)}")
+        return HTMLResponse(f"""
+            <html>
+                <body style="font-family: Arial; text-align: center; padding: 50px;">
+                    <h2>❌ Authentication Failed</h2>
+                    <p>Invalid or expired token</p>
+                    <p style="font-size: 12px; color: #666;">{str(e)}</p>
+                    <button onclick="window.close()">Close</button>
+                </body>
+            </html>
+        """, status_code=401)
+    except Exception as e:
+        print(f"❌ Canva OAuth error: {str(e)}")
+        return HTMLResponse(f"""
+            <html>
+                <body style="font-family: Arial; text-align: center; padding: 50px;">
+                    <h2>❌ Authentication Failed</h2>
+                    <p>{str(e)}</p>
+                    <button onclick="window.close()">Close</button>
+                </body>
+            </html>
+        """, status_code=401)
+
+
+@router.get("/canva/callback", summary="Handle Canva OAuth callback")
+async def canva_callback(
+    code: Optional[str] = Query(None),
+    state: Optional[str] = Query(None),
+    error: Optional[str] = Query(None)
+):
+    """Handle OAuth callback from Canva"""
+    
+    if error:
+        return HTMLResponse(f"""
+            <html>
+                <body>
+                    <h2>❌ Authorization Failed</h2>
+                    <p>{error}</p>
+                    <button onclick="window.close()">Close</button>
+                </body>
+            </html>
+        """, status_code=400)
+    
+    if not code or not state:
+        return HTMLResponse("""
+            <html>
+                <body>
+                    <h2>❌ Invalid Request</h2>
+                    <p>Missing authorization code or state</p>
+                    <button onclick="window.close()">Close</button>
+                </body>
+            </html>
+        """, status_code=400)
+    
+    if state not in oauth_states:
+        return HTMLResponse("""
+            <html>
+                <body>
+                    <h2>❌ Invalid State</h2>
+                    <p>Security validation failed</p>
+                    <button onclick="window.close()">Close</button>
+                </body>
+            </html>
+        """, status_code=400)
+    
+    oauth_data = oauth_states[state]
+    
+    connection = None
+    cursor = None
+    
+    try:
+        # Exchange code for access token
+        import requests
+        
+        token_response = requests.post(
+            'https://api.canva.com/rest/v1/oauth/token',
+            data={
+                'grant_type': 'authorization_code',
+                'code': code,
+                'redirect_uri': settings.CANVA_REDIRECT_URI,
+                'client_id': settings.CANVA_CLIENT_ID,
+                'client_secret': settings.CANVA_CLIENT_SECRET
+            },
+            timeout=30
+        )
+        
+        if not token_response.ok:
+            raise Exception(f"Token exchange failed: {token_response.text}")
+        
+        token_data = token_response.json()
+        access_token = token_data.get('access_token')
+        refresh_token = token_data.get('refresh_token')
+        expires_in = token_data.get('expires_in', 3600)
+        
+        # Calculate expiration
+        from datetime import timedelta
+        token_expires_at = datetime.now() + timedelta(seconds=expires_in)
+        
+        # Store in database
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        cursor.execute("""
+            INSERT INTO client_profiles (
+                client_id, canva_access_token, canva_refresh_token, 
+                canva_token_expires_at, updated_at
+            ) VALUES (%s, %s, %s, %s, NOW())
+            ON DUPLICATE KEY UPDATE
+                canva_access_token = VALUES(canva_access_token),
+                canva_refresh_token = VALUES(canva_refresh_token),
+                canva_token_expires_at = VALUES(canva_token_expires_at),
+                updated_at = NOW()
+        """, (oauth_data['client_id'], access_token, refresh_token, token_expires_at))
+        
+        connection.commit()
+        
+        # Clean up state
+        del oauth_states[state]
+        
+        return HTMLResponse("""
+            <html>
+                <head>
+                    <style>
+                        body { font-family: 'Segoe UI', Arial; text-align: center; padding: 50px; background: #f8fafc; }
+                        .success-box { background: white; padding: 40px; border-radius: 16px; max-width: 500px; margin: 0 auto; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+                        h2 { color: #10b981; margin-bottom: 1rem; }
+                        button { padding: 12px 24px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; margin-top: 20px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="success-box">
+                        <h2>✅ Canva Connected!</h2>
+                        <p>Your Canva account has been successfully connected.</p>
+                        <p>You can now create designs using Canva API.</p>
+                        <button onclick="closeWindow()">Close & Continue</button>
+                    </div>
+                    <script>
+                        function closeWindow() {
+                            if (window.opener) {
+                                window.opener.postMessage({ type: 'canva_connected' }, '*');
+                            }
+                            window.close();
+                        }
+                        // Auto-close after 3 seconds
+                        setTimeout(closeWindow, 3000);
+                    </script>
+                </body>
+            </html>
+        """)
+        
+    except Exception as e:
+        print(f"❌ Canva OAuth error: {str(e)}")
+        return HTMLResponse(f"""
+            <html>
+                <body>
+                    <h2>❌ Connection Failed</h2>
+                    <p>{str(e)}</p>
+                    <button onclick="window.close()">Close</button>
+                </body>
+            </html>
+        """, status_code=500)
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+# Temporary OAuth states storage
+oauth_states = {}
 
 
 # ========== ASSET MANAGEMENT ENDPOINTS ==========

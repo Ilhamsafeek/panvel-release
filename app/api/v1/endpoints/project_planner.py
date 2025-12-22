@@ -115,6 +115,7 @@ async def generate_proposal(
         strategy_prompt = f"""
         Create a comprehensive digital marketing strategy for:
         Company: {project_input.company_name}
+        Website: {project_input.website_url or 'Not provided'}
         Business Type: {project_input.business_type}
         Budget: ${project_input.budget}
         Challenges: {project_input.challenges}

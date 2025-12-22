@@ -523,7 +523,8 @@ async function createDesign(event) {
         const title = document.getElementById('designTitle').value;
         const designType = document.getElementById('designType').value;
         
-        const response = await fetch(`${API_BASE}/generate/design`, {
+        // ✅ FIXED - Changed from /generate/design to /create-design
+        const response = await fetch(`${API_BASE}/create-design`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -545,7 +546,7 @@ async function createDesign(event) {
         const result = await response.json();
         
         if (result.success) {
-            showNotification('Design created successfully!', 'success');
+            showNotification('✓ Design created successfully!', 'success');
             closeModal('designModal');
             loadMediaAssets();
             
@@ -563,7 +564,6 @@ async function createDesign(event) {
         createBtn.innerHTML = originalBtnText;
     }
 }
-
 // =====================================================
 // LOAD MEDIA ASSETS
 // =====================================================
