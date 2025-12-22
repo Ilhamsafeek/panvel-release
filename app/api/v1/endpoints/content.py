@@ -1,13 +1,8 @@
 """
-Content Intelligence Hub API - Module 5 (COMPLETE)
+Content Intelligence Hub API - Module 5
 File: app/api/v1/endpoints/content.py
 
-IMPLEMENTS ALL BRD REQUIREMENTS:
-1. AI-powered content generation
-2. Performance Score 1-100 scale (≥70 = Optimized)  
-3. AI-generated target audience & keywords
-4. Platform-specific optimization
-5. Hashtag & CTA optimization
+AI-powered content creation and optimization
 """
 
 from fastapi import APIRouter, HTTPException, status, Depends
@@ -46,16 +41,16 @@ class ContentGenerateRequest(BaseModel):
     client_id: Optional[int] = Field(None, description="Client ID")
 
 
-class ContentGenerateWithAIRequest(BaseModel):
-    """Request for AI-powered content with auto-generated audience & keywords"""
-    platform: str
-    content_type: str
-    topic: str
-    tone: Optional[str] = "professional"
-    client_id: Optional[int] = None
-    auto_generate_audience: bool = True
-    auto_generate_keywords: bool = True
-    industry: Optional[str] = None
+class MultiPlatformContentRequest(BaseModel):
+    """Request model for multi-platform AI content generation"""
+    client_id: int = Field(..., description="Client ID")
+    platforms: List[str] = Field(..., description="List of social media platforms")
+    content_type: str = Field(..., description="Type of content")
+    topic: str = Field(..., description="Content topic/brief")
+    tone: Optional[str] = Field("professional", description="Content tone")
+    target_audience: Optional[str] = Field(None, description="Target audience")
+    keywords: Optional[List[str]] = Field([], description="Keywords to include")
+    generate_audience_insights: Optional[bool] = Field(True, description="Generate AI audience insights")
 
 
 class ContentSaveRequest(BaseModel):
@@ -77,25 +72,11 @@ class ContentUpdateRequest(BaseModel):
     content_text: Optional[str] = None
     hashtags: Optional[List[str]] = None
     cta_text: Optional[str] = None
+    optimization_score: Optional[float] = None
     status: Optional[str] = None
 
 
-class ContentAnalyzeRequest(BaseModel):
-    """Request to analyze content and get performance score"""
-    content_text: str
-    platform: str
-    target_audience: Optional[str] = None
-    keywords: Optional[List[str]] = None
-
-
-class AudienceKeywordGenerateRequest(BaseModel):
-    """Request to generate target audience and keywords from client profile"""
-    client_id: int
-    topic: Optional[str] = None
-    platform: Optional[str] = None
-
-
-# ========== PLATFORM GUIDELINES ==========
+# ========== HELPER FUNCTIONS ==========
 
 def get_platform_guidelines(platform: str) -> Dict[str, Any]:
     """Get platform-specific content guidelines"""
@@ -104,45 +85,42 @@ def get_platform_guidelines(platform: str) -> Dict[str, Any]:
             "max_chars": 2200,
             "optimal_chars": 150,
             "hashtag_limit": 30,
-            "optimal_hashtags": "5-10",
+            "optimal_hashtags": "8-15",
             "best_practices": [
-                "Start with a hook in the first line",
-                "Use line breaks for readability",
-                "Include a clear call-to-action",
-                "Mix popular and niche hashtags",
-                "Use emojis strategically"
+                "Use emojis to increase engagement",
+                "Ask questions to encourage comments",
+                "Include call-to-action in first line",
+                "Use line breaks for readability"
             ]
         },
         "facebook": {
             "max_chars": 63206,
-            "optimal_chars": 80,
+            "optimal_chars": 250,
             "hashtag_limit": 10,
-            "optimal_hashtags": "2-3",
+            "optimal_hashtags": "1-3",
             "best_practices": [
-                "Keep posts concise and engaging",
-                "Ask questions to drive engagement",
-                "Use visuals whenever possible",
-                "Include links strategically",
-                "Post at optimal times"
+                "Keep posts concise and scannable",
+                "Use native video when possible",
+                "Tag relevant pages and people",
+                "Post when audience is most active"
             ]
         },
         "linkedin": {
             "max_chars": 3000,
             "optimal_chars": 150,
-            "hashtag_limit": 5,
+            "hashtag_limit": 30,
             "optimal_hashtags": "3-5",
             "best_practices": [
                 "Lead with value or insight",
                 "Use professional tone",
-                "Share industry knowledge",
-                "Include relevant statistics",
-                "Engage with comments"
+                "Include industry-specific hashtags",
+                "Tag relevant professionals"
             ]
         },
         "twitter": {
             "max_chars": 280,
             "optimal_chars": 240,
-            "hashtag_limit": 2,
+            "hashtag_limit": 10,
             "optimal_hashtags": "1-2",
             "best_practices": [
                 "Be concise and impactful",
@@ -162,6 +140,18 @@ def get_platform_guidelines(platform: str) -> Dict[str, Any]:
                 "Add relevant hashtags",
                 "Describe image content clearly"
             ]
+        },
+        "youtube": {
+            "max_chars": 5000,
+            "optimal_chars": 300,
+            "hashtag_limit": 15,
+            "optimal_hashtags": "3-5",
+            "best_practices": [
+                "Include keywords in first 100 characters",
+                "Add timestamps for longer videos",
+                "Include clear call-to-action",
+                "Use relevant tags"
+            ]
         }
     }
     
@@ -173,296 +163,6 @@ def get_platform_guidelines(platform: str) -> Dict[str, Any]:
         "best_practices": []
     })
 
-
-# ========== AI-POWERED TARGET AUDIENCE & KEYWORDS GENERATION ==========
-
-async def generate_audience_and_keywords(
-    client_id: int,
-    topic: str,
-    platform: str,
-    industry: Optional[str] = None
-) -> Dict[str, Any]:
-    """
-    AI-powered generation of target audience and keywords based on client profile
-    This is a KEY BRD requirement
-    """
-    connection = None
-    cursor = None
-    
-    try:
-        # Get client profile data
-        connection = get_db_connection()
-        cursor = connection.cursor()
-        
-        cursor.execute("""
-            SELECT u.full_name, u.email,
-                   c.company_name, c.industry, c.target_audience as existing_audience,
-                   c.website_url, c.business_type
-            FROM users u
-            LEFT JOIN clients c ON u.user_id = c.client_id
-            WHERE u.user_id = %s
-        """, (client_id,))
-        
-        client_data = cursor.fetchone()
-        
-        # Get client's previous content for context
-        cursor.execute("""
-            SELECT content_text, platform, hashtags 
-            FROM content_library 
-            WHERE client_id = %s 
-            ORDER BY created_at DESC 
-            LIMIT 5
-        """, (client_id,))
-        
-        previous_content = cursor.fetchall()
-        
-        # Build context for AI
-        client_context = ""
-        if client_data:
-            client_context = f"""
-Client Profile:
-- Company: {client_data.get('company_name', 'N/A')}
-- Industry: {client_data.get('industry', industry or 'General')}
-- Business Type: {client_data.get('business_type', 'N/A')}
-- Existing Target Audience: {client_data.get('existing_audience', 'Not specified')}
-"""
-        
-        previous_context = ""
-        if previous_content:
-            previous_context = "\nPrevious Content Topics:\n"
-            for pc in previous_content[:3]:
-                previous_context += f"- {pc.get('content_text', '')[:100]}...\n"
-        
-        if not openai_client:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="AI service not available"
-            )
-        
-        prompt = f"""Based on the following client profile and content topic, generate comprehensive target audience and keywords for {platform} content.
-
-{client_context}
-{previous_context}
-
-Content Topic: {topic}
-Platform: {platform}
-Industry: {industry or client_data.get('industry', 'General') if client_data else 'General'}
-
-Generate a detailed JSON response with:
-{{
-    "target_audience": {{
-        "primary_demographic": {{
-            "age_range": "25-45",
-            "gender": "All/Male/Female",
-            "location": "Geographic focus",
-            "income_level": "Income bracket",
-            "education": "Education level"
-        }},
-        "psychographics": {{
-            "interests": ["interest1", "interest2", "interest3"],
-            "values": ["value1", "value2"],
-            "pain_points": ["pain1", "pain2"],
-            "goals": ["goal1", "goal2"]
-        }},
-        "behavior_patterns": {{
-            "online_behavior": ["behavior1", "behavior2"],
-            "purchasing_behavior": ["pattern1", "pattern2"],
-            "content_preferences": ["preference1", "preference2"]
-        }},
-        "audience_personas": [
-            {{
-                "name": "Persona Name",
-                "description": "Brief description",
-                "key_motivators": ["motivator1", "motivator2"]
-            }}
-        ]
-    }},
-    "keywords": {{
-        "primary_keywords": ["keyword1", "keyword2", "keyword3"],
-        "secondary_keywords": ["keyword4", "keyword5", "keyword6"],
-        "long_tail_keywords": ["long tail 1", "long tail 2"],
-        "trending_keywords": ["trending1", "trending2"],
-        "hashtags": ["#hashtag1", "#hashtag2", "#hashtag3", "#hashtag4", "#hashtag5"]
-    }},
-    "content_recommendations": {{
-        "optimal_posting_times": ["9:00 AM", "12:00 PM", "6:00 PM"],
-        "content_formats": ["format1", "format2"],
-        "tone_suggestions": ["suggestion1", "suggestion2"],
-        "cta_recommendations": ["CTA1", "CTA2"]
-    }}
-}}
-
-Return ONLY valid JSON."""
-
-        response = openai_client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are an expert digital marketing strategist specializing in audience targeting and keyword research."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7,
-            max_tokens=2000
-        )
-        
-        content = response.choices[0].message.content
-        
-        # Parse JSON
-        try:
-            result = json.loads(content)
-        except json.JSONDecodeError:
-            json_match = re.search(r'\{.*\}', content, re.DOTALL)
-            if json_match:
-                result = json.loads(json_match.group(0))
-            else:
-                raise ValueError("No JSON found in response")
-        
-        return result
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Audience/Keyword generation error: {e}")
-        # Return default structure
-        return {
-            "target_audience": {
-                "primary_demographic": {
-                    "age_range": "25-55",
-                    "gender": "All",
-                    "location": "India"
-                },
-                "psychographics": {
-                    "interests": ["Digital Marketing", "Business Growth"],
-                    "values": ["Quality", "Innovation"],
-                    "pain_points": ["Time Management", "ROI Tracking"],
-                    "goals": ["Increase Revenue", "Brand Awareness"]
-                }
-            },
-            "keywords": {
-                "primary_keywords": [topic],
-                "secondary_keywords": [],
-                "hashtags": []
-            }
-        }
-    finally:
-        if cursor:
-            cursor.close()
-        if connection:
-            connection.close()
-
-
-# ========== PERFORMANCE SCORE CALCULATION (1-100) ==========
-
-async def calculate_performance_score(
-    content_text: str,
-    platform: str,
-    target_audience: Optional[str] = None,
-    keywords: Optional[List[str]] = None
-) -> Dict[str, Any]:
-    """
-    Calculate content performance score (1-100)
-    Score ≥70 = Optimized (BRD requirement)
-    """
-    try:
-        if not openai_client:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="AI service not available"
-            )
-        
-        guidelines = get_platform_guidelines(platform)
-        
-        prompt = f"""Analyze this {platform} content and provide a detailed performance score.
-
-Content: "{content_text}"
-
-Platform: {platform}
-Platform Guidelines:
-- Optimal Length: {guidelines['optimal_chars']} characters
-- Max Hashtags: {guidelines['hashtag_limit']}
-- Current Length: {len(content_text)} characters
-
-Target Audience: {target_audience or 'General'}
-Keywords to Include: {', '.join(keywords) if keywords else 'None specified'}
-
-Provide a comprehensive JSON analysis:
-{{
-    "overall_score": <1-100>,
-    "optimization_status": "<Optimized/Needs Improvement/Poor>",
-    "breakdown": {{
-        "engagement_potential": <1-100>,
-        "readability": <1-100>,
-        "platform_fit": <1-100>,
-        "keyword_optimization": <1-100>,
-        "cta_effectiveness": <1-100>,
-        "emotional_appeal": <1-100>
-    }},
-    "sentiment": "<positive/neutral/negative>",
-    "strengths": ["strength1", "strength2", "strength3"],
-    "improvements": [
-        {{
-            "issue": "Issue description",
-            "suggestion": "How to fix it",
-            "impact": "+X% estimated improvement"
-        }}
-    ],
-    "predicted_metrics": {{
-        "estimated_engagement_rate": "X%",
-        "estimated_reach_multiplier": "Xv",
-        "virality_potential": "<low/medium/high>"
-    }},
-    "optimized_version": "Rewritten optimized version of the content"
-}}
-
-IMPORTANT: Score ≥70 means "Optimized", 50-69 means "Needs Improvement", <50 means "Poor"
-
-Return ONLY valid JSON."""
-
-        response = openai_client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are an expert content analyst specializing in social media optimization. Be strict but fair in scoring."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.3,
-            max_tokens=1500
-        )
-        
-        content = response.choices[0].message.content
-        
-        try:
-            result = json.loads(content)
-        except json.JSONDecodeError:
-            json_match = re.search(r'\{.*\}', content, re.DOTALL)
-            if json_match:
-                result = json.loads(json_match.group(0))
-            else:
-                raise ValueError("No JSON found in response")
-        
-        # Ensure optimization status is set correctly based on score
-        score = result.get('overall_score', 0)
-        if score >= 70:
-            result['optimization_status'] = "Optimized"
-        elif score >= 50:
-            result['optimization_status'] = "Needs Improvement"
-        else:
-            result['optimization_status'] = "Poor"
-        
-        return result
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Performance score calculation error: {e}")
-        return {
-            "overall_score": 50,
-            "optimization_status": "Needs Improvement",
-            "breakdown": {},
-            "strengths": [],
-            "improvements": [{"issue": "Analysis failed", "suggestion": "Try again", "impact": "N/A"}]
-        }
-
-
-# ========== CONTENT GENERATION WITH AI ==========
 
 def generate_ai_content(
     platform: str,
@@ -519,58 +219,77 @@ Provide the response in this JSON format:
 
     try:
         response = openai_client.chat.completions.create(
-            model=settings.OPENAI_MODEL if hasattr(settings, 'OPENAI_MODEL') else "gpt-4",
+            model=settings.OPENAI_MODEL,
             messages=[
-                {"role": "system", "content": "You are an expert social media content creator specializing in platform-specific optimization."},
+                {"role": "system", "content": "You are an expert social media content creator specializing in platform-specific optimization. Always respond with valid JSON."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.8,
+            temperature=0.7,
             max_tokens=1000
         )
         
-        content = response.choices[0].message.content
+        response_text = response.choices[0].message.content
         
+        # Parse JSON from response
         try:
-            result = json.loads(content)
+            content_data = json.loads(response_text)
         except json.JSONDecodeError:
-            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if json_match:
-                result = json.loads(json_match.group(0))
+                content_data = json.loads(json_match.group(0))
             else:
-                result = {"content": content, "headline": "", "cta": ""}
+                content_data = {
+                    "content": response_text,
+                    "headline": "",
+                    "cta": ""
+                }
         
-        return result
+        content_length = len(content_data.get('content', ''))
+        
+        return {
+            "content": content_data.get('content', ''),
+            "headline": content_data.get('headline', ''),
+            "cta": content_data.get('cta', ''),
+            "caption": content_data.get('content', ''),
+            "guidelines": guidelines,
+            "character_count": content_length
+        }
         
     except Exception as e:
-        print(f"Content generation error: {e}")
+        print(f"Error generating content: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to generate content: {str(e)}"
         )
 
 
-def generate_hashtags(
-    platform: str,
-    topic: str,
-    keywords: List[str] = None,
-    count: int = 10
-) -> List[str]:
-    """Generate platform-optimized hashtags"""
+def generate_hashtags(platform: str, topic: str, keywords: Optional[List[str]] = None, count: int = 10) -> List[str]:
+    """Generate relevant hashtags using AI"""
     
     if not openai_client:
         return []
     
+    guidelines = get_platform_guidelines(platform)
+    
+    prompt = f"""Generate {count} relevant hashtags for {platform} content about: {topic}
+
+Requirements:
+- Mix of popular and niche hashtags
+- Relevant to {platform} audience
+- Include trending hashtags when applicable
+- Format: Return only a JSON array of hashtag strings (without # symbol)
+
+Example: ["socialmedia", "marketing", "digitalstrategy"]
+"""
+    
+    if keywords:
+        prompt += f"\nInclude variations of these keywords: {', '.join(keywords)}"
+    
     try:
-        prompt = f"""Generate {count} optimized hashtags for {platform} about: {topic}
-Keywords: {', '.join(keywords) if keywords else 'None'}
-
-Return ONLY a JSON array of hashtags (with #):
-["#hashtag1", "#hashtag2", ...]"""
-
         response = openai_client.chat.completions.create(
-            model="gpt-4",
+            model=settings.OPENAI_MODEL,
             messages=[
-                {"role": "system", "content": "You are a hashtag optimization expert."},
+                {"role": "system", "content": "You are a hashtag optimization expert. Return only valid JSON arrays."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
@@ -583,12 +302,179 @@ Return ONLY a JSON array of hashtags (with #):
             hashtags = json.loads(content)
             return hashtags if isinstance(hashtags, list) else []
         except:
-            # Extract hashtags from text
-            return re.findall(r'#\w+', content)[:count]
+            return re.findall(r'#?(\w+)', content)[:count]
             
     except Exception as e:
         print(f"Hashtag generation error: {e}")
         return []
+
+
+async def calculate_performance_score(
+    content_text: str,
+    platform: str,
+    target_audience: Optional[str] = None,
+    keywords: Optional[List[str]] = None
+) -> Dict[str, Any]:
+    """Calculate content performance score (1-100)"""
+    
+    guidelines = get_platform_guidelines(platform)
+    content_length = len(content_text)
+    
+    # Length score (40% weight)
+    optimal_length = guidelines['optimal_chars']
+    max_length = guidelines['max_chars']
+    
+    if content_length <= optimal_length:
+        length_score = (content_length / optimal_length) * 100
+    elif content_length <= max_length:
+        length_score = 100 - ((content_length - optimal_length) / (max_length - optimal_length)) * 30
+    else:
+        length_score = 40
+    
+    # Engagement indicators (30% weight)
+    engagement_score = 50
+    if '?' in content_text:
+        engagement_score += 15
+    if any(word in content_text.lower() for word in ['you', 'your', "you're"]):
+        engagement_score += 10
+    if any(cta in content_text.lower() for cta in ['click', 'learn', 'discover', 'get', 'try', 'join', 'start']):
+        engagement_score += 15
+    if content_text.strip() and content_text[0].isupper():
+        engagement_score += 10
+    
+    engagement_score = min(100, engagement_score)
+    
+    # Keyword integration (30% weight)
+    keyword_score = 70
+    if keywords:
+        keywords_found = sum(1 for kw in keywords if kw.lower() in content_text.lower())
+        keyword_score = (keywords_found / len(keywords)) * 100 if keywords else 70
+    
+    overall_score = (length_score * 0.4) + (engagement_score * 0.3) + (keyword_score * 0.3)
+    overall_score = min(100, max(0, overall_score))
+    
+    return {
+        "overall_score": round(overall_score, 1),
+        "length_score": round(length_score, 1),
+        "engagement_score": round(engagement_score, 1),
+        "keyword_score": round(keyword_score, 1),
+        "optimization_status": "Optimized" if overall_score >= 70 else "Needs Improvement",
+        "character_count": content_length,
+        "optimal_length": optimal_length,
+        "max_length": max_length
+    }
+
+
+async def generate_audience_and_keywords(
+    client_id: int,
+    topic: str,
+    platform: str,
+    industry: Optional[str] = None
+) -> Dict[str, Any]:
+    """Generate target audience and keywords based on client profile"""
+    
+    if not openai_client:
+        return {
+            "target_audience": {"description": "General audience"},
+            "keywords": {"primary": [], "secondary": []},
+            "content_recommendations": {}
+        }
+    
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor(pymysql.cursors.DictCursor)
+        
+        cursor.execute("""
+            SELECT u.full_name, u.email,
+                   c.company_name, c.industry, c.target_audience as existing_audience,
+                   c.website_url, c.business_type
+            FROM users u
+            LEFT JOIN clients c ON u.user_id = c.client_id
+            WHERE u.user_id = %s
+        """, (client_id,))
+        
+        client_data = cursor.fetchone()
+        
+        client_context = ""
+        if client_data:
+            client_context = f"""
+Client Profile:
+- Company: {client_data.get('company_name', 'N/A')}
+- Industry: {client_data.get('industry', industry or 'General')}
+- Business Type: {client_data.get('business_type', 'N/A')}
+- Existing Target Audience: {client_data.get('existing_audience', 'Not specified')}
+"""
+        
+        prompt = f"""Based on the following client profile and content topic, generate comprehensive target audience and keywords for {platform} content.
+
+{client_context}
+
+Topic: {topic}
+Platform: {platform}
+
+Provide response in this JSON format:
+{{
+    "target_audience": {{
+        "description": "Brief description of ideal audience",
+        "demographics": ["age range", "location", "interests"],
+        "pain_points": ["problem 1", "problem 2"],
+        "goals": ["goal 1", "goal 2"]
+    }},
+    "keywords": {{
+        "primary": ["keyword1", "keyword2", "keyword3"],
+        "secondary": ["keyword4", "keyword5", "keyword6"],
+        "hashtags": ["hashtag1", "hashtag2"]
+    }},
+    "content_recommendations": {{
+        "best_time_to_post": "Suggested posting time",
+        "content_angle": "Suggested content angle",
+        "cta_suggestion": "Suggested call-to-action"
+    }}
+}}
+"""
+        
+        response = openai_client.chat.completions.create(
+            model=settings.OPENAI_MODEL,
+            messages=[
+                {"role": "system", "content": "You are an expert digital marketing strategist. Always respond with valid JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=800
+        )
+        
+        response_text = response.choices[0].message.content
+        
+        try:
+            result = json.loads(response_text)
+        except json.JSONDecodeError:
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+            if json_match:
+                result = json.loads(json_match.group(0))
+            else:
+                result = {
+                    "target_audience": {"description": "General audience"},
+                    "keywords": {"primary": [], "secondary": []},
+                    "content_recommendations": {}
+                }
+        
+        return result
+        
+    except Exception as e:
+        print(f"Error generating audience/keywords: {e}")
+        return {
+            "target_audience": {"description": "General audience"},
+            "keywords": {"primary": [], "secondary": []},
+            "content_recommendations": {}
+        }
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
 
 
 # ========== API ENDPOINTS ==========
@@ -610,14 +496,12 @@ async def generate_content(
             keywords=request.keywords
         )
         
-        # Generate hashtags
         hashtags = generate_hashtags(
             platform=request.platform,
             topic=request.topic,
             keywords=request.keywords
         )
         
-        # Calculate performance score
         performance = await calculate_performance_score(
             content_text=result.get('content', ''),
             platform=request.platform,
@@ -646,161 +530,131 @@ async def generate_content(
         )
 
 
-@router.post("/generate-with-audience")
-async def generate_content_with_auto_audience(
-    request: ContentGenerateWithAIRequest,
+@router.post("/intelligence/generate")
+async def generate_multi_platform_content(
+    request: MultiPlatformContentRequest,
     current_user: dict = Depends(require_admin_or_employee)
 ):
     """
-    Generate content with AI-powered target audience & keywords
-    BRD REQUIREMENT: Auto-generate audience and keywords from client profile
+    Generate AI-powered content for multiple platforms simultaneously
+    BRD REQUIREMENT: Content Intelligence Hub - Multi-platform content generation
     """
     try:
-        audience_keywords = None
+        if not openai_client:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="AI service not available"
+            )
         
-        # Auto-generate audience and keywords if requested
-        if request.auto_generate_audience or request.auto_generate_keywords:
-            if request.client_id:
-                audience_keywords = await generate_audience_and_keywords(
+        # Generate audience insights if requested
+        audience_insights = None
+        suggested_keywords = None
+        
+        if request.generate_audience_insights and request.client_id:
+            try:
+                ai_data = await generate_audience_and_keywords(
                     client_id=request.client_id,
                     topic=request.topic,
-                    platform=request.platform,
-                    industry=request.industry
+                    platform=request.platforms[0] if request.platforms else "instagram",
+                    industry=None
                 )
+                audience_insights = ai_data.get('target_audience', {})
+                suggested_keywords = ai_data.get('keywords', {})
+            except Exception as e:
+                print(f"Warning: Could not generate audience insights: {e}")
         
-        # Extract keywords for content generation
-        keywords = []
-        target_audience_str = None
+        # Use AI-generated audience if not provided
+        target_audience = request.target_audience
+        if not target_audience and audience_insights:
+            if isinstance(audience_insights, dict):
+                target_audience = audience_insights.get('description', '')
+            else:
+                target_audience = str(audience_insights)
         
-        if audience_keywords:
-            kw_data = audience_keywords.get('keywords', {})
-            keywords = kw_data.get('primary_keywords', []) + kw_data.get('secondary_keywords', [])[:3]
-            
-            aud_data = audience_keywords.get('target_audience', {})
-            demo = aud_data.get('primary_demographic', {})
-            target_audience_str = f"{demo.get('age_range', '25-45')}, {demo.get('location', 'India')}"
+        # Merge keywords
+        keywords = request.keywords or []
+        if suggested_keywords:
+            if isinstance(suggested_keywords, dict):
+                ai_keywords = suggested_keywords.get('primary', []) + suggested_keywords.get('secondary', [])
+                keywords = list(set(keywords + ai_keywords))
+            elif isinstance(suggested_keywords, list):
+                keywords = list(set(keywords + suggested_keywords))
         
-        # Generate content
-        result = generate_ai_content(
-            platform=request.platform,
-            content_type=request.content_type,
-            topic=request.topic,
-            tone=request.tone,
-            target_audience=target_audience_str,
-            keywords=keywords[:5]  # Use top 5 keywords
-        )
+        # Generate content for each platform
+        variants = []
         
-        # Generate hashtags from AI-suggested hashtags or generate new ones
-        hashtags = []
-        if audience_keywords:
-            hashtags = audience_keywords.get('keywords', {}).get('hashtags', [])
-        
-        if len(hashtags) < 5:
-            additional_hashtags = generate_hashtags(
-                platform=request.platform,
-                topic=request.topic,
-                keywords=keywords
-            )
-            hashtags.extend(additional_hashtags)
-            hashtags = list(set(hashtags))[:10]
-        
-        # Calculate performance score
-        performance = await calculate_performance_score(
-            content_text=result.get('content', ''),
-            platform=request.platform,
-            target_audience=target_audience_str,
-            keywords=keywords
-        )
+        for platform in request.platforms:
+            try:
+                result = generate_ai_content(
+                    platform=platform,
+                    content_type=request.content_type,
+                    topic=request.topic,
+                    tone=request.tone,
+                    target_audience=target_audience,
+                    keywords=keywords
+                )
+                
+                hashtags = generate_hashtags(
+                    platform=platform,
+                    topic=request.topic,
+                    keywords=keywords
+                )
+                
+                performance = await calculate_performance_score(
+                    content_text=result.get('content', ''),
+                    platform=platform,
+                    target_audience=target_audience,
+                    keywords=keywords
+                )
+                
+                guidelines = get_platform_guidelines(platform)
+                
+                variants.append({
+                    "platform": platform,
+                    "content": result.get('content', ''),
+                    "caption": result.get('caption', result.get('content', '')),
+                    "headline": result.get('headline', ''),
+                    "hashtags": hashtags,
+                    "cta": result.get('cta', ''),
+                    "performance_score": performance.get('overall_score', 0),
+                    "optimization_status": performance.get('optimization_status', 'Unknown'),
+                    "is_optimized": performance.get('overall_score', 0) >= 70,
+                    "guidelines": guidelines,
+                    "character_count": len(result.get('content', '')),
+                    "optimal_length": guidelines.get('optimal_chars', 150)
+                })
+                
+            except Exception as e:
+                print(f"Error generating content for {platform}: {e}")
+                variants.append({
+                    "platform": platform,
+                    "error": str(e),
+                    "content": "",
+                    "caption": "",
+                    "hashtags": [],
+                    "performance_score": 0,
+                    "is_optimized": False
+                })
         
         return {
             "success": True,
             "data": {
-                **result,
-                "hashtags": hashtags,
-                "performance_score": performance.get('overall_score', 0),
-                "optimization_status": performance.get('optimization_status', 'Unknown'),
-                "performance_analysis": performance
-            },
-            "ai_generated_audience": audience_keywords.get('target_audience') if audience_keywords else None,
-            "ai_generated_keywords": audience_keywords.get('keywords') if audience_keywords else None,
-            "content_recommendations": audience_keywords.get('content_recommendations') if audience_keywords else None
+                "variants": variants,
+                "audience_insights": audience_insights,
+                "suggested_keywords": suggested_keywords,
+                "topic": request.topic,
+                "content_type": request.content_type,
+                "tone": request.tone
+            }
         }
         
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error in generate_content_with_auto_audience: {str(e)}")
+        print(f"Error in generate_multi_platform_content: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
-        )
-
-
-@router.post("/generate-audience-keywords")
-async def generate_audience_keywords_endpoint(
-    request: AudienceKeywordGenerateRequest,
-    current_user: dict = Depends(require_admin_or_employee)
-):
-    """
-    Generate target audience and keywords based on client profile
-    BRD REQUIREMENT: AI generates target audience & keywords from client profile
-    """
-    try:
-        result = await generate_audience_and_keywords(
-            client_id=request.client_id,
-            topic=request.topic or "General Marketing",
-            platform=request.platform or "instagram",
-            industry=None
-        )
-        
-        return {
-            "success": True,
-            "client_id": request.client_id,
-            "target_audience": result.get('target_audience', {}),
-            "keywords": result.get('keywords', {}),
-            "content_recommendations": result.get('content_recommendations', {})
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate audience and keywords: {str(e)}"
-        )
-
-
-@router.post("/analyze")
-async def analyze_content(
-    request: ContentAnalyzeRequest,
-    current_user: dict = Depends(require_admin_or_employee)
-):
-    """
-    Analyze content and return performance score (1-100)
-    BRD REQUIREMENT: Performance Score 1-100 scale (≥70 = Optimized)
-    """
-    try:
-        result = await calculate_performance_score(
-            content_text=request.content_text,
-            platform=request.platform,
-            target_audience=request.target_audience,
-            keywords=request.keywords
-        )
-        
-        return {
-            "success": True,
-            "performance_score": result.get('overall_score', 0),
-            "optimization_status": result.get('optimization_status', 'Unknown'),
-            "is_optimized": result.get('overall_score', 0) >= 70,
-            "analysis": result
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Content analysis failed: {str(e)}"
         )
 
 
@@ -818,21 +672,12 @@ async def save_content(
         connection = get_db_connection()
         cursor = connection.cursor()
         
-        # Calculate performance score if not provided
-        optimization_score = request.optimization_score
-        if optimization_score is None:
-            performance = await calculate_performance_score(
-                content_text=request.content_text,
-                platform=request.platform
-            )
-            optimization_score = performance.get('overall_score', 0)
-        
         cursor.execute("""
             INSERT INTO content_library (
                 client_id, created_by, platform, content_type,
                 title, content_text, hashtags, cta_text,
-                optimization_score, status
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ai_generated, optimization_score, status
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             request.client_id,
             current_user['user_id'],
@@ -842,7 +687,8 @@ async def save_content(
             request.content_text,
             json.dumps(request.hashtags),
             request.cta_text,
-            optimization_score,
+            True,
+            request.optimization_score,
             request.status
         ))
         
@@ -851,15 +697,14 @@ async def save_content(
         
         return {
             "success": True,
-            "content_id": content_id,
             "message": "Content saved successfully",
-            "optimization_score": optimization_score,
-            "is_optimized": optimization_score >= 70
+            "content_id": content_id
         }
         
     except Exception as e:
         if connection:
             connection.rollback()
+        print(f"Error saving content: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to save content: {str(e)}"
@@ -871,56 +716,73 @@ async def save_content(
             connection.close()
 
 
-@router.get("/library/{client_id}")
-async def get_content_library(
-    client_id: int,
-    current_user: dict = Depends(require_admin_or_employee)
+@router.get("/list")
+async def list_content(
+    client_id: Optional[int] = None,
+    platform: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = 20,
+    current_user: dict = Depends(get_current_user)
 ):
-    """Get content library for a client"""
+    """Get list of content from library"""
     
     connection = None
     cursor = None
     
     try:
         connection = get_db_connection()
-        cursor = connection.cursor()
+        cursor = connection.cursor(pymysql.cursors.DictCursor)
         
-        cursor.execute("""
-            SELECT c.*, u.full_name as creator_name
-            FROM content_library c
-            LEFT JOIN users u ON c.created_by = u.user_id
-            WHERE c.client_id = %s
-            ORDER BY c.created_at DESC
-        """, (client_id,))
+        query = """
+            SELECT 
+                cl.*,
+                u.full_name as creator_name,
+                c.full_name as client_name
+            FROM content_library cl
+            LEFT JOIN users u ON cl.created_by = u.user_id
+            LEFT JOIN users c ON cl.client_id = c.user_id
+            WHERE 1=1
+        """
+        params = []
         
+        if current_user['role'] == 'client':
+            query += " AND cl.client_id = %s"
+            params.append(current_user['user_id'])
+        elif client_id:
+            query += " AND cl.client_id = %s"
+            params.append(client_id)
+        
+        if platform:
+            query += " AND cl.platform = %s"
+            params.append(platform)
+        
+        if status:
+            query += " AND cl.status = %s"
+            params.append(status)
+        
+        query += " ORDER BY cl.created_at DESC LIMIT %s"
+        params.append(limit)
+        
+        cursor.execute(query, tuple(params))
         content_list = cursor.fetchall()
         
-        for item in content_list:
-            if item.get('hashtags'):
+        for content in content_list:
+            if content.get('hashtags'):
                 try:
-                    item['hashtags'] = json.loads(item['hashtags'])
+                    content['hashtags'] = json.loads(content['hashtags'])
                 except:
-                    item['hashtags'] = []
-            if item.get('created_at'):
-                item['created_at'] = item['created_at'].isoformat()
-            if item.get('updated_at'):
-                item['updated_at'] = item['updated_at'].isoformat()
-            
-            # Add optimization status
-            score = item.get('optimization_score', 0)
-            item['is_optimized'] = score >= 70 if score else False
-            item['optimization_status'] = "Optimized" if score >= 70 else "Needs Improvement" if score >= 50 else "Poor"
+                    content['hashtags'] = []
         
         return {
             "success": True,
-            "content": content_list,
-            "total": len(content_list)
+            "data": content_list
         }
         
     except Exception as e:
+        print(f"Error fetching content: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch content library: {str(e)}"
+            detail=f"Failed to fetch content: {str(e)}"
         )
     finally:
         if cursor:
@@ -932,22 +794,26 @@ async def get_content_library(
 @router.get("/{content_id}")
 async def get_content(
     content_id: int,
-    current_user: dict = Depends(require_admin_or_employee)
+    current_user: dict = Depends(get_current_user)
 ):
-    """Get specific content item"""
+    """Get specific content by ID"""
     
     connection = None
     cursor = None
     
     try:
         connection = get_db_connection()
-        cursor = connection.cursor()
+        cursor = connection.cursor(pymysql.cursors.DictCursor)
         
         cursor.execute("""
-            SELECT c.*, u.full_name as creator_name
-            FROM content_library c
-            LEFT JOIN users u ON c.created_by = u.user_id
-            WHERE c.content_id = %s
+            SELECT 
+                cl.*,
+                u.full_name as creator_name,
+                c.full_name as client_name
+            FROM content_library cl
+            LEFT JOIN users u ON cl.created_by = u.user_id
+            LEFT JOIN users c ON cl.client_id = c.user_id
+            WHERE cl.content_id = %s
         """, (content_id,))
         
         content = cursor.fetchone()
@@ -964,22 +830,15 @@ async def get_content(
             except:
                 content['hashtags'] = []
         
-        if content.get('created_at'):
-            content['created_at'] = content['created_at'].isoformat()
-        
-        # Add optimization status
-        score = content.get('optimization_score', 0)
-        content['is_optimized'] = score >= 70 if score else False
-        content['optimization_status'] = "Optimized" if score >= 70 else "Needs Improvement" if score >= 50 else "Poor"
-        
         return {
             "success": True,
-            "content": content
+            "data": content
         }
         
     except HTTPException:
         raise
     except Exception as e:
+        print(f"Error fetching content: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch content: {str(e)}"
@@ -997,7 +856,7 @@ async def update_content(
     request: ContentUpdateRequest,
     current_user: dict = Depends(require_admin_or_employee)
 ):
-    """Update content item"""
+    """Update existing content"""
     
     connection = None
     cursor = None
@@ -1006,57 +865,55 @@ async def update_content(
         connection = get_db_connection()
         cursor = connection.cursor()
         
-        # Build update query
-        updates = []
-        values = []
+        update_fields = []
+        params = []
         
         if request.title is not None:
-            updates.append("title = %s")
-            values.append(request.title)
+            update_fields.append("title = %s")
+            params.append(request.title)
         
         if request.content_text is not None:
-            updates.append("content_text = %s")
-            values.append(request.content_text)
+            update_fields.append("content_text = %s")
+            params.append(request.content_text)
         
         if request.hashtags is not None:
-            updates.append("hashtags = %s")
-            values.append(json.dumps(request.hashtags))
+            update_fields.append("hashtags = %s")
+            params.append(json.dumps(request.hashtags))
         
         if request.cta_text is not None:
-            updates.append("cta_text = %s")
-            values.append(request.cta_text)
+            update_fields.append("cta_text = %s")
+            params.append(request.cta_text)
+        
+        if request.optimization_score is not None:
+            update_fields.append("optimization_score = %s")
+            params.append(request.optimization_score)
         
         if request.status is not None:
-            updates.append("status = %s")
-            values.append(request.status)
+            update_fields.append("status = %s")
+            params.append(request.status)
         
-        if not updates:
+        if not update_fields:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="No fields to update"
             )
         
-        updates.append("updated_at = NOW()")
-        values.append(content_id)
+        params.append(content_id)
         
-        query = f"UPDATE content_library SET {', '.join(updates)} WHERE content_id = %s"
-        cursor.execute(query, values)
+        query = f"""
+            UPDATE content_library 
+            SET {', '.join(update_fields)}
+            WHERE content_id = %s
+        """
+        
+        cursor.execute(query, tuple(params))
         connection.commit()
         
-        # Recalculate performance score if content was updated
-        if request.content_text:
-            cursor.execute("SELECT platform FROM content_library WHERE content_id = %s", (content_id,))
-            content = cursor.fetchone()
-            if content:
-                performance = await calculate_performance_score(
-                    content_text=request.content_text,
-                    platform=content['platform']
-                )
-                cursor.execute(
-                    "UPDATE content_library SET optimization_score = %s WHERE content_id = %s",
-                    (performance.get('overall_score', 0), content_id)
-                )
-                connection.commit()
+        if cursor.rowcount == 0:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Content not found"
+            )
         
         return {
             "success": True,
@@ -1068,6 +925,7 @@ async def update_content(
     except Exception as e:
         if connection:
             connection.rollback()
+        print(f"Error updating content: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update content: {str(e)}"
@@ -1084,7 +942,7 @@ async def delete_content(
     content_id: int,
     current_user: dict = Depends(require_admin_or_employee)
 ):
-    """Delete content item"""
+    """Delete content from library"""
     
     connection = None
     cursor = None
@@ -1093,7 +951,11 @@ async def delete_content(
         connection = get_db_connection()
         cursor = connection.cursor()
         
-        cursor.execute("DELETE FROM content_library WHERE content_id = %s", (content_id,))
+        cursor.execute("""
+            DELETE FROM content_library 
+            WHERE content_id = %s
+        """, (content_id,))
+        
         connection.commit()
         
         if cursor.rowcount == 0:
@@ -1112,6 +974,7 @@ async def delete_content(
     except Exception as e:
         if connection:
             connection.rollback()
+        print(f"Error deleting content: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete content: {str(e)}"
@@ -1127,13 +990,9 @@ async def delete_content(
 async def get_all_platform_guidelines():
     """Get content guidelines for all platforms"""
     
-    platforms = ["instagram", "facebook", "linkedin", "twitter", "pinterest"]
-    guidelines = {}
-    
-    for platform in platforms:
-        guidelines[platform] = get_platform_guidelines(platform)
+    platforms = ["instagram", "facebook", "linkedin", "twitter", "pinterest", "youtube"]
     
     return {
         "success": True,
-        "guidelines": guidelines
+        "data": {platform: get_platform_guidelines(platform) for platform in platforms}
     }
