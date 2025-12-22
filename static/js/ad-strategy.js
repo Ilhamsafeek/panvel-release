@@ -19,7 +19,7 @@ let selectedAdCopy = null;
 // INITIALIZATION
 // =====================================================
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     loadClients();
     loadDashboard();
 });
@@ -45,7 +45,7 @@ function showNotification(message, type = 'info') {
     `;
     notification.textContent = message;
     document.body.appendChild(notification);
-    
+
     setTimeout(() => {
         notification.style.animation = 'slideOut 0.3s ease-out';
         setTimeout(() => notification.remove(), 300);
@@ -59,10 +59,10 @@ function showNotification(message, type = 'info') {
 function switchTab(tabName) {
     document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
     event.target.closest('.tab').classList.add('active');
-    
+
     document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
     document.getElementById(`${tabName}-tab`).classList.add('active');
-    
+
     if (tabName === 'campaigns') {
         loadCampaigns();
     } else if (tabName === 'audience') {
@@ -81,11 +81,11 @@ async function loadClients() {
         const response = await fetch('/api/v1/clients/list', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        
+
         if (!response.ok) throw new Error('Failed to fetch clients');
-        
+
         const data = await response.json();
-        
+
         const selectors = ['filterClientCampaign', 'filterClientAudience'];
         selectors.forEach(id => {
             const select = document.getElementById(id);
@@ -98,11 +98,11 @@ async function loadClients() {
                 }
             }
         });
-        
+
         if (data.clients && data.clients.length === 1) {
             currentClientId = data.clients[0].user_id;
         }
-        
+
     } catch (error) {
         console.error('Error loading clients:', error);
         showNotification('Failed to load clients', 'error');
@@ -119,20 +119,20 @@ async function loadDashboard() {
         showEmptyDashboard();
         return;
     }
-    
+
     try {
         const response = await fetch(`${API_BASE}/dashboard/${clientId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        
+
         if (!response.ok) throw new Error('Failed to load dashboard');
-        
+
         const data = await response.json();
-        
+
         displayDashboardStats(data.campaign_stats);
         displayPlatformPerformance(data.platform_performance);
         displayRecentCampaigns(data.recent_campaigns);
-        
+
     } catch (error) {
         console.error('Error loading dashboard:', error);
         showNotification('Failed to load dashboard data', 'error');
@@ -157,7 +157,7 @@ function displayDashboardStats(stats) {
         container.innerHTML = '<div class="empty-state"><p>No campaign data available</p></div>';
         return;
     }
-    
+
     container.innerHTML = `
         <div class="stat-card">
             <div class="stat-icon"><i class="ti ti-badge-ad"></i></div>
@@ -184,12 +184,12 @@ function displayDashboardStats(stats) {
 
 function displayPlatformPerformance(platforms) {
     const container = document.getElementById('platformPerformance');
-    
+
     if (!platforms || platforms.length === 0) {
         container.innerHTML = '<div class="empty-state"><i class="ti ti-chart-bar"></i><p>No performance data yet</p></div>';
         return;
     }
-    
+
     container.innerHTML = platforms.map(platform => `
         <div class="campaign-card">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
@@ -220,12 +220,12 @@ function displayPlatformPerformance(platforms) {
 
 function displayRecentCampaigns(campaigns) {
     const container = document.getElementById('recentCampaigns');
-    
+
     if (!campaigns || campaigns.length === 0) {
         container.innerHTML = '<div class="empty-state"><i class="ti ti-badge-ad"></i><p>No campaigns yet</p></div>';
         return;
     }
-    
+
     container.innerHTML = campaigns.map(campaign => `
         <div class="campaign-card" onclick="viewCampaign(${campaign.campaign_id})">
             <div class="campaign-header">
@@ -259,27 +259,27 @@ function showEmptyDashboard() {
 async function loadCampaigns() {
     const clientId = document.getElementById('filterClientCampaign').value;
     const platform = document.getElementById('filterPlatformCampaign').value;
-    
+
     const container = document.getElementById('campaignsList');
     container.innerHTML = '<div style="text-align: center; padding: 2rem;"><div class="loading-spinner"></div><p>Loading campaigns...</p></div>';
-    
+
     try {
         let url = `${API_BASE}/campaigns/list/${clientId || (await getFirstClientId())}`;
         if (platform) url += `?platform=${platform}`;
-        
+
         const response = await fetch(url, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        
+
         if (!response.ok) throw new Error('Failed to load campaigns');
-        
+
         const data = await response.json();
-        
+
         if (!data.campaigns || data.campaigns.length === 0) {
             container.innerHTML = '<div class="empty-state"><i class="ti ti-badge-ad"></i><h3>No campaigns yet</h3><p>Create your first ad campaign to get started</p></div>';
             return;
         }
-        
+
         container.innerHTML = data.campaigns.map(campaign => `
             <div class="campaign-card">
                 <div class="campaign-header">
@@ -322,7 +322,7 @@ async function loadCampaigns() {
                 </div>
             </div>
         `).join('');
-        
+
     } catch (error) {
         console.error('Error loading campaigns:', error);
         container.innerHTML = '<div class="empty-state"><i class="ti ti-alert-circle"></i><p>Failed to load campaigns</p></div>';
@@ -333,11 +333,11 @@ async function loadCampaigns() {
 function openCreateCampaignModal() {
     // Load clients into modal dropdown
     loadClientsForModal('campaignClient');
-    
+
     // Set default start date to today
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('campaignStartDate').value = today;
-    
+
     // Show modal
     document.getElementById('campaignModal').style.display = 'flex';
 }
@@ -351,7 +351,7 @@ async function submitCampaign() {
     const btn = document.getElementById('submitCampaignBtn');
     btn.disabled = true;
     btn.innerHTML = '<i class="ti ti-loader"></i> Creating...';
-    
+
     try {
         const formData = {
             client_id: parseInt(document.getElementById('campaignClient').value),
@@ -366,7 +366,7 @@ async function submitCampaign() {
             placement_settings: {},
             ab_test_config: document.getElementById('enableABTest').checked ? {} : null
         };
-        
+
         const response = await fetch(`${API_BASE}/campaigns/create`, {
             method: 'POST',
             headers: {
@@ -375,17 +375,17 @@ async function submitCampaign() {
             },
             body: JSON.stringify(formData)
         });
-        
+
         if (!response.ok) {
             const error = await response.json();
             throw new Error(error.detail || 'Failed to create campaign');
         }
-        
+
         const data = await response.json();
         showNotification('Campaign created successfully!', 'success');
         closeCampaignModal();
         loadCampaigns();
-        
+
     } catch (error) {
         console.error('Error creating campaign:', error);
         showNotification(error.message, 'error');
@@ -397,22 +397,22 @@ async function submitCampaign() {
 
 async function publishCampaign(campaignId) {
     if (!confirm('Publish this campaign to the ad platform?')) return;
-    
+
     try {
         const response = await fetch(`${API_BASE}/campaigns/${campaignId}/publish`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        
+
         if (!response.ok) {
             const error = await response.json();
             throw new Error(error.detail || 'Failed to publish campaign');
         }
-        
+
         const data = await response.json();
         showNotification(data.message, 'success');
         loadCampaigns();
-        
+
     } catch (error) {
         console.error('Error publishing campaign:', error);
         showNotification(error.message, 'error');
@@ -424,42 +424,42 @@ async function viewCampaign(campaignId) {
         const campaignResponse = await fetch(`${API_BASE}/campaigns/list/${currentClientId || (await getFirstClientId())}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        
+
         if (!campaignResponse.ok) throw new Error('Failed to fetch campaign');
-        
+
         const campaignData = await campaignResponse.json();
         const campaign = campaignData.campaigns.find(c => c.campaign_id === campaignId);
-        
+
         if (!campaign) {
             showNotification('Campaign not found', 'error');
             return;
         }
-        
+
         // Fetch campaign ads
         const adsResponse = await fetch(`${API_BASE}/campaigns/${campaignId}/ads`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        
+
         let ads = [];
         if (adsResponse.ok) {
             const adsData = await adsResponse.json();
             ads = adsData.ads || [];
         }
-        
+
         // Fetch performance data
         const perfResponse = await fetch(`${API_BASE}/performance/${campaignId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        
+
         let performance = null;
         if (perfResponse.ok) {
             const perfData = await perfResponse.json();
             performance = perfData.performance || null;
         }
-        
+
         // Display campaign details modal
         displayCampaignDetailsModal(campaign, ads, performance);
-        
+
     } catch (error) {
         console.error('Error loading campaign details:', error);
         showNotification('Failed to load campaign details', 'error');
@@ -471,9 +471,9 @@ function displayCampaignDetailsModal(campaign, ads, performance) {
     if (!modal) {
         createCampaignDetailsModal();
     }
-    
+
     const detailsContainer = document.getElementById('campaignDetailsContent');
-    
+
     // Campaign header
     let html = `
         <div style="margin-bottom: 2rem;">
@@ -533,7 +533,7 @@ function displayCampaignDetailsModal(campaign, ads, performance) {
             </div>
         </div>
     `;
-    
+
     // Performance metrics
     if (performance) {
         html += `
@@ -570,7 +570,7 @@ function displayCampaignDetailsModal(campaign, ads, performance) {
             </div>
         `;
     }
-    
+
     // Campaign ads
     html += `
         <div>
@@ -636,7 +636,7 @@ function displayCampaignDetailsModal(campaign, ads, performance) {
             `}
         </div>
     `;
-    
+
     detailsContainer.innerHTML = html;
     document.getElementById('campaignDetailsModal').style.display = 'flex';
 }
@@ -646,7 +646,7 @@ function createCampaignDetailsModal() {
     modal.id = 'campaignDetailsModal';
     modal.className = 'modal';
     modal.style.display = 'none';
-    
+
     modal.innerHTML = `
         <div class="modal-overlay" onclick="closeCampaignDetailsModal()"></div>
         <div class="modal-container" style="max-width: 1200px; max-height: 90vh; overflow-y: auto;">
@@ -664,7 +664,7 @@ function createCampaignDetailsModal() {
             </div>
         </div>
     `;
-    
+
     document.body.appendChild(modal);
 }
 
@@ -677,7 +677,7 @@ function closeCampaignDetailsModal() {
 
 async function pauseCampaign(campaignId) {
     if (!confirm('Are you sure you want to pause this campaign?')) return;
-    
+
     try {
         const response = await fetch(`${API_BASE}/campaigns/${campaignId}/control`, {
             method: 'POST',
@@ -687,16 +687,16 @@ async function pauseCampaign(campaignId) {
             },
             body: JSON.stringify({ action: 'pause' })
         });
-        
+
         if (!response.ok) {
             const error = await response.json();
             throw new Error(error.detail || 'Failed to pause campaign');
         }
-        
+
         showNotification('Campaign paused successfully', 'success');
         closeCampaignDetailsModal();
         loadCampaigns();
-        
+
     } catch (error) {
         console.error('Error pausing campaign:', error);
         showNotification(error.message, 'error');
@@ -705,7 +705,7 @@ async function pauseCampaign(campaignId) {
 
 async function resumeCampaign(campaignId) {
     if (!confirm('Resume this campaign?')) return;
-    
+
     try {
         const response = await fetch(`${API_BASE}/campaigns/${campaignId}/control`, {
             method: 'POST',
@@ -715,16 +715,16 @@ async function resumeCampaign(campaignId) {
             },
             body: JSON.stringify({ action: 'resume' })
         });
-        
+
         if (!response.ok) {
             const error = await response.json();
             throw new Error(error.detail || 'Failed to resume campaign');
         }
-        
+
         showNotification('Campaign resumed successfully', 'success');
         closeCampaignDetailsModal();
         loadCampaigns();
-        
+
     } catch (error) {
         console.error('Error resuming campaign:', error);
         showNotification(error.message, 'error');
@@ -733,16 +733,16 @@ async function resumeCampaign(campaignId) {
 
 async function openCreateAdModal(campaignId) {
     currentCampaignId = campaignId;
-    
+
     // Create modal if it doesn't exist
     if (!document.getElementById('createAdModal')) {
         createAdModal();
     }
-    
+
     // Reset form
     document.getElementById('createAdForm').reset();
     document.getElementById('adCampaignId').value = campaignId;
-    
+
     // Show modal
     document.getElementById('createAdModal').style.display = 'flex';
 }
@@ -752,7 +752,7 @@ function createAdModal() {
     modal.id = 'createAdModal';
     modal.className = 'modal';
     modal.style.display = 'none';
-    
+
     modal.innerHTML = `
         <div class="modal-overlay" onclick="closeCreateAdModal()"></div>
         <div class="modal-container" style="max-width: 900px;">
@@ -841,24 +841,24 @@ function createAdModal() {
             </div>
         </div>
     `;
-    
+
     document.body.appendChild(modal);
-    
+
     // Add character counters
-    document.getElementById('adHeadline').addEventListener('input', function(e) {
+    document.getElementById('adHeadline').addEventListener('input', function (e) {
         document.getElementById('headlineCount').textContent = e.target.value.length;
     });
-    
-    document.getElementById('adPrimaryText').addEventListener('input', function(e) {
+
+    document.getElementById('adPrimaryText').addEventListener('input', function (e) {
         document.getElementById('primaryTextCount').textContent = e.target.value.length;
     });
-    
-    document.getElementById('adDescription').addEventListener('input', function(e) {
+
+    document.getElementById('adDescription').addEventListener('input', function (e) {
         document.getElementById('descriptionCount').textContent = e.target.value.length;
     });
-    
+
     // Show/hide A/B test group
-    document.getElementById('isABTest').addEventListener('change', function(e) {
+    document.getElementById('isABTest').addEventListener('change', function (e) {
         document.getElementById('abTestGroup').style.display = e.target.checked ? 'block' : 'none';
     });
 }
@@ -871,7 +871,7 @@ async function submitCreateAd() {
     const btn = document.getElementById('submitAdBtn');
     btn.disabled = true;
     btn.innerHTML = '<i class="ti ti-loader"></i> Creating...';
-    
+
     try {
         // Collect media URLs
         const mediaUrls = [];
@@ -879,9 +879,9 @@ async function submitCreateAd() {
             const url = document.getElementById(`mediaUrl${i}`).value.trim();
             if (url) mediaUrls.push(url);
         }
-        
+
         const isABTest = document.getElementById('isABTest').checked;
-        
+
         const adData = {
             campaign_id: parseInt(document.getElementById('adCampaignId').value),
             ad_name: document.getElementById('adName').value,
@@ -893,7 +893,7 @@ async function submitCreateAd() {
             is_ab_test_variant: isABTest,
             ab_test_group: isABTest ? document.getElementById('abGroup').value : null
         };
-        
+
         const response = await fetch(`${API_BASE}/ads/create`, {
             method: 'POST',
             headers: {
@@ -902,19 +902,19 @@ async function submitCreateAd() {
             },
             body: JSON.stringify(adData)
         });
-        
+
         if (!response.ok) {
             const error = await response.json();
             throw new Error(error.detail || 'Failed to create ad');
         }
-        
+
         const data = await response.json();
         showNotification('Ad created successfully!', 'success');
         closeCreateAdModal();
-        
+
         // Reload campaign details to show new ad
         viewCampaign(adData.campaign_id);
-        
+
     } catch (error) {
         console.error('Error creating ad:', error);
         showNotification(error.message, 'error');
@@ -932,57 +932,402 @@ async function submitCreateAd() {
 async function loadAudienceSegments() {
     const clientId = document.getElementById('filterClientAudience').value;
     if (!clientId) {
-        document.getElementById('audienceSegmentsList').innerHTML = '<div class="empty-state"><i class="ti ti-users"></i><p>Please select a client</p></div>';
+        document.getElementById('audienceSegmentsList').innerHTML = `
+            <div class="empty-state">
+                <i class="ti ti-users"></i>
+                <p>Please select a client</p>
+            </div>
+        `;
         return;
     }
-    
+
     const container = document.getElementById('audienceSegmentsList');
-    container.innerHTML = '<div style="text-align: center; padding: 2rem;"><div class="loading-spinner"></div><p>Loading segments...</p></div>';
-    
+    container.innerHTML = `
+        <div style="text-align: center; padding: 2rem;">
+            <div class="loading-spinner"></div>
+            <p>Loading segments with AI insights...</p>
+        </div>
+    `;
+
     try {
         const response = await fetch(`${API_BASE}/audience/list/${clientId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        
+
         if (!response.ok) throw new Error('Failed to load segments');
-        
+
         const data = await response.json();
-        
+
         if (!data.segments || data.segments.length === 0) {
-            container.innerHTML = '<div class="empty-state"><i class="ti ti-users"></i><h3>No audience segments yet</h3><p>Create a segment to target specific audiences</p></div>';
+            container.innerHTML = `
+                <div class="empty-state">
+                    <i class="ti ti-users"></i>
+                    <h3>No audience segments yet</h3>
+                    <p>Create a segment to target specific audiences</p>
+                    <button class="btn-primary" onclick="openCreateAudienceModal()" style="margin-top: 1rem;">
+                        <i class="ti ti-plus"></i> Create Segment
+                    </button>
+                </div>
+            `;
             return;
         }
-        
-        container.innerHTML = data.segments.map(segment => `
-            <div class="campaign-card">
-                <div class="campaign-header">
-                    <div>
-                        <div class="campaign-title">${segment.segment_name}</div>
-                        <div class="campaign-meta">
-                            <span><i class="ti ti-calendar"></i> ${new Date(segment.created_at).toLocaleDateString()}</span>
-                            <span><i class="ti ti-user"></i> ${segment.creator_name}</span>
-                        </div>
-                    </div>
-                    <span class="platform-badge">${segment.platform}</span>
-                </div>
-                <div style="margin-top: 1rem;">
-                    <div style="font-size: 0.875rem; color: #64748b; margin-bottom: 0.5rem;">Estimated Reach</div>
-                    <div style="font-size: 1.25rem; font-weight: 600;">${Number(segment.estimated_size || 0).toLocaleString()} people</div>
-                </div>
+
+        container.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h3 style="margin: 0;"><i class="ti ti-users-group"></i> Audience Segments (${data.segments.length})</h3>
+                <button class="btn-primary" onclick="openCreateAudienceModal()">
+                    <i class="ti ti-plus"></i> New Segment
+                </button>
             </div>
-        `).join('');
-        
+            <div class="segments-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 1.5rem;">
+                ${data.segments.map(segment => renderAudienceSegmentCard(segment)).join('')}
+            </div>
+        `;
+
     } catch (error) {
         console.error('Error loading segments:', error);
-        container.innerHTML = '<div class="empty-state"><i class="ti ti-alert-circle"></i><p>Failed to load segments</p></div>';
+        container.innerHTML = `
+            <div class="empty-state">
+                <i class="ti ti-alert-circle"></i>
+                <p>Failed to load segments</p>
+            </div>
+        `;
         showNotification('Failed to load audience segments', 'error');
     }
 }
 
+function renderAudienceSegmentCard(segment) {
+    // Parse AI insights if available
+    const aiInsights = segment.ai_insights || segment.insights || {};
+    const demographics = segment.demographics || {};
+    const interests = segment.interests || [];
+    const behaviors = segment.behaviors || [];
+    const estimatedSize = segment.estimated_size || segment.estimated_reach || 0;
+    const predictedCPL = segment.predicted_cpl || aiInsights.predicted_cpl || null;
+    const conversionProbability = aiInsights.conversion_probability || segment.conversion_score || null;
+    
+    return `
+        <div class="segment-card" style="
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: all 0.2s;
+        " onmouseover="this.style.boxShadow='0 4px 12px rgba(153,38,243,0.15)'; this.style.borderColor='#9926F3';"
+           onmouseout="this.style.boxShadow='none'; this.style.borderColor='#e2e8f0';">
+            
+            <!-- Header -->
+            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
+                <div>
+                    <h4 style="margin: 0 0 0.25rem 0; color: #1e293b;">${segment.segment_name}</h4>
+                    <span style="
+                        background: linear-gradient(135deg, #9926F3, #1DD8FC);
+                        -webkit-background-clip: text;
+                        -webkit-text-fill-color: transparent;
+                        font-size: 0.875rem;
+                        font-weight: 500;
+                    ">${segment.platform || 'Multi-platform'}</span>
+                </div>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button class="btn-icon" onclick="editSegment(${segment.segment_id})" title="Edit">
+                        <i class="ti ti-edit"></i>
+                    </button>
+                    <button class="btn-icon" onclick="deleteSegment(${segment.segment_id})" title="Delete">
+                        <i class="ti ti-trash"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Estimated Reach -->
+            <div style="
+                background: linear-gradient(135deg, rgba(153,38,243,0.1), rgba(29,216,252,0.1));
+                border-radius: 8px;
+                padding: 1rem;
+                margin-bottom: 1rem;
+                text-align: center;
+            ">
+                <div style="font-size: 1.75rem; font-weight: 700; color: #9926F3;">
+                    ${estimatedSize.toLocaleString()}
+                </div>
+                <div style="color: #64748b; font-size: 0.875rem;">Estimated Reach</div>
+            </div>
+            
+            <!-- AI Insights Section -->
+            ${(predictedCPL || conversionProbability) ? `
+            <div style="
+                background: #f8fafc;
+                border-radius: 8px;
+                padding: 1rem;
+                margin-bottom: 1rem;
+            ">
+                <div style="font-size: 0.75rem; color: #9926F3; font-weight: 600; margin-bottom: 0.5rem;">
+                    <i class="ti ti-brain"></i> AI INSIGHTS
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    ${predictedCPL ? `
+                    <div>
+                        <div style="font-size: 1.25rem; font-weight: 600; color: #1e293b;">${predictedCPL.toFixed(2)}</div>
+                        <div style="font-size: 0.75rem; color: #64748b;">Predicted CPL</div>
+                    </div>
+                    ` : ''}
+                    ${conversionProbability ? `
+                    <div>
+                        <div style="font-size: 1.25rem; font-weight: 600; color: ${conversionProbability >= 70 ? '#22c55e' : conversionProbability >= 40 ? '#f59e0b' : '#ef4444'};">
+                            ${conversionProbability}%
+                        </div>
+                        <div style="font-size: 0.75rem; color: #64748b;">Conversion Probability</div>
+                    </div>
+                    ` : ''}
+                </div>
+            </div>
+            ` : ''}
+            
+            <!-- Demographics -->
+            ${Object.keys(demographics).length > 0 ? `
+            <div style="margin-bottom: 1rem;">
+                <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 0.5rem;">DEMOGRAPHICS</div>
+                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                    ${demographics.age ? `<span style="background: #e2e8f0; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem;"><i class="ti ti-calendar"></i> ${demographics.age}</span>` : ''}
+                    ${demographics.gender ? `<span style="background: #e2e8f0; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem;"><i class="ti ti-gender-bigender"></i> ${demographics.gender}</span>` : ''}
+                    ${demographics.location ? `<span style="background: #e2e8f0; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem;"><i class="ti ti-map-pin"></i> ${demographics.location}</span>` : ''}
+                </div>
+            </div>
+            ` : ''}
+            
+            <!-- Interests -->
+            ${interests.length > 0 ? `
+            <div style="margin-bottom: 1rem;">
+                <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 0.5rem;">INTERESTS</div>
+                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                    ${interests.slice(0, 5).map(i => `
+                        <span style="background: rgba(153,38,243,0.1); color: #9926F3; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem;">${i}</span>
+                    `).join('')}
+                    ${interests.length > 5 ? `<span style="color: #64748b; font-size: 0.75rem;">+${interests.length - 5} more</span>` : ''}
+                </div>
+            </div>
+            ` : ''}
+            
+            <!-- Behaviors -->
+            ${behaviors.length > 0 ? `
+            <div style="margin-bottom: 1rem;">
+                <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 0.5rem;">BEHAVIORS</div>
+                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                    ${behaviors.slice(0, 3).map(b => `
+                        <span style="background: rgba(29,216,252,0.1); color: #1DD8FC; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem;">${b}</span>
+                    `).join('')}
+                </div>
+            </div>
+            ` : ''}
+            
+            <!-- Actions -->
+            <div style="display: flex; gap: 0.75rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e2e8f0;">
+                <button class="btn-secondary" onclick="activateSegment(${segment.segment_id})" style="flex: 1;">
+                    <i class="ti ti-send"></i> Activate
+                </button>
+                <button class="btn-secondary" onclick="duplicateSegment(${segment.segment_id})">
+                    <i class="ti ti-copy"></i>
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+
+async function loadCampaignRecommendations(campaignId) {
+    const container = document.getElementById('campaignRecommendations');
+    if (!container) return;
+    
+    container.innerHTML = `
+        <div style="text-align: center; padding: 1rem;">
+            <div class="loading-spinner"></div>
+            <p style="color: #64748b; font-size: 0.875rem;">Analyzing campaign performance...</p>
+        </div>
+    `;
+    
+    try {
+        const response = await fetch(`${API_BASE}/campaigns/${campaignId}/recommendations`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!response.ok) throw new Error('Failed to load recommendations');
+        
+        const data = await response.json();
+        
+        if (!data.recommendations || data.recommendations.length === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 1rem; color: #64748b;">
+                    <i class="ti ti-check-circle" style="font-size: 2rem; color: #22c55e;"></i>
+                    <p>Campaign is performing well! No recommendations at this time.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        container.innerHTML = `
+            <div class="recommendations-panel" style="
+                background: linear-gradient(135deg, rgba(153,38,243,0.05), rgba(29,216,252,0.05));
+                border: 1px solid rgba(153,38,243,0.2);
+                border-radius: 12px;
+                padding: 1.5rem;
+            ">
+                <h4 style="margin: 0 0 1rem 0; display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="ti ti-bulb" style="color: #f59e0b;"></i>
+                    Real-Time Recommendations
+                </h4>
+                
+                ${data.recommendations.map((rec, idx) => `
+                    <div class="recommendation-item" style="
+                        background: white;
+                        border-radius: 8px;
+                        padding: 1rem;
+                        margin-bottom: ${idx < data.recommendations.length - 1 ? '0.75rem' : '0'};
+                        border-left: 4px solid ${rec.priority === 'high' ? '#ef4444' : rec.priority === 'medium' ? '#f59e0b' : '#22c55e'};
+                    ">
+                        <div style="display: flex; justify-content: space-between; align-items: start;">
+                            <div>
+                                <div style="font-weight: 600; color: #1e293b; margin-bottom: 0.25rem;">
+                                    ${rec.title || rec.type || 'Optimization Suggestion'}
+                                </div>
+                                <p style="color: #64748b; font-size: 0.875rem; margin: 0;">
+                                    ${rec.description || rec.message}
+                                </p>
+                            </div>
+                            ${rec.impact ? `
+                                <span style="
+                                    background: #22c55e;
+                                    color: white;
+                                    padding: 0.25rem 0.5rem;
+                                    border-radius: 4px;
+                                    font-size: 0.75rem;
+                                    white-space: nowrap;
+                                ">+${rec.impact}%</span>
+                            ` : ''}
+                        </div>
+                        ${rec.action ? `
+                            <button class="btn-secondary" onclick="applyRecommendation(${campaignId}, '${rec.action}')" style="margin-top: 0.75rem;">
+                                <i class="ti ti-check"></i> Apply
+                            </button>
+                        ` : ''}
+                    </div>
+                `).join('')}
+            </div>
+        `;
+        
+    } catch (error) {
+        console.error('Error loading recommendations:', error);
+        container.innerHTML = `
+            <div style="text-align: center; padding: 1rem; color: #ef4444;">
+                <i class="ti ti-alert-circle"></i>
+                <p>Unable to load recommendations</p>
+            </div>
+        `;
+    }
+}
+
+
+async function loadDashboardStats() {
+    try {
+        const response = await fetch(`${API_BASE}/dashboard/stats`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!response.ok) throw new Error('Failed to load stats');
+        
+        const data = await response.json();
+        
+        // Update stats cards
+        document.getElementById('totalCampaigns').textContent = data.total_campaigns || 0;
+        document.getElementById('activeCampaigns').textContent = data.active_campaigns || 0;
+        document.getElementById('totalSpend').textContent = `${(data.total_spend || 0).toLocaleString()}`;
+        document.getElementById('avgRoas').textContent = `${(data.avg_roas || 0).toFixed(2)}x`;
+        
+        // Load active campaigns with real-time monitoring
+        if (data.active_campaign_ids && data.active_campaign_ids.length > 0) {
+            loadActiveCampaignMonitoring(data.active_campaign_ids);
+        }
+        
+    } catch (error) {
+        console.error('Error loading dashboard stats:', error);
+    }
+}
+
+
+async function loadActiveCampaignMonitoring(campaignIds) {
+    const container = document.getElementById('activeCampaignMonitor');
+    if (!container) return;
+    
+    container.innerHTML = `
+        <h4 style="margin-bottom: 1rem;"><i class="ti ti-activity"></i> Active Campaign Monitoring</h4>
+        <div id="monitoringCards"></div>
+    `;
+    
+    const cardsContainer = document.getElementById('monitoringCards');
+    
+    for (const campaignId of campaignIds.slice(0, 5)) {
+        try {
+            const response = await fetch(`${API_BASE}/campaigns/${campaignId}/realtime`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (response.ok) {
+                const campaign = await response.json();
+                cardsContainer.innerHTML += renderCampaignMonitorCard(campaign);
+            }
+        } catch (error) {
+            console.error(`Error loading campaign ${campaignId}:`, error);
+        }
+    }
+}
+
+
+function renderCampaignMonitorCard(campaign) {
+    const status = campaign.performance_status || 'normal';
+    const statusColor = status === 'excellent' ? '#22c55e' : status === 'good' ? '#3b82f6' : status === 'warning' ? '#f59e0b' : '#ef4444';
+    
+    return `
+        <div class="monitor-card" style="
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+            border-left: 4px solid ${statusColor};
+        ">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <div style="font-weight: 600; color: #1e293b;">${campaign.campaign_name}</div>
+                    <div style="font-size: 0.875rem; color: #64748b;">${campaign.platform}</div>
+                </div>
+                <div style="text-align: right;">
+                    <div style="font-size: 1.25rem; font-weight: 600; color: ${statusColor};">
+                        ${campaign.current_roas ? `${campaign.current_roas.toFixed(2)}x` : 'N/A'}
+                    </div>
+                    <div style="font-size: 0.75rem; color: #64748b;">ROAS</div>
+                </div>
+            </div>
+            ${campaign.alert ? `
+                <div style="
+                    background: rgba(245,158,11,0.1);
+                    color: #f59e0b;
+                    padding: 0.5rem;
+                    border-radius: 4px;
+                    margin-top: 0.75rem;
+                    font-size: 0.875rem;
+                ">
+                    <i class="ti ti-alert-triangle"></i> ${campaign.alert}
+                </div>
+            ` : ''}
+        </div>
+    `;
+}
+
+
+
+
 function openCreateAudienceModal() {
     // Load clients into modal dropdown
     loadClientsForModal('audienceClient');
-    
+
     // Show modal
     document.getElementById('audienceModal').style.display = 'flex';
 }
@@ -996,12 +1341,12 @@ async function submitAudience() {
     const btn = document.getElementById('submitAudienceBtn');
     btn.disabled = true;
     btn.innerHTML = '<i class="ti ti-loader"></i> Creating...';
-    
+
     try {
         // Get device targeting
         const deviceCheckboxes = document.querySelectorAll('#audienceModal input[type="checkbox"]:checked');
         const devices = Array.from(deviceCheckboxes).map(cb => cb.value).filter(v => v);
-        
+
         const formData = {
             client_id: parseInt(document.getElementById('audienceClient').value),
             platform: document.getElementById('audiencePlatform').value,
@@ -1022,7 +1367,7 @@ async function submitAudience() {
             device_targeting: devices.length > 0 ? { devices: devices } : null,
             lookalike_source: document.getElementById('audienceLookalike').value || null
         };
-        
+
         const response = await fetch(`${API_BASE}/audience/create`, {
             method: 'POST',
             headers: {
@@ -1031,20 +1376,20 @@ async function submitAudience() {
             },
             body: JSON.stringify(formData)
         });
-        
+
         if (!response.ok) {
             const error = await response.json();
             throw new Error(error.detail || 'Failed to create audience segment');
         }
-        
+
         const data = await response.json();
         showNotification('Audience segment created successfully!', 'success');
         closeAudienceModal();
-        
+
         // Switch to audience tab and reload
         document.getElementById('filterClientAudience').value = formData.client_id;
         loadAudienceSegments();
-        
+
     } catch (error) {
         console.error('Error creating audience:', error);
         showNotification(error.message, 'error');
@@ -1059,19 +1404,19 @@ async function loadClientsForModal(selectId) {
         const response = await fetch('/api/v1/clients/list', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        
+
         if (!response.ok) throw new Error('Failed to fetch clients');
-        
+
         const data = await response.json();
         const select = document.getElementById(selectId);
-        
+
         select.innerHTML = '<option value="">Select client...</option>';
         if (data.clients && data.clients.length > 0) {
             data.clients.forEach(client => {
                 select.innerHTML += `<option value="${client.user_id}">${client.full_name}</option>`;
             });
         }
-        
+
     } catch (error) {
         console.error('Error loading clients:', error);
     }
@@ -1086,15 +1431,15 @@ async function getPlatformRecommendations() {
     const objective = document.getElementById('recObjective').value;
     const budget = parseFloat(document.getElementById('recBudget').value);
     const industry = document.getElementById('recIndustry').value;
-    
+
     if (!objective || !budget) {
         showNotification('Please fill in all required fields', 'error');
         return;
     }
-    
+
     btn.disabled = true;
     btn.innerHTML = '<i class="ti ti-wand"></i> Analyzing...<span class="loading-spinner"></span>';
-    
+
     try {
         const response = await fetch(`${API_BASE}/platform/recommend`, {
             method: 'POST',
@@ -1110,15 +1455,15 @@ async function getPlatformRecommendations() {
                 industry: industry || null
             })
         });
-        
+
         if (!response.ok) {
             const error = await response.json();
             throw new Error(error.detail || 'Failed to get recommendations');
         }
-        
+
         const data = await response.json();
         displayPlatformRecommendations(data.recommendations);
-        
+
     } catch (error) {
         console.error('Error getting recommendations:', error);
         showNotification(error.message, 'error');
@@ -1130,15 +1475,15 @@ async function getPlatformRecommendations() {
 
 function displayPlatformRecommendations(recommendations) {
     const container = document.getElementById('platformRecommendations');
-    
+
     if (!recommendations || !recommendations.recommendations) {
         container.innerHTML = '<p>No recommendations available</p>';
         return;
     }
-    
+
     container.innerHTML = recommendations.recommendations.map((rec, index) => {
         // Properly handle formats array
-        const formatsHtml = rec.formats && Array.isArray(rec.formats) 
+        const formatsHtml = rec.formats && Array.isArray(rec.formats)
             ? rec.formats.map(fmt => `
                 <div style="margin-bottom: 0.75rem; padding: 0.75rem; background: white; border-radius: 6px;">
                     <strong>${fmt.format_name}</strong> (${fmt.budget_allocation}% of platform budget)<br>
@@ -1147,7 +1492,7 @@ function displayPlatformRecommendations(recommendations) {
                 </div>
             `).join('')
             : '<p>No format details available</p>';
-        
+
         return `
             <div class="recommendation-card">
                 <h4>${index + 1}. ${rec.platform} - ${rec.budget_percent}% of budget</h4>
@@ -1185,15 +1530,15 @@ async function generateAdCopy() {
     const audience = document.getElementById('copyAudience').value;
     const platform = document.getElementById('copyPlatform').value;
     const benefits = document.getElementById('copyBenefits').value.split(',').map(b => b.trim()).filter(b => b);
-    
+
     if (!product || !audience) {
         showNotification('Please fill in all required fields', 'error');
         return;
     }
-    
+
     btn.disabled = true;
     btn.innerHTML = '<i class="ti ti-sparkles"></i> Generating...<span class="loading-spinner"></span>';
-    
+
     try {
         const response = await fetch(`${API_BASE}/adcopy/generate`, {
             method: 'POST',
@@ -1211,15 +1556,15 @@ async function generateAdCopy() {
                 cta_type: 'Learn More'
             })
         });
-        
+
         if (!response.ok) {
             const error = await response.json();
             throw new Error(error.detail || 'Failed to generate ad copy');
         }
-        
+
         const data = await response.json();
         displayAdCopyResults(data.ad_copy);
-        
+
     } catch (error) {
         console.error('Error generating ad copy:', error);
         showNotification(error.message, 'error');
@@ -1231,12 +1576,12 @@ async function generateAdCopy() {
 
 function displayAdCopyResults(adCopy) {
     const container = document.getElementById('adCopyResults');
-    
+
     if (!adCopy || !adCopy.variations) {
         container.innerHTML = '<p>No ad copy generated</p>';
         return;
     }
-    
+
     container.innerHTML = `
         <h3 style="margin-bottom: 1rem;">Generated Ad Copy Variations</h3>
         ${adCopy.variations.map((variation, index) => `
@@ -1284,15 +1629,15 @@ async function forecastPerformance() {
     const budget = parseFloat(document.getElementById('forecastBudget').value);
     const duration = parseInt(document.getElementById('forecastDuration').value);
     const audience = parseInt(document.getElementById('forecastAudience').value);
-    
+
     if (!budget || !duration || !audience) {
         showNotification('Please fill in all required fields', 'error');
         return;
     }
-    
+
     btn.disabled = true;
     btn.innerHTML = '<i class="ti ti-calculator"></i> Calculating...<span class="loading-spinner"></span>';
-    
+
     try {
         const response = await fetch(`${API_BASE}/forecast`, {
             method: 'POST',
@@ -1311,15 +1656,15 @@ async function forecastPerformance() {
                 run_simulations: true
             })
         });
-        
+
         if (!response.ok) {
             const error = await response.json();
             throw new Error(error.detail || 'Failed to generate forecast');
         }
-        
+
         const data = await response.json();
         displayForecastResults(data.forecast);
-        
+
     } catch (error) {
         console.error('Error generating forecast:', error);
         showNotification(error.message, 'error');
@@ -1331,14 +1676,14 @@ async function forecastPerformance() {
 
 function displayForecastResults(forecast) {
     const container = document.getElementById('forecastResults');
-    
+
     if (!forecast || !forecast.total_metrics) {
         container.innerHTML = '<p>No forecast available</p>';
         return;
     }
-    
+
     const metrics = forecast.total_metrics;
-    
+
     let breakEvenHtml = '';
     if (forecast.breakeven_analysis) {
         const ba = forecast.breakeven_analysis;
@@ -1364,7 +1709,7 @@ function displayForecastResults(forecast) {
             </div>
         `;
     }
-    
+
     container.innerHTML = `
         <h3 style="margin-bottom: 1rem;">Performance Forecast</h3>
         <div class="forecast-grid">
