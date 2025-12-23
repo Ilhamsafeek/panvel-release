@@ -387,51 +387,81 @@ async def calculate_performance_score(
         "optimal_length": optimal_length,
         "max_length": max_length
     }
-
-
 async def generate_audience_and_keywords(
     client_id: int,
     topic: str,
     platform: str,
     industry: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Generate target audience and keywords based on client profile"""
+    """
+    Generate target audience and keywords based on client profile
+    FIXED VERSION with proper error handling
+    """
     
+    # Check if OpenAI client is available
     if not openai_client:
-        return {
-            "target_audience": {"description": "General audience"},
-            "keywords": {"primary": [], "secondary": []},
-            "content_recommendations": {}
-        }
+        print("❌ [AUDIENCE INSIGHTS] OpenAI client not initialized!")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI service not available. OpenAI client not initialized."
+        )
     
     connection = None
     cursor = None
     
     try:
+        print(f"✅ [AUDIENCE INSIGHTS] Starting for client_id={client_id}, topic={topic}, platform={platform}")
+        
+        # Get client data from database
         connection = get_db_connection()
         cursor = connection.cursor(pymysql.cursors.DictCursor)
         
+        # FIXED: Use correct table names - client_profiles instead of clients
         cursor.execute("""
-            SELECT u.full_name, u.email,
-                   c.company_name, c.industry, c.target_audience as existing_audience,
-                   c.website_url, c.business_type
+            SELECT 
+                u.full_name, 
+                u.email,
+                cp.business_name as company_name,
+                cp.business_type,
+                cp.website_url,
+                pp.target_audience as existing_audience,
+                pp.business_type as proposal_business_type
             FROM users u
-            LEFT JOIN clients c ON u.user_id = c.client_id
+            LEFT JOIN client_profiles cp ON u.user_id = cp.client_id
+            LEFT JOIN project_proposals pp ON u.user_id = pp.client_id
             WHERE u.user_id = %s
+            ORDER BY pp.created_at DESC
+            LIMIT 1
         """, (client_id,))
         
         client_data = cursor.fetchone()
         
-        client_context = ""
-        if client_data:
+        if not client_data:
+            print(f"⚠️ [AUDIENCE INSIGHTS] Client {client_id} not found in database")
+            # Continue with minimal context
             client_context = f"""
 Client Profile:
-- Company: {client_data.get('company_name', 'N/A')}
-- Industry: {client_data.get('industry', industry or 'General')}
-- Business Type: {client_data.get('business_type', 'N/A')}
+- Client ID: {client_id}
+- Industry: {industry or 'General'}
+- Note: Limited client information available
+"""
+        else:
+            print(f"✅ [AUDIENCE INSIGHTS] Found client: {client_data.get('full_name', 'N/A')}")
+            # Use the correct field names from our query
+            company_name = client_data.get('company_name') or client_data.get('business_name') or 'N/A'
+            business_type = client_data.get('business_type') or client_data.get('proposal_business_type') or 'N/A'
+            
+            client_context = f"""
+Client Profile:
+- Name: {client_data.get('full_name', 'N/A')}
+- Company: {company_name}
+- Business Type: {business_type}
+- Industry: {industry or 'General'}
 - Existing Target Audience: {client_data.get('existing_audience', 'Not specified')}
+- Website: {client_data.get('website_url', 'N/A')}
 """
         
+        # Create comprehensive prompt for OpenAI
         prompt = f"""Based on the following client profile and content topic, generate comprehensive target audience and keywords for {platform} content.
 
 {client_context}
@@ -439,66 +469,228 @@ Client Profile:
 Topic: {topic}
 Platform: {platform}
 
-Provide response in this JSON format:
+IMPORTANT: Provide a detailed, specific response in this EXACT JSON format (no markdown, no code blocks):
 {{
     "target_audience": {{
-        "description": "Brief description of ideal audience",
-        "demographics": ["age range", "location", "interests"],
-        "pain_points": ["problem 1", "problem 2"],
-        "goals": ["goal 1", "goal 2"]
+        "description": "Detailed 2-3 sentence description of the ideal target audience for this content",
+        "demographics": ["age range", "gender", "location", "income level", "education"],
+        "interests": ["specific interest 1", "specific interest 2", "specific interest 3", "specific interest 4"],
+        "behaviors": ["online behavior 1", "purchasing behavior 2", "content consumption behavior 3"],
+        "pain_points": ["specific pain point 1", "pain point 2", "pain point 3"],
+        "goals": ["audience goal 1", "goal 2", "goal 3"]
     }},
     "keywords": {{
-        "primary": ["keyword1", "keyword2", "keyword3"],
-        "secondary": ["keyword4", "keyword5", "keyword6"],
-        "hashtags": ["hashtag1", "hashtag2"]
+        "primary": ["highly relevant keyword 1", "keyword 2", "keyword 3", "keyword 4", "keyword 5"],
+        "secondary": ["supporting keyword 1", "keyword 2", "keyword 3", "keyword 4", "keyword 5"]
     }},
     "content_recommendations": {{
-        "best_time_to_post": "Suggested posting time",
-        "content_angle": "Suggested content angle",
-        "cta_suggestion": "Suggested call-to-action"
+        "best_time_to_post": "Specific day and time recommendation with reasoning",
+        "content_angle": "Specific content angle that will resonate with this audience",
+        "cta_suggestion": "Specific call-to-action that matches audience intent"
     }}
 }}
-"""
+
+Requirements:
+- Be SPECIFIC, not generic
+- Base recommendations on the client's industry and business type
+- Use actual behavioral data for {platform}
+- Include demographic details relevant to {topic}
+- Provide actionable keywords, not just topic words
+- Make it ready to use immediately
+
+Respond with ONLY the JSON object, no additional text or markdown formatting."""
         
+        print(f"📤 [AUDIENCE INSIGHTS] Sending request to OpenAI GPT-4...")
+        
+        # Call OpenAI API
         response = openai_client.chat.completions.create(
-            model=settings.OPENAI_MODEL,
+            model="gpt-4",  # Use GPT-4 for better quality
             messages=[
-                {"role": "system", "content": "You are an expert digital marketing strategist. Always respond with valid JSON."},
-                {"role": "user", "content": prompt}
+                {
+                    "role": "system", 
+                    "content": "You are an expert digital marketing strategist with deep knowledge of audience targeting, keyword research, and platform-specific content optimization. Always respond with valid, well-structured JSON without any markdown formatting."
+                },
+                {
+                    "role": "user", 
+                    "content": prompt
+                }
             ],
             temperature=0.7,
-            max_tokens=800
+            max_tokens=1200  # Increased for more detailed responses
         )
         
-        response_text = response.choices[0].message.content
+        response_text = response.choices[0].message.content.strip()
+        print(f"📥 [AUDIENCE INSIGHTS] Received response from OpenAI ({len(response_text)} chars)")
         
+        # Clean response - remove markdown code blocks if present
+        if response_text.startswith('```'):
+            print("⚠️ [AUDIENCE INSIGHTS] Response has markdown formatting, cleaning...")
+            # Remove ```json and ``` markers
+            response_text = response_text.replace('```json', '').replace('```', '').strip()
+        
+        # Parse JSON response
         try:
             result = json.loads(response_text)
-        except json.JSONDecodeError:
+            print(f"✅ [AUDIENCE INSIGHTS] Successfully parsed JSON response")
+            
+            # Validate response structure
+            if 'target_audience' not in result:
+                print("⚠️ [AUDIENCE INSIGHTS] Missing 'target_audience' key, adding default")
+                result['target_audience'] = {"description": "General audience"}
+            
+            if 'keywords' not in result:
+                print("⚠️ [AUDIENCE INSIGHTS] Missing 'keywords' key, adding default")
+                result['keywords'] = {"primary": [], "secondary": []}
+            
+            if 'content_recommendations' not in result:
+                print("⚠️ [AUDIENCE INSIGHTS] Missing 'content_recommendations' key, adding default")
+                result['content_recommendations'] = {}
+            
+            # Log what we're returning
+            audience_desc = result.get('target_audience', {}).get('description', '')
+            primary_keywords = result.get('keywords', {}).get('primary', [])
+            print(f"✅ [AUDIENCE INSIGHTS] Returning: audience='{audience_desc[:50]}...', keywords={len(primary_keywords)}")
+            
+            return result
+            
+        except json.JSONDecodeError as json_err:
+            print(f"❌ [AUDIENCE INSIGHTS] JSON decode error: {str(json_err)}")
+            print(f"📄 [AUDIENCE INSIGHTS] Raw response: {response_text[:500]}")
+            
+            # Try to extract JSON using regex
             json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if json_match:
-                result = json.loads(json_match.group(0))
-            else:
-                result = {
-                    "target_audience": {"description": "General audience"},
-                    "keywords": {"primary": [], "secondary": []},
-                    "content_recommendations": {}
-                }
+                print("🔍 [AUDIENCE INSIGHTS] Trying regex extraction...")
+                try:
+                    result = json.loads(json_match.group(0))
+                    print(f"✅ [AUDIENCE INSIGHTS] Regex extraction successful")
+                    return result
+                except:
+                    pass
+            
+            # If all parsing fails, raise an error instead of returning fallback
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to parse AI response. Please try again. Error: {str(json_err)}"
+            )
         
-        return result
-        
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"Error generating audience/keywords: {e}")
-        return {
-            "target_audience": {"description": "General audience"},
-            "keywords": {"primary": [], "secondary": []},
-            "content_recommendations": {}
-        }
+        error_msg = str(e)
+        print(f"❌ [AUDIENCE INSIGHTS] Unexpected error: {error_msg}")
+        import traceback
+        print(f"📄 [AUDIENCE INSIGHTS] Traceback: {traceback.format_exc()}")
+        
+        # Don't return fallback data - raise error so frontend knows something went wrong
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate audience insights: {error_msg}"
+        )
     finally:
         if cursor:
             cursor.close()
         if connection:
             connection.close()
+
+
+# Also update the endpoint to show errors properly
+@router.post("/audience-insights")
+async def get_audience_insights_endpoint(
+    client_id: int = Body(...),
+    topic: str = Body(...),
+    platform: str = Body("instagram"),
+    current_user: dict = Depends(require_admin_or_employee)
+):
+    """
+    Get AI-generated audience insights and keywords
+    BRD REQUIREMENT: AI generate target audience & keywords based on client profile
+    FIXED VERSION with proper error handling
+    """
+    try:
+        print(f"\n{'='*60}")
+        print(f"🚀 [ENDPOINT] Audience Insights Request")
+        print(f"   Client ID: {client_id}")
+        print(f"   Topic: {topic}")
+        print(f"   Platform: {platform}")
+        print(f"   User: {current_user.get('email', 'Unknown')}")
+        print(f"{'='*60}\n")
+        
+        insights = await generate_audience_and_keywords(
+            client_id=client_id,
+            topic=topic,
+            platform=platform
+        )
+        
+        print(f"\n✅ [ENDPOINT] Successfully generated insights")
+        print(f"   Audience: {insights.get('target_audience', {}).get('description', '')[:80]}...")
+        print(f"   Primary Keywords: {len(insights.get('keywords', {}).get('primary', []))}")
+        print(f"   Secondary Keywords: {len(insights.get('keywords', {}).get('secondary', []))}\n")
+        
+        return {
+            "success": True,
+            "data": insights
+        }
+        
+    except HTTPException as http_err:
+        print(f"\n❌ [ENDPOINT] HTTP Exception: {http_err.detail}\n")
+        raise
+    except Exception as e:
+        error_msg = str(e)
+        print(f"\n❌ [ENDPOINT] Unexpected error: {error_msg}\n")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error generating audience insights: {error_msg}"
+        )
+
+# Also update the endpoint to show errors properly
+@router.post("/audience-insights")
+async def get_audience_insights_endpoint(
+    client_id: int = Body(...),
+    topic: str = Body(...),
+    platform: str = Body("instagram"),
+    current_user: dict = Depends(require_admin_or_employee)
+):
+    """
+    Get AI-generated audience insights and keywords
+    BRD REQUIREMENT: AI generate target audience & keywords based on client profile
+    FIXED VERSION with proper error handling
+    """
+    try:
+        print(f"\n{'='*60}")
+        print(f"🚀 [ENDPOINT] Audience Insights Request")
+        print(f"   Client ID: {client_id}")
+        print(f"   Topic: {topic}")
+        print(f"   Platform: {platform}")
+        print(f"   User: {current_user.get('email', 'Unknown')}")
+        print(f"{'='*60}\n")
+        
+        insights = await generate_audience_and_keywords(
+            client_id=client_id,
+            topic=topic,
+            platform=platform
+        )
+        
+        print(f"\n✅ [ENDPOINT] Successfully generated insights")
+        print(f"   Audience: {insights.get('target_audience', {}).get('description', '')[:80]}...")
+        print(f"   Primary Keywords: {len(insights.get('keywords', {}).get('primary', []))}")
+        print(f"   Secondary Keywords: {len(insights.get('keywords', {}).get('secondary', []))}\n")
+        
+        return {
+            "success": True,
+            "data": insights
+        }
+        
+    except HTTPException as http_err:
+        print(f"\n❌ [ENDPOINT] HTTP Exception: {http_err.detail}\n")
+        raise
+    except Exception as e:
+        error_msg = str(e)
+        print(f"\n❌ [ENDPOINT] Unexpected error: {error_msg}\n")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error generating audience insights: {error_msg}"
+        )
 
 
 # ========== API ENDPOINTS ==========

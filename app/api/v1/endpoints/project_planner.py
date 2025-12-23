@@ -111,7 +111,7 @@ async def generate_proposal(
         ai_service = AIService()
         
         # Generate Strategy
-        print("[1/4] Generating Strategy...")
+        print("[1/6] Generating Strategy...")
         strategy_prompt = f"""
         Create a comprehensive digital marketing strategy for:
         Company: {project_input.company_name}
@@ -136,7 +136,7 @@ async def generate_proposal(
         print("   ✓ Strategy generated")
         
         # Generate Differentiators
-        print("[2/4] Generating Differentiators...")
+        print("[2/6] Generating Differentiators...")
         differentiator_prompt = f"""
         Create competitive differentiators for a digital marketing agency proposal.
         Budget: ${project_input.budget}
@@ -154,8 +154,65 @@ async def generate_proposal(
         differentiators = await ai_service.generate_differentiators(differentiator_prompt)
         print("   ✓ Differentiators generated")
         
+        # Generate Value Propositions (NEW)
+        print("[3/6] Generating Value Propositions...")
+        vp_prompt = f"""
+        Create 4-5 unique value propositions for {project_input.company_name} ({project_input.business_type}).
+        Budget: ${project_input.budget}
+        
+        For each value proposition provide:
+        - title: Catchy, benefit-focused (with emoji)
+        - description: Clear 2-3 sentence explanation
+        - competitive_advantage: Why this beats competitors
+        - impact: Expected business impact
+        
+        Format as JSON array with objects containing: title, description, competitive_advantage, impact
+        """
+        value_propositions = await ai_service.generate_content(vp_prompt, "value_props")
+        print("   ✓ Value Propositions generated")
+        
+        # Generate Competitive Analysis (NEW)
+        print("[4/6] Performing Competitive Analysis...")
+        comp_prompt = f"""
+        Analyze competitive landscape for {project_input.business_type} business: {project_input.company_name}
+        Budget: ${project_input.budget}
+        Target Audience: {project_input.target_audience}
+        
+        Provide competitive intelligence with:
+        - opportunities: Array of 4-5 specific opportunities where competitors are weak
+        - threats: Array of 3-4 competitive threats/challenges
+        - key_insights: Array of 3 critical insights about the market
+        - opportunity_score: Score 0-100 indicating market opportunity
+        
+        Format as JSON with keys: opportunities, threats, key_insights, opportunity_score
+        """
+        competitive_analysis = await ai_service.generate_content(comp_prompt, "competitive")
+        print("   ✓ Competitive Analysis complete")
+        
+        # Generate ROI Simulation (NEW)
+        print("[5/6] Generating ROI Simulation...")
+        roi_prompt = f"""
+        Create realistic ROI simulation for:
+        Budget: ${project_input.budget}
+        Business Type: {project_input.business_type}
+        Target Audience: {project_input.target_audience}
+        
+        Provide "If you spend $X, expect Y leads" projections:
+        - expected_leads: Object with month_1, month_3, month_6, month_12 (number of leads)
+        - cost_per_lead: Object with average, best_case, worst_case (dollar amounts)
+        - conversion_rate: Percentage (e.g., 5 for 5%)
+        - estimated_customers: Number of customers from leads
+        - estimated_revenue: Total revenue expected (dollar amount)
+        - roi_percentage: Overall ROI percentage
+        - timeframe_to_roi: Months to break even
+        
+        Format as JSON with above keys. Be realistic based on industry benchmarks.
+        """
+        roi_simulation = await ai_service.generate_content(roi_prompt, "roi")
+        print("   ✓ ROI Simulation complete")
+        
         # Generate Timeline
-        print("[3/4] Generating Timeline...")
+        print("[6/6] Generating Timeline...")
         timeline_prompt = f"""
         Create project timeline for:
         Budget: ${project_input.budget}
@@ -172,7 +229,7 @@ async def generate_proposal(
         print("   ✓ Timeline generated")
         
         # Save to Database
-        print("[4/4] Saving to database...")
+        print("[SAVE] Saving to database...")
         connection = get_db_connection()
         cursor = connection.cursor()
         
@@ -190,18 +247,19 @@ async def generate_proposal(
         else:
             lead_user_id = lead_user['user_id']
         
-        # Insert proposal with lead info
+        # Insert proposal with NEW fields
         cursor.execute("""
             INSERT INTO project_proposals 
             (client_id, created_by, lead_name, lead_email, company_name, website_url, 
              business_type, budget, challenges, target_audience, existing_presence, 
-             ai_generated_strategy, competitive_differentiators, suggested_timeline, status)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+             ai_generated_strategy, competitive_differentiators, value_propositions,
+             competitive_analysis, roi_simulation, suggested_timeline, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             lead_user_id,
             current_user['user_id'],
-            project_input.lead_name,           # ✅ ADDED
-            project_input.lead_email,          # ✅ ADDED
+            project_input.lead_name,
+            project_input.lead_email,
             project_input.company_name,
             project_input.website_url,
             project_input.business_type,
@@ -211,6 +269,9 @@ async def generate_proposal(
             json.dumps(project_input.existing_presence or {}),
             json.dumps(ai_strategy),
             json.dumps(differentiators),
+            json.dumps(value_propositions) if value_propositions else '[]',      # NEW
+            json.dumps(competitive_analysis) if competitive_analysis else '{}',  # NEW
+            json.dumps(roi_simulation) if roi_simulation else '{}',              # NEW
             json.dumps(timeline),
             'draft'
         ))
@@ -233,7 +294,8 @@ async def generate_proposal(
         
         # Parse JSON fields for frontend
         json_fields = ['existing_presence', 'ai_generated_strategy', 
-                      'competitive_differentiators', 'suggested_timeline']
+                      'competitive_differentiators', 'value_propositions',
+                      'competitive_analysis', 'roi_simulation', 'suggested_timeline']
         
         for field in json_fields:
             if complete_proposal.get(field):
@@ -241,11 +303,11 @@ async def generate_proposal(
                     try:
                         complete_proposal[field] = json.loads(complete_proposal[field])
                     except:
-                        complete_proposal[field] = {}
+                        complete_proposal[field] = {} if field != 'value_propositions' else []
         
         return {
             "success": True,
-            "message": "Proposal generated successfully",
+            "message": "Proposal generated successfully with competitive analysis and ROI simulation",
             "proposal_id": proposal_id,
             "proposal": complete_proposal
         }
@@ -260,8 +322,8 @@ async def generate_proposal(
             cursor.close()
         if connection:
             connection.close()
-
             
+                      
 
 @router.put("/proposals/{proposal_id}/edit")
 async def edit_proposal(

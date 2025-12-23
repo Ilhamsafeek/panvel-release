@@ -1,10 +1,20 @@
 /**
- * Content Intelligence Hub - Frontend JavaScript
+ * Content Intelligence Hub - Frontend JavaScript (FIXED)
  * File: static/js/content.js
+ * 
+ * FIXES:
+ * 1. Fixed input ID from 'contentTopic' to 'topicInput'
+ * 2. Standardized token storage to 'access_token'
+ * 3. Added missing 'selectedPlatforms' array initialization
+ * 4. Fixed visual analysis base64 encoding
+ * 5. Implemented AI audience insights feature
+ * 6. Implemented Google Vision API visual analysis
+ * 7. Added proper performance score display (1-100 scale)
  */
 
 const API_BASE = `/api/v1/content`;
-let selectedPlatform = '';
+// Use window.selectedPlatforms to sync with inline script in HTML
+window.selectedPlatforms = window.selectedPlatforms || [];
 let selectedContentType = '';
 let generatedContent = null;
 let currentClientId = null;
@@ -14,7 +24,7 @@ let currentClientId = null;
 // =====================================================
 
 document.addEventListener('DOMContentLoaded', function() {
-    initializePlatformSelector();
+    // Platform selector initialized by inline script in content.html
     initializeContentTypeSelector();
     loadClients();
     loadContentLibrary();
@@ -25,55 +35,11 @@ document.addEventListener('DOMContentLoaded', function() {
         imageInput.addEventListener('change', analyzeImageUpload);
     }
 });
-// =====================================================
-// PLATFORM & CONTENT TYPE SELECTION
-// =====================================================
-function initializePlatformSelector() {
-    const platforms = document.querySelectorAll('.platform-option');
-    
-    platforms.forEach(platform => {
-        platform.addEventListener('click', function() {
-            const platformValue = this.dataset.platform;
-            
-            // Toggle selection
-            if (this.classList.contains('active')) {
-                // Deselect
-                this.classList.remove('active');
-                selectedPlatforms = selectedPlatforms.filter(p => p !== platformValue);
-            } else {
-                // Select
-                this.classList.add('active');
-                if (!selectedPlatforms.includes(platformValue)) {
-                    selectedPlatforms.push(platformValue);
-                }
-            }
-            
-            updateSelectedPlatformsDisplay();
-            
-            console.log('Selected platforms:', selectedPlatforms); // Debug
-        });
-    });
-}
 
-
-function updateSelectedPlatformsDisplay() {
-    const infoBox = document.getElementById('selectedPlatformsInfo');
-    const badgeContainer = document.getElementById('selectedPlatformsBadges');
-    
-    if (infoBox && badgeContainer) {
-        if (selectedPlatforms.length > 0) {
-            infoBox.classList.add('show');
-            badgeContainer.innerHTML = selectedPlatforms.map(p => `
-                <span class="platform-badge">
-                    <i class="ti ti-brand-${p}"></i> ${capitalize(p)}
-                </span>
-            `).join('');
-        } else {
-            infoBox.classList.remove('show');
-            badgeContainer.innerHTML = '';
-        }
-    }
-}
+// =====================================================
+// CONTENT TYPE SELECTION
+// =====================================================
+// Note: Platform selection is handled by inline script in content.html
 
 function initializeContentTypeSelector() {
     const types = document.querySelectorAll('.type-chip');
@@ -87,7 +53,7 @@ function initializeContentTypeSelector() {
             this.classList.add('active');
             selectedContentType = this.dataset.type;
             
-            console.log('Selected content type:', selectedContentType); // Debug
+            console.log('Selected content type:', selectedContentType);
         });
     });
 }
@@ -100,7 +66,7 @@ async function loadClients() {
     const clientSelect = document.getElementById('clientSelect');
     
     try {
-        const token = localStorage.getItem('access_token');
+        const token = localStorage.getItem('access_token'); // FIXED: Standardized token storage
         const response = await fetch('/api/v1/clients/list', {
             headers: {
                 'Authorization': `Bearer ${token}`
@@ -131,72 +97,15 @@ async function loadClients() {
 }
 
 // =====================================================
-// PLATFORM GUIDELINES
-// =====================================================
-
-async function showPlatformGuidelines(platform) {
-    const guidelinesSection = document.getElementById('guidelinesSection');
-    const guidelinesContent = document.getElementById('guidelinesContent');
-    
-    try {
-        const token = localStorage.getItem('access_token');
-        const response = await fetch(`${API_BASE}/platforms/guidelines`, {
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
-        
-        const result = await response.json();
-        
-        if (result.success && result.data[platform]) {
-            const guidelines = result.data[platform];
-            
-            guidelinesContent.innerHTML = `
-                <div class="guideline-box">
-                    <h4><i class="ti ti-ruler"></i> Character Limits</h4>
-                    <p style="font-size: 0.875rem; color: #64748b; margin: 0.5rem 0;">
-                        <strong>Optimal:</strong> ${guidelines.optimal_chars} characters | 
-                        <strong>Maximum:</strong> ${guidelines.max_chars} characters
-                    </p>
-                </div>
-                
-                <div class="guideline-box">
-                    <h4><i class="ti ti-hash"></i> Hashtag Guidelines</h4>
-                    <p style="font-size: 0.875rem; color: #64748b; margin: 0.5rem 0;">
-                        <strong>Optimal:</strong> ${guidelines.optimal_hashtags} hashtags | 
-                        <strong>Maximum:</strong> ${guidelines.hashtag_limit} hashtags
-                    </p>
-                </div>
-                
-                ${guidelines.best_practices && guidelines.best_practices.length > 0 ? `
-                    <div class="guideline-box">
-                        <h4><i class="ti ti-bulb"></i> Best Practices</h4>
-                        <ul class="guideline-list">
-                            ${guidelines.best_practices.map(practice => 
-                                `<li>${practice}</li>`
-                            ).join('')}
-                        </ul>
-                    </div>
-                ` : ''}
-            `;
-            
-            guidelinesSection.style.display = 'block';
-        }
-        
-    } catch (error) {
-        console.error('Error loading guidelines:', error);
-    }
-}
-
-// =====================================================
 // GENERATE CONTENT
 // =====================================================
+
 async function generateContent() {
     const clientId = document.getElementById('clientSelect')?.value;
-    const topic = document.getElementById('contentTopic')?.value;
+    const topic = document.getElementById('topicInput')?.value; // FIXED: Changed from 'contentTopic' to 'topicInput'
     const tone = document.getElementById('toneSelect')?.value || 'professional';
     
-    console.log('Generate clicked. Platforms:', selectedPlatforms); // Debug
+    console.log('Generate clicked. Platforms:', window.selectedPlatforms); // Use window.selectedPlatforms
     
     // Validation
     if (!clientId) {
@@ -209,7 +118,7 @@ async function generateContent() {
         return;
     }
     
-    if (selectedPlatforms.length === 0) {
+    if (!window.selectedPlatforms || window.selectedPlatforms.length === 0) {
         alert('Please select at least one platform');
         return;
     }
@@ -219,14 +128,14 @@ async function generateContent() {
         return;
     }
     
-    const generateBtn = document.getElementById('generateContentBtn');
+    const generateBtn = document.getElementById('generateBtn');
     if (generateBtn) {
         generateBtn.disabled = true;
         generateBtn.innerHTML = '<i class="ti ti-loader"></i> Generating Content...';
     }
     
     try {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('access_token'); // FIXED: Standardized token
         
         const response = await fetch(`/api/v1/content/intelligence/generate`, {
             method: 'POST',
@@ -236,7 +145,7 @@ async function generateContent() {
             },
             body: JSON.stringify({
                 client_id: parseInt(clientId),
-                platforms: selectedPlatforms,
+                platforms: window.selectedPlatforms, // Use window.selectedPlatforms
                 content_type: selectedContentType,
                 topic: topic,
                 tone: tone,
@@ -247,8 +156,8 @@ async function generateContent() {
         const result = await response.json();
         
         if (result.success && result.data) {
-            displayGeneratedContent(result.data);
-            alert('Content generated successfully!');
+            displayMultiPlatformContent(result.data);
+            showNotification('Content generated successfully!', 'success');
         } else {
             throw new Error(result.detail || 'Content generation failed');
         }
@@ -262,101 +171,113 @@ async function generateContent() {
         }
     }
 }
+
 // =====================================================
-// DISPLAY GENERATED CONTENT
+// DISPLAY MULTI-PLATFORM CONTENT
 // =====================================================
 
-function displayGeneratedContent(data) {
+function displayMultiPlatformContent(data) {
     const previewContainer = document.getElementById('previewContainer');
     
-    const scoreColor = data.optimization_score >= 80 ? '#16a34a' : 
-                      data.optimization_score >= 60 ? '#eab308' : '#ef4444';
+    if (!data.variants || data.variants.length === 0) {
+        previewContainer.innerHTML = `
+            <div class="empty-state">
+                <i class="ti ti-alert-circle"></i>
+                <h3>No Content Generated</h3>
+                <p>Please try again with different parameters</p>
+            </div>
+        `;
+        return;
+    }
     
-    previewContainer.innerHTML = `
-        <!-- Optimization Score -->
-        <div class="optimization-score">
-            <div class="score-circle" style="background: ${scoreColor};">
-                ${Math.round(data.optimization_score)}
-            </div>
-            <div class="score-details">
-                <h4>Optimization Score</h4>
-                <p>${data.optimization_score >= 80 ? 'Excellent!' : 
-                     data.optimization_score >= 60 ? 'Good, but could be better' : 
-                     'Needs improvement'}</p>
-            </div>
-        </div>
-
-        <!-- Main Content -->
-        <div class="content-preview">
-            ${data.headline ? `
-                <div style="margin-bottom: 1rem;">
-                    <label style="font-size: 0.75rem; font-weight: 600; color: #64748b; text-transform: uppercase; margin-bottom: 0.5rem; display: block;">Headline</label>
-                    <div style="font-size: 1.1rem; font-weight: 600; color: #1e293b;" id="headlineText">${data.headline}</div>
+    // Display variants for each platform
+    previewContainer.innerHTML = data.variants.map(variant => {
+        const scoreColor = variant.performance_score >= 80 ? '#16a34a' : 
+                          variant.performance_score >= 60 ? '#eab308' : '#ef4444';
+        
+        return `
+            <div class="platform-variant" style="background: white; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; border: 2px solid ${variant.is_optimized ? '#16a34a' : '#e2e8f0'};">
+                <!-- Platform Header -->
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 2px solid #f1f5f9;">
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <i class="ti ti-brand-${variant.platform}" style="font-size: 1.5rem; color: #9926F3;"></i>
+                        <h3 style="font-size: 1.1rem; font-weight: 600; color: #1e293b; margin: 0;">${capitalize(variant.platform)}</h3>
+                    </div>
+                    <div class="score-badge" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: ${scoreColor}15; border-radius: 8px;">
+                        <i class="ti ti-chart-line" style="color: ${scoreColor};"></i>
+                        <span style="font-weight: 600; color: ${scoreColor};">${Math.round(variant.performance_score)}/100</span>
+                        <span style="font-size: 0.75rem; color: #64748b;">${variant.optimization_status}</span>
+                    </div>
                 </div>
-            ` : ''}
-            
-            <div style="margin-bottom: 1rem;">
-                <label style="font-size: 0.75rem; font-weight: 600; color: #64748b; text-transform: uppercase; margin-bottom: 0.5rem; display: block;">Content</label>
-                <div style="font-size: 0.95rem; line-height: 1.6; color: #334155; white-space: pre-wrap;" id="contentText">${data.content}</div>
+
+                <!-- Content -->
+                ${variant.headline ? `
+                    <div style="margin-bottom: 1rem;">
+                        <label style="font-size: 0.75rem; font-weight: 600; color: #64748b; text-transform: uppercase; margin-bottom: 0.5rem; display: block;">Headline</label>
+                        <div style="font-size: 1.1rem; font-weight: 600; color: #1e293b;">${variant.headline}</div>
+                    </div>
+                ` : ''}
                 
-                <div class="character-counter">
-                    <span>${data.character_count} / ${data.guidelines.max_chars} characters</span>
-                    <span style="color: ${data.character_count <= data.guidelines.optimal_chars ? '#16a34a' : '#eab308'};">
-                        ${data.character_count <= data.guidelines.optimal_chars ? 'Optimal length ✓' : 'Consider shortening'}
-                    </span>
-                </div>
-                <div class="counter-bar">
-                    <div class="counter-fill" style="width: ${(data.character_count / data.guidelines.max_chars) * 100}%;"></div>
-                </div>
-            </div>
-
-            ${data.cta ? `
                 <div style="margin-bottom: 1rem;">
-                    <label style="font-size: 0.75rem; font-weight: 600; color: #64748b; text-transform: uppercase; margin-bottom: 0.5rem; display: block;">Call to Action</label>
-                    <div style="font-size: 0.95rem; font-weight: 500; color: #9926F3;" id="ctaText">${data.cta}</div>
+                    <label style="font-size: 0.75rem; font-weight: 600; color: #64748b; text-transform: uppercase; margin-bottom: 0.5rem; display: block;">Content</label>
+                    <div style="font-size: 0.95rem; line-height: 1.6; color: #334155; white-space: pre-wrap;">${variant.content}</div>
+                    
+                    <div class="character-counter" style="margin-top: 0.75rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem;">
+                        <span style="color: #64748b;">${variant.character_count || variant.content.length} / ${variant.optimal_length || 2000} characters</span>
+                        <span style="color: ${(variant.character_count || variant.content.length) <= (variant.optimal_length || 200) ? '#16a34a' : '#eab308'};">
+                            ${(variant.character_count || variant.content.length) <= (variant.optimal_length || 200) ? 'Optimal length ✓' : 'Consider shortening'}
+                        </span>
+                    </div>
                 </div>
-            ` : ''}
-        </div>
 
-        <!-- Hashtags -->
-        ${data.hashtags && data.hashtags.length > 0 ? `
-            <div style="margin-bottom: 1.5rem;">
-                <label style="font-size: 0.875rem; font-weight: 600; color: #334155; margin-bottom: 0.75rem; display: block;">
-                    <i class="ti ti-hash"></i> Suggested Hashtags (${data.hashtags.length})
-                </label>
-                <div class="hashtag-container" id="hashtagsContainer">
-                    ${data.hashtags.map((tag, index) => 
-                        `<span class="hashtag-tag" id="hashtag-${index}">#${tag}</span>`
-                    ).join('')}
+                ${variant.cta ? `
+                    <div style="margin-bottom: 1rem;">
+                        <label style="font-size: 0.75rem; font-weight: 600; color: #64748b; text-transform: uppercase; margin-bottom: 0.5rem; display: block;">Call to Action</label>
+                        <div style="font-size: 0.95rem; font-weight: 500; color: #9926F3;">${variant.cta}</div>
+                    </div>
+                ` : ''}
+
+                <!-- Hashtags -->
+                ${variant.hashtags && variant.hashtags.length > 0 ? `
+                    <div style="margin-bottom: 1.5rem;">
+                        <label style="font-size: 0.875rem; font-weight: 600; color: #334155; margin-bottom: 0.75rem; display: block;">
+                            <i class="ti ti-hash"></i> Suggested Hashtags (${variant.hashtags.length})
+                        </label>
+                        <div class="hashtag-container">
+                            ${variant.hashtags.map(tag => 
+                                `<span class="hashtag-tag" style="display: inline-block; padding: 0.375rem 0.75rem; background: linear-gradient(135deg, rgba(153, 38, 243, 0.1), rgba(29, 216, 252, 0.1)); border: 1px solid #9926F3; border-radius: 4px; margin: 0.25rem; font-size: 0.85rem; color: #9926F3;">#${tag}</span>`
+                            ).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+
+                <!-- Action Buttons -->
+                <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
+                    <button class="btn-primary" onclick='savePlatformContent(${JSON.stringify(variant).replace(/'/g, "&#39;")})'>
+                        <i class="ti ti-device-floppy"></i>
+                        Save
+                    </button>
+                    <button class="btn-secondary" onclick='copyPlatformContent(${JSON.stringify(variant).replace(/'/g, "&#39;")})'>
+                        <i class="ti ti-copy"></i>
+                        Copy
+                    </button>
                 </div>
             </div>
-        ` : ''}
-
-        <!-- Action Buttons -->
-        <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
-            <button class="btn-primary" onclick="saveContent()">
-                <i class="ti ti-device-floppy"></i>
-                Save to Library
-            </button>
-            <button class="btn-secondary" onclick="copyToClipboard()">
-                <i class="ti ti-copy"></i>
-                Copy All
-            </button>
-            <button class="btn-secondary" onclick="regenerateContent()">
-                <i class="ti ti-refresh"></i>
-                Regenerate
-            </button>
-        </div>
-    `;
+        `;
+    }).join('');
+    
+    // Store current data for saving
+    currentClientId = document.getElementById('clientSelect')?.value;
+    generatedContent = data;
 }
 
 // =====================================================
-// SAVE CONTENT
+// SAVE & COPY PLATFORM CONTENT
 // =====================================================
 
-async function saveContent() {
-    if (!generatedContent || !currentClientId) {
-        showNotification('No content to save', 'error');
+async function savePlatformContent(variant) {
+    if (!currentClientId) {
+        showNotification('Client ID not found', 'error');
         return;
     }
     
@@ -370,14 +291,14 @@ async function saveContent() {
                 'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify({
-                client_id: currentClientId,
-                platform: selectedPlatform,
+                client_id: parseInt(currentClientId),
+                platform: variant.platform,
                 content_type: selectedContentType,
-                title: generatedContent.headline || `${selectedPlatform} ${selectedContentType}`,
-                content_text: generatedContent.content,
-                hashtags: generatedContent.hashtags || [],
-                cta_text: generatedContent.cta,
-                optimization_score: generatedContent.optimization_score,
+                title: variant.headline || `${variant.platform} ${selectedContentType}`,
+                content_text: variant.content,
+                hashtags: variant.hashtags || [],
+                cta_text: variant.cta,
+                optimization_score: variant.performance_score,
                 status: 'draft'
             })
         });
@@ -392,22 +313,6 @@ async function saveContent() {
         if (result.success) {
             showNotification('Content saved to library!', 'success');
             loadContentLibrary();
-            
-            // Reset form
-            document.getElementById('topicInput').value = '';
-            document.getElementById('audienceInput').value = '';
-            document.getElementById('keywordsInput').value = '';
-            
-            const previewContainer = document.getElementById('previewContainer');
-            previewContainer.innerHTML = `
-                <div class="empty-state">
-                    <i class="ti ti-check-circle" style="color: #16a34a;"></i>
-                    <h3>Content Saved!</h3>
-                    <p>Your content has been saved to the library</p>
-                </div>
-            `;
-            
-            generatedContent = null;
         }
         
     } catch (error) {
@@ -416,30 +321,21 @@ async function saveContent() {
     }
 }
 
-// =====================================================
-// COPY TO CLIPBOARD
-// =====================================================
-
-function copyToClipboard() {
-    if (!generatedContent) {
-        showNotification('No content to copy', 'error');
-        return;
-    }
-    
+function copyPlatformContent(variant) {
     let textToCopy = '';
     
-    if (generatedContent.headline) {
-        textToCopy += generatedContent.headline + '\n\n';
+    if (variant.headline) {
+        textToCopy += variant.headline + '\n\n';
     }
     
-    textToCopy += generatedContent.content + '\n\n';
+    textToCopy += variant.content + '\n\n';
     
-    if (generatedContent.cta) {
-        textToCopy += generatedContent.cta + '\n\n';
+    if (variant.cta) {
+        textToCopy += variant.cta + '\n\n';
     }
     
-    if (generatedContent.hashtags && generatedContent.hashtags.length > 0) {
-        textToCopy += generatedContent.hashtags.map(tag => `#${tag}`).join(' ');
+    if (variant.hashtags && variant.hashtags.length > 0) {
+        textToCopy += variant.hashtags.map(tag => `#${tag}`).join(' ');
     }
     
     navigator.clipboard.writeText(textToCopy).then(() => {
@@ -451,11 +347,294 @@ function copyToClipboard() {
 }
 
 // =====================================================
-// REGENERATE CONTENT
+// AI AUDIENCE INSIGHTS FEATURE (NEW)
 // =====================================================
 
-function regenerateContent() {
-    generateContent();
+async function generateAudienceInsights() {
+    const clientId = document.getElementById('clientSelect')?.value;
+    const topic = document.getElementById('topicInput')?.value; // FIXED: Changed ID
+    
+    if (!clientId || !topic) {
+        alert('Please select a client and enter a topic');
+        return;
+    }
+    
+    const generateBtn = document.getElementById('generateAudienceBtn');
+    if (generateBtn) {
+        generateBtn.disabled = true;
+        generateBtn.innerHTML = '<i class="ti ti-loader"></i> Generating Insights...';
+    }
+    
+    try {
+        const token = localStorage.getItem('access_token'); // FIXED: Standardized token
+        const response = await fetch(`/api/v1/content/audience-insights`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                client_id: parseInt(clientId),
+                topic: topic,
+                platform: window.selectedPlatforms[0] || 'instagram' // Use window.selectedPlatforms
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+            displayAudienceInsights(result.data);
+            showNotification('Audience insights generated successfully!', 'success');
+        } else {
+            throw new Error(result.detail || 'Failed to generate insights');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error: ' + error.message);
+    } finally {
+        if (generateBtn) {
+            generateBtn.disabled = false;
+            generateBtn.innerHTML = '<i class="ti ti-users"></i> Generate Audience Insights';
+        }
+    }
+}
+
+function displayAudienceInsights(data) {
+    const container = document.getElementById('audienceInsightsDisplay');
+    if (!container) return;
+    
+    const audience = data.target_audience || {};
+    const keywords = data.keywords || {};
+    
+    container.innerHTML = `
+        <div style="background: linear-gradient(135deg, rgba(153, 38, 243, 0.05), rgba(29, 216, 252, 0.05)); padding: 1.5rem; border-radius: 12px; margin-bottom: 1rem; border: 2px solid #9926F3;">
+            <h4 style="color: #1e293b; margin-bottom: 1rem;"><i class="ti ti-target"></i> Target Audience</h4>
+            <p style="color: #334155; line-height: 1.6; margin-bottom: 1rem;">${audience.description || 'No description available'}</p>
+            
+            ${audience.demographics && audience.demographics.length > 0 ? `
+                <div style="margin-top: 1rem;">
+                    <strong style="color: #1e293b; font-size: 0.9rem;">Demographics:</strong><br>
+                    <div style="margin-top: 0.5rem;">
+                        ${audience.demographics.map(d => `<span style="display: inline-block; padding: 0.375rem 0.75rem; background: white; border: 1px solid #e2e8f0; border-radius: 6px; margin: 0.25rem; font-size: 0.85rem;">${d}</span>`).join('')}
+                    </div>
+                </div>
+            ` : ''}
+            
+            ${audience.interests && audience.interests.length > 0 ? `
+                <div style="margin-top: 1rem;">
+                    <strong style="color: #1e293b; font-size: 0.9rem;">Interests:</strong><br>
+                    <div style="margin-top: 0.5rem;">
+                        ${audience.interests.map(i => `<span style="display: inline-block; padding: 0.375rem 0.75rem; background: white; border: 1px solid #e2e8f0; border-radius: 6px; margin: 0.25rem; font-size: 0.85rem;">${i}</span>`).join('')}
+                    </div>
+                </div>
+            ` : ''}
+        </div>
+        
+        <div style="background: linear-gradient(135deg, rgba(153, 38, 243, 0.05), rgba(29, 216, 252, 0.05)); padding: 1.5rem; border-radius: 12px; border: 2px solid #1DD8FC;">
+            <h4 style="color: #1e293b; margin-bottom: 1rem;"><i class="ti ti-key"></i> Recommended Keywords</h4>
+            
+            ${keywords.primary && keywords.primary.length > 0 ? `
+                <div style="margin-bottom: 1rem;">
+                    <strong style="color: #1e293b; font-size: 0.9rem;">Primary Keywords:</strong><br>
+                    <div style="margin-top: 0.5rem;">
+                        ${keywords.primary.map(k => `<span style="display: inline-block; padding: 0.5rem 0.875rem; background: linear-gradient(135deg, rgba(153, 38, 243, 0.15), rgba(29, 216, 252, 0.15)); border: 2px solid #9926F3; border-radius: 6px; margin: 0.25rem; font-size: 0.875rem; color: #9926F3; font-weight: 600;">#${k}</span>`).join('')}
+                    </div>
+                </div>
+            ` : ''}
+            
+            ${keywords.secondary && keywords.secondary.length > 0 ? `
+                <div>
+                    <strong style="color: #1e293b; font-size: 0.9rem;">Secondary Keywords:</strong><br>
+                    <div style="margin-top: 0.5rem;">
+                        ${keywords.secondary.map(k => `<span style="display: inline-block; padding: 0.5rem 0.875rem; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; margin: 0.25rem; font-size: 0.875rem; color: #64748b;">#${k}</span>`).join('')}
+                    </div>
+                </div>
+            ` : ''}
+        </div>
+    `;
+    
+    container.style.display = 'block';
+}
+
+// =====================================================
+// VISUAL ANALYSIS FEATURE (GOOGLE VISION API)
+// =====================================================
+
+async function analyzeImageUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    if (!file.type.startsWith('image/')) {
+        alert('Please upload an image file');
+        return;
+    }
+    
+    if (file.size > 10 * 1024 * 1024) {
+        alert('Image size must be less than 10MB');
+        return;
+    }
+    
+    // Show preview
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const preview = document.getElementById('imagePreview');
+        if (preview) {
+            preview.innerHTML = `<img src="${e.target.result}" style="max-width: 100%; max-height: 400px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">`;
+            preview.style.display = 'block';
+        }
+    };
+    reader.readAsDataURL(file);
+    
+    // Convert to base64 for analysis
+    const base64Reader = new FileReader();
+    base64Reader.onload = async function(e) {
+        // FIXED: Properly extract base64 without data URL prefix
+        const base64String = e.target.result;
+        const base64Data = base64String.split(',')[1]; // Remove "data:image/jpeg;base64," prefix
+        await analyzeVisualContent(base64Data);
+    };
+    base64Reader.readAsDataURL(file);
+}
+
+async function analyzeVisualContent(base64Image) {
+    const analyzeBtn = document.getElementById('analyzeVisualBtn');
+    if (analyzeBtn) {
+        analyzeBtn.disabled = true;
+        analyzeBtn.innerHTML = '<i class="ti ti-loader"></i> Analyzing...';
+    }
+    
+    try {
+        const token = localStorage.getItem('access_token'); // FIXED: Standardized token
+        const response = await fetch(`/api/v1/content/analyze-visual`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                image_base64: base64Image,
+                platform: window.selectedPlatforms[0] || 'instagram' // Use window.selectedPlatforms
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+            displayVisualAnalysis(result.data);
+            showNotification('Visual analysis complete!', 'success');
+        } else {
+            throw new Error(result.detail || 'Visual analysis failed');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error: ' + error.message);
+    } finally {
+        if (analyzeBtn) {
+            analyzeBtn.disabled = false;
+            analyzeBtn.innerHTML = '<i class="ti ti-scan"></i> Analyze Image';
+        }
+    }
+}
+
+function displayVisualAnalysis(analysis) {
+    const container = document.getElementById('visualAnalysisResults');
+    if (!container) return;
+    
+    const score = analysis.composition_score || 0;
+    const scoreColor = score >= 70 ? '#10b981' : score >= 50 ? '#f59e0b' : '#ef4444';
+    const scoreText = score >= 70 ? 'Optimized' : score >= 50 ? 'Good' : 'Needs Improvement';
+    
+    container.innerHTML = `
+        <div style="background: white; border-radius: 12px; padding: 2rem; border: 2px solid ${scoreColor};">
+            <!-- Score Header -->
+            <div style="display: flex; align-items: center; gap: 2rem; margin-bottom: 2rem; padding-bottom: 1.5rem; border-bottom: 2px solid #f1f5f9;">
+                <div style="text-align: center;">
+                    <div style="width: 120px; height: 120px; border-radius: 50%; background: linear-gradient(135deg, ${scoreColor}20, ${scoreColor}40); display: flex; align-items: center; justify-content: center; border: 4px solid ${scoreColor};">
+                        <div>
+                            <div style="font-size: 2.5rem; font-weight: bold; color: ${scoreColor};">${Math.round(score)}</div>
+                            <div style="font-size: 0.75rem; color: #64748b; margin-top: 0.25rem;">/ 100</div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 0.75rem; padding: 0.375rem 0.875rem; background: ${scoreColor}; color: white; border-radius: 6px; font-size: 0.875rem; font-weight: 600;">
+                        ${scoreText}
+                    </div>
+                </div>
+                
+                <div style="flex: 1;">
+                    <h3 style="color: #1e293b; margin-bottom: 1rem; font-size: 1.25rem;">Visual Analysis Results</h3>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                        <!-- Face Detection -->
+                        <div style="padding: 0.875rem; background: ${analysis.face_detected ? '#d1fae5' : '#fee2e2'}; border-radius: 8px; border-left: 3px solid ${analysis.face_detected ? '#10b981' : '#ef4444'};">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <i class="ti ti-${analysis.face_detected ? 'user-check' : 'user-x'}" style="font-size: 1.25rem; color: ${analysis.face_detected ? '#10b981' : '#ef4444'};"></i>
+                                <span style="font-size: 0.9rem; font-weight: 500; color: #1e293b;">${analysis.face_detected ? `${analysis.faces_count} face(s) detected` : 'No faces detected'}</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Object Detection -->
+                        <div style="padding: 0.875rem; background: #f8fafc; border-radius: 8px; border-left: 3px solid #9926F3;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <i class="ti ti-tags" style="font-size: 1.25rem; color: #9926F3;"></i>
+                                <span style="font-size: 0.9rem; font-weight: 500; color: #1e293b;">${analysis.labels ? analysis.labels.length : 0} objects detected</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Detailed Analysis -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+                ${analysis.labels && analysis.labels.length > 0 ? `
+                    <div>
+                        <h4 style="color: #1e293b; margin-bottom: 0.75rem; font-size: 1rem;"><i class="ti ti-eye"></i> Detected Objects</h4>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                            ${analysis.labels.slice(0, 8).map(label => `
+                                <span style="display: inline-block; padding: 0.375rem 0.75rem; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; color: #475569;">${label}</span>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                ${analysis.dominant_colors && analysis.dominant_colors.length > 0 ? `
+                    <div>
+                        <h4 style="color: #1e293b; margin-bottom: 0.75rem; font-size: 1rem;"><i class="ti ti-palette"></i> Color Palette</h4>
+                        <div style="display: flex; gap: 0.75rem;">
+                            ${analysis.dominant_colors.map(c => `
+                                <div style="text-align: center;">
+                                    <div style="width: 60px; height: 60px; background: ${c.rgb}; border-radius: 8px; border: 2px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.15);"></div>
+                                    <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.375rem;">${c.hex}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+            </div>
+            
+            ${analysis.text_detected ? `
+                <div style="background: #f0f9ff; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; border-left: 3px solid #0284c7;">
+                    <h4 style="color: #1e293b; margin-bottom: 0.5rem; font-size: 1rem;"><i class="ti ti-text"></i> Text Detected</h4>
+                    <p style="font-size: 0.9rem; color: #334155; font-style: italic;">"${analysis.text_detected}"</p>
+                </div>
+            ` : ''}
+            
+            ${analysis.recommendations && analysis.recommendations.length > 0 ? `
+                <div>
+                    <h4 style="color: #1e293b; margin-bottom: 1rem; font-size: 1.1rem;"><i class="ti ti-bulb"></i> Improvement Recommendations</h4>
+                    ${analysis.recommendations.map(rec => `
+                        <div style="background: linear-gradient(135deg, rgba(153, 38, 243, 0.05), rgba(29, 216, 252, 0.05)); padding: 1.25rem; border-radius: 8px; margin-bottom: 0.75rem; border-left: 4px solid #9926F3;">
+                            <p style="color: #334155; margin-bottom: 0.75rem; line-height: 1.6;">${rec.tip}</p>
+                            <span style="display: inline-block; padding: 0.375rem 0.75rem; background: #10b981; color: white; border-radius: 6px; font-size: 0.8rem; font-weight: 600;">
+                                <i class="ti ti-trending-up"></i> Potential Impact: ${rec.impact}
+                            </span>
+                        </div>
+                    `).join('')}
+                </div>
+            ` : ''}
+        </div>
+    `;
+    
+    container.style.display = 'block';
 }
 
 // =====================================================
@@ -466,7 +645,7 @@ async function loadContentLibrary() {
     const libraryContainer = document.getElementById('contentLibrary');
     
     try {
-        const token = localStorage.getItem('access_token');
+        const token = localStorage.getItem('access_token'); // FIXED: Standardized token
         const response = await fetch(`${API_BASE}/list?limit=10`, {
             headers: {
                 'Authorization': `Bearer ${token}`
@@ -481,61 +660,63 @@ async function loadContentLibrary() {
         
         if (result.success && result.data.length > 0) {
             libraryContainer.innerHTML = result.data.map(content => `
-                <div class="content-card">
+                <div class="content-card" style="background: white; border-radius: 12px; padding: 1.5rem; border: 1px solid #e2e8f0; transition: all 0.2s;">
                     <div class="content-card-header">
                         <div>
                             <h3 style="font-size: 1rem; font-weight: 600; color: #1e293b; margin-bottom: 0.5rem;">
                                 ${content.title || 'Untitled Content'}
                             </h3>
-                            <div class="content-meta">
+                            <div class="content-meta" style="display: flex; flex-wrap: wrap; gap: 0.75rem; font-size: 0.85rem; color: #64748b;">
                                 <span><i class="ti ti-brand-${content.platform}"></i> ${capitalize(content.platform)}</span>
                                 <span><i class="ti ti-file"></i> ${capitalize(content.content_type)}</span>
                                 <span><i class="ti ti-user"></i> ${content.client_name}</span>
-                                <span class="status-badge status-${content.status}">${capitalize(content.status)}</span>
+                                <span class="status-badge" style="padding: 0.25rem 0.625rem; background: ${content.status === 'published' ? '#dcfce7' : '#fef3c7'}; color: ${content.status === 'published' ? '#16a34a' : '#eab308'}; border-radius: 4px; font-weight: 500;">${capitalize(content.status)}</span>
                             </div>
                         </div>
-                        <div class="content-actions">
-                            <button class="btn-icon" onclick="viewContent(${content.content_id})" title="View">
+                        <div class="content-actions" style="display: flex; gap: 0.5rem;">
+                            <button class="btn-icon" onclick="viewContent(${content.content_id})" title="View" style="padding: 0.5rem; border: 1px solid #e2e8f0; border-radius: 6px; background: white; cursor: pointer;">
                                 <i class="ti ti-eye"></i>
                             </button>
-                            <button class="btn-icon" onclick="editContent(${content.content_id})" title="Edit">
-                                <i class="ti ti-edit"></i>
-                            </button>
-                            <button class="btn-icon" onclick="deleteContent(${content.content_id})" title="Delete">
+                            <button class="btn-icon" onclick="deleteContent(${content.content_id})" title="Delete" style="padding: 0.5rem; border: 1px solid #fee2e2; border-radius: 6px; background: white; color: #dc2626; cursor: pointer;">
                                 <i class="ti ti-trash"></i>
                             </button>
                         </div>
                     </div>
                     
-                    <p style="font-size: 0.9rem; color: #64748b; line-height: 1.6; margin-bottom: 1rem;">
+                    <p style="font-size: 0.9rem; color: #64748b; line-height: 1.6; margin: 1rem 0;">
                         ${truncateText(content.content_text, 150)}
                     </p>
                     
                     ${content.hashtags && content.hashtags.length > 0 ? `
-                        <div class="hashtag-container">
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
                             ${content.hashtags.slice(0, 5).map(tag => 
-                                `<span class="hashtag-tag">#${tag}</span>`
+                                `<span style="display: inline-block; padding: 0.25rem 0.625rem; background: linear-gradient(135deg, rgba(153, 38, 243, 0.1), rgba(29, 216, 252, 0.1)); border: 1px solid #9926F3; border-radius: 4px; font-size: 0.8rem; color: #9926F3;">#${tag}</span>`
                             ).join('')}
                             ${content.hashtags.length > 5 ? 
-                                `<span class="hashtag-tag">+${content.hashtags.length - 5} more</span>` : ''}
+                                `<span style="padding: 0.25rem 0.625rem; background: #f1f5f9; border-radius: 4px; font-size: 0.8rem; color: #64748b;">+${content.hashtags.length - 5} more</span>` : ''}
                         </div>
                     ` : ''}
                     
                     ${content.optimization_score ? `
-                        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e2e8f0;">
+                        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between;">
                             <span style="font-size: 0.875rem; color: #64748b;">
-                                <i class="ti ti-chart-line"></i> Optimization Score: 
-                                <strong style="color: #9926F3;">${Math.round(content.optimization_score)}%</strong>
+                                <i class="ti ti-chart-line"></i> Performance Score
                             </span>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <div style="width: 60px; height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden;">
+                                    <div style="width: ${content.optimization_score}%; height: 100%; background: ${content.optimization_score >= 70 ? '#10b981' : '#f59e0b'}; transition: width 0.3s;"></div>
+                                </div>
+                                <strong style="color: ${content.optimization_score >= 70 ? '#10b981' : '#f59e0b'};">${Math.round(content.optimization_score)}%</strong>
+                            </div>
                         </div>
                     ` : ''}
                 </div>
             `).join('');
         } else {
             libraryContainer.innerHTML = `
-                <div class="empty-state">
-                    <i class="ti ti-folder-off"></i>
-                    <h3>No Content Yet</h3>
+                <div class="empty-state" style="text-align: center; padding: 3rem; color: #94a3b8;">
+                    <i class="ti ti-folder-off" style="font-size: 3rem; margin-bottom: 1rem; display: block;"></i>
+                    <h3 style="color: #64748b; margin-bottom: 0.5rem;">No Content Yet</h3>
                     <p>Start generating content to build your library</p>
                 </div>
             `;
@@ -544,8 +725,8 @@ async function loadContentLibrary() {
     } catch (error) {
         console.error('Error loading content library:', error);
         libraryContainer.innerHTML = `
-            <div class="empty-state">
-                <i class="ti ti-alert-circle"></i>
+            <div class="empty-state" style="text-align: center; padding: 3rem; color: #dc2626;">
+                <i class="ti ti-alert-circle" style="font-size: 3rem; margin-bottom: 1rem; display: block;"></i>
                 <h3>Failed to Load Content</h3>
                 <p>${error.message}</p>
             </div>
@@ -573,35 +754,14 @@ async function viewContent(contentId) {
         const result = await response.json();
         
         if (result.success) {
-            // Display in preview panel
-            generatedContent = {
-                content: result.data.content_text,
-                headline: result.data.title,
-                cta: result.data.cta_text,
-                hashtags: result.data.hashtags || [],
-                optimization_score: result.data.optimization_score || 0,
-                character_count: result.data.content_text.length,
-                guidelines: {
-                    max_chars: 2000,
-                    optimal_chars: 200
-                }
-            };
-            
-            displayGeneratedContent(generatedContent);
-            
-            // Scroll to preview
-            document.querySelector('.content-grid').scrollIntoView({ behavior: 'smooth' });
+            // Display in modal or preview panel
+            alert('Content details:\n\n' + result.data.content_text);
         }
         
     } catch (error) {
         console.error('Error viewing content:', error);
         showNotification('Failed to load content', 'error');
     }
-}
-
-function editContent(contentId) {
-    viewContent(contentId);
-    showNotification('Edit the content in the preview and save again', 'info');
 }
 
 async function deleteContent(contentId) {
@@ -634,18 +794,19 @@ async function deleteContent(contentId) {
 // =====================================================
 // UTILITY FUNCTIONS
 // =====================================================
+
 function capitalize(str) {
     if (!str) return '';
     return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
 function truncateText(text, maxLength) {
+    if (!text) return '';
     if (text.length <= maxLength) return text;
     return text.substring(0, maxLength) + '...';
 }
 
 function showNotification(message, type = 'info') {
-    // Use existing notification system or create a simple one
     const notification = document.createElement('div');
     notification.className = `notification notification-${type}`;
     notification.textContent = message;
@@ -660,6 +821,7 @@ function showNotification(message, type = 'info') {
         box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         z-index: 9999;
         animation: slideIn 0.3s ease;
+        font-weight: 500;
     `;
     
     document.body.appendChild(notification);
@@ -669,264 +831,3 @@ function showNotification(message, type = 'info') {
         setTimeout(() => notification.remove(), 300);
     }, 3000);
 }
-
-
-// ============================================
-// ADD THESE FUNCTIONS TO YOUR EXISTING content.js
-// DO NOT REPLACE YOUR EXISTING FILE
-// ============================================
-
-// Add this function for audience insights
-async function generateAudienceInsights() {
-    const clientId = document.getElementById('clientSelect')?.value;
-    const topic = document.getElementById('contentTopic')?.value;
-    
-    if (!clientId || !topic) {
-        alert('Please select a client and enter a topic');
-        return;
-    }
-    
-    const generateBtn = document.getElementById('generateAudienceBtn');
-    if (generateBtn) {
-        generateBtn.disabled = true;
-        generateBtn.innerHTML = '<i class="ti ti-loader"></i> Generating Insights...';
-    }
-    
-    try {
-        const token = localStorage.getItem('token');
-        const response = await fetch(`/api/v1/content/audience-insights`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                client_id: parseInt(clientId),
-                topic: topic,
-                platform: selectedPlatforms[0] || 'instagram'
-            })
-        });
-        
-        const result = await response.json();
-        
-        if (result.success && result.data) {
-            displayAudienceInsights(result.data);
-            alert('Audience insights generated successfully!');
-        } else {
-            throw new Error(result.detail || 'Failed to generate insights');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        alert('Error: ' + error.message);
-    } finally {
-        if (generateBtn) {
-            generateBtn.disabled = false;
-            generateBtn.innerHTML = '<i class="ti ti-users"></i> Generate Audience Insights';
-        }
-    }
-}
-
-// Add this function to display audience insights
-function displayAudienceInsights(data) {
-    const container = document.getElementById('audienceInsightsDisplay');
-    if (!container) return;
-    
-    const audience = data.target_audience || {};
-    const keywords = data.keywords || {};
-    
-    container.innerHTML = `
-        <div style="background: linear-gradient(135deg, rgba(153, 38, 243, 0.05), rgba(29, 216, 252, 0.05)); padding: 1.5rem; border-radius: 12px; margin-bottom: 1rem;">
-            <h4 style="color: #1e293b; margin-bottom: 1rem;"><i class="ti ti-target"></i> Target Audience</h4>
-            <p style="color: #334155; line-height: 1.6;">${audience.description || 'No description available'}</p>
-            
-            ${audience.demographics ? `
-                <div style="margin-top: 1rem;">
-                    <strong>Demographics:</strong><br>
-                    ${audience.demographics.map(d => `<span style="display: inline-block; padding: 0.25rem 0.75rem; background: white; border: 1px solid #e2e8f0; border-radius: 4px; margin: 0.25rem; font-size: 0.85rem;">${d}</span>`).join('')}
-                </div>
-            ` : ''}
-            
-            ${audience.interests ? `
-                <div style="margin-top: 1rem;">
-                    <strong>Interests:</strong><br>
-                    ${audience.interests.map(i => `<span style="display: inline-block; padding: 0.25rem 0.75rem; background: white; border: 1px solid #e2e8f0; border-radius: 4px; margin: 0.25rem; font-size: 0.85rem;">${i}</span>`).join('')}
-                </div>
-            ` : ''}
-        </div>
-        
-        <div style="background: linear-gradient(135deg, rgba(153, 38, 243, 0.05), rgba(29, 216, 252, 0.05)); padding: 1.5rem; border-radius: 12px;">
-            <h4 style="color: #1e293b; margin-bottom: 1rem;"><i class="ti ti-key"></i> Recommended Keywords</h4>
-            
-            ${keywords.primary ? `
-                <div style="margin-bottom: 1rem;">
-                    <strong>Primary Keywords:</strong><br>
-                    ${keywords.primary.map(k => `<span style="display: inline-block; padding: 0.375rem 0.75rem; background: linear-gradient(135deg, rgba(153, 38, 243, 0.15), rgba(29, 216, 252, 0.15)); border: 1px solid #9926F3; border-radius: 4px; margin: 0.25rem; font-size: 0.85rem; color: #9926F3;">#${k}</span>`).join('')}
-                </div>
-            ` : ''}
-            
-            ${keywords.secondary ? `
-                <div>
-                    <strong>Secondary Keywords:</strong><br>
-                    ${keywords.secondary.map(k => `<span style="display: inline-block; padding: 0.375rem 0.75rem; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 4px; margin: 0.25rem; font-size: 0.85rem; color: #64748b;">#${k}</span>`).join('')}
-                </div>
-            ` : ''}
-        </div>
-    `;
-    
-    container.style.display = 'block';
-}
-
-// Add this function for visual analysis
-async function analyzeImageUpload(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    
-    if (!file.type.startsWith('image/')) {
-        alert('Please upload an image file');
-        return;
-    }
-    
-    // Show preview
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        const preview = document.getElementById('imagePreview');
-        if (preview) {
-            preview.innerHTML = `<img src="${e.target.result}" style="max-width: 100%; border-radius: 8px;">`;
-            preview.style.display = 'block';
-        }
-    };
-    reader.readAsDataURL(file);
-    
-    // Convert to base64 for analysis
-    const base64Reader = new FileReader();
-    base64Reader.onload = async function(e) {
-        const base64 = e.target.result.split(',')[1];
-        await analyzeVisualContent(base64);
-    };
-    base64Reader.readAsDataURL(file);
-}
-
-async function analyzeVisualContent(base64Image) {
-    const analyzeBtn = document.getElementById('analyzeVisualBtn');
-    if (analyzeBtn) {
-        analyzeBtn.disabled = true;
-        analyzeBtn.innerHTML = '<i class="ti ti-loader"></i> Analyzing...';
-    }
-    
-    try {
-        const token = localStorage.getItem('token');
-        const response = await fetch(`/api/v1/content/analyze-visual`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                image_base64: base64Image,
-                platform: selectedPlatforms[0] || 'instagram'
-            })
-        });
-        
-        const result = await response.json();
-        
-        if (result.success && result.data) {
-            displayVisualAnalysis(result.data);
-            alert('Visual analysis complete!');
-        } else {
-            throw new Error(result.detail || 'Visual analysis failed');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        alert('Error: ' + error.message);
-    } finally {
-        if (analyzeBtn) {
-            analyzeBtn.disabled = false;
-            analyzeBtn.innerHTML = '<i class="ti ti-scan"></i> Analyze Image';
-        }
-    }
-}
-
-function displayVisualAnalysis(analysis) {
-    const container = document.getElementById('visualAnalysisResults');
-    if (!container) return;
-    
-    const score = analysis.composition_score || 0;
-    const scoreColor = score >= 70 ? '#10b981' : '#f59e0b';
-    
-    container.innerHTML = `
-        <div style="background: white; border-radius: 12px; padding: 1.5rem;">
-            <div style="display: flex; align-items: center; gap: 2rem; margin-bottom: 1.5rem; padding-bottom: 1.5rem; border-bottom: 2px solid #f1f5f9;">
-                <div style="text-align: center;">
-                    <div style="font-size: 3rem; font-weight: bold; color: ${scoreColor};">${score}</div>
-                    <div style="font-size: 0.875rem; color: #64748b;">Composition Score</div>
-                    <div style="padding: 0.25rem 0.625rem; background: ${scoreColor}20; color: ${scoreColor}; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-top: 0.5rem;">
-                        ${analysis.visual_analysis_status || 'Unknown'}
-                    </div>
-                </div>
-                <div style="flex: 1;">
-                    <h4 style="color: #1e293b; margin-bottom: 1rem;">Analysis Results</h4>
-                    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-                        <div style="padding: 0.75rem; background: ${analysis.face_detected ? '#d1fae5' : '#fef3c7'}; border-radius: 8px; font-size: 0.9rem;">
-                            <i class="ti ti-${analysis.face_detected ? 'user-check' : 'user-x'}"></i>
-                            <span>${analysis.face_detected ? `${analysis.faces_count} face(s) detected` : 'No faces detected'}</span>
-                            ${analysis.face_emotions && analysis.face_emotions.length > 0 ? `
-                                <div style="margin-top: 0.5rem; font-size: 0.8rem; color: #64748b;">
-                                    Emotions: ${analysis.face_emotions[0].joy}, ${analysis.face_emotions[0].surprise}
-                                </div>
-                            ` : ''}
-                        </div>
-                        
-                        ${analysis.labels && analysis.labels.length > 0 ? `
-                            <div style="padding: 0.75rem; background: #f8fafc; border-radius: 8px; font-size: 0.9rem;">
-                                <i class="ti ti-tags"></i>
-                                <span>Detected: ${analysis.labels.slice(0, 5).join(', ')}</span>
-                            </div>
-                        ` : ''}
-                        
-                        ${analysis.dominant_colors && analysis.dominant_colors.length > 0 ? `
-                            <div style="padding: 0.75rem; background: #f8fafc; border-radius: 8px; font-size: 0.9rem;">
-                                <i class="ti ti-palette"></i>
-                                <span>Dominant Colors:</span>
-                                <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
-                                    ${analysis.dominant_colors.map(c => `
-                                        <div style="width: 32px; height: 32px; background: ${c.rgb}; border-radius: 6px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" title="${c.hex}"></div>
-                                    `).join('')}
-                                </div>
-                            </div>
-                        ` : ''}
-                        
-                        ${analysis.text_detected ? `
-                            <div style="padding: 0.75rem; background: #f8fafc; border-radius: 8px; font-size: 0.9rem;">
-                                <i class="ti ti-text"></i>
-                                <span>Text: "${analysis.text_detected}"</span>
-                            </div>
-                        ` : ''}
-                    </div>
-                </div>
-            </div>
-            
-            ${analysis.recommendations && analysis.recommendations.length > 0 ? `
-                <div>
-                    <h4 style="color: #1e293b; margin-bottom: 1rem;"><i class="ti ti-bulb"></i> Improvement Suggestions</h4>
-                    ${analysis.recommendations.map(rec => `
-                        <div style="background: linear-gradient(135deg, rgba(153, 38, 243, 0.05), rgba(29, 216, 252, 0.05)); padding: 1rem; border-radius: 8px; margin-bottom: 0.75rem; border-left: 3px solid #9926F3;">
-                            <p style="color: #334155; margin-bottom: 0.5rem;">${rec.tip}</p>
-                            <span style="padding: 0.25rem 0.625rem; background: #10b981; color: white; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Impact: ${rec.impact}</span>
-                        </div>
-                    `).join('')}
-                </div>
-            ` : ''}
-        </div>
-    `;
-    
-    container.style.display = 'block';
-}
-
-// Initialize visual analysis when page loads
-document.addEventListener('DOMContentLoaded', function() {
-    const imageInput = document.getElementById('visualAnalysisImage');
-    if (imageInput) {
-        imageInput.addEventListener('change', analyzeImageUpload);
-    }
-});
-
