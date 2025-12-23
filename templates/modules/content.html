@@ -741,6 +741,58 @@
                 <i class="ti ti-sparkles"></i>
                 Generate Content
             </button>
+
+
+            <!-- Section 1: AI Audience Insights -->
+<div class="content-panel" style="grid-column: span 2; margin-top: 2rem;">
+    <div class="panel-header">
+        <i class="ti ti-users"></i>
+        <h2>AI Audience Insights & Keywords Generator</h2>
+    </div>
+    
+    <p style="color: #64748b; font-size: 0.9rem; margin-bottom: 1rem; line-height: 1.6;">
+        Generate AI-powered target audience insights and keyword recommendations based on client profile and content topic. 
+        Analyzes client industry, business type, and provides demographics, interests, behaviors, pain points, and optimized keywords.
+    </p>
+    
+    <button class="btn-primary" id="generateAudienceBtn" onclick="generateAudienceInsights()">
+        <i class="ti ti-users"></i> Generate Audience Insights
+    </button>
+    
+    <div id="audienceInsightsDisplay" style="display: none; margin-top: 1.5rem;">
+        <!-- Results populated by JavaScript -->
+    </div>
+</div>
+
+<!-- Section 2: Visual Analysis with Google Cloud Vision -->
+<div class="content-panel" style="grid-column: span 2; margin-top: 2rem;">
+    <div class="panel-header">
+        <i class="ti ti-scan"></i>
+        <h2>Visual Content Analysis (Google Cloud Vision)</h2>
+    </div>
+    
+    <p style="color: #64748b; font-size: 0.9rem; margin-bottom: 1rem; line-height: 1.6;">
+        Analyze images for composition, face detection with emotions, dominant colors, object detection, and text recognition. 
+        Get actionable recommendations to improve visual engagement with performance scores.
+    </p>
+    
+    <div style="margin-bottom: 1rem;">
+        <label for="visualAnalysisImage" style="display: flex; flex-direction: column; align-items: center; padding: 2rem; border: 2px dashed #cbd5e1; border-radius: 12px; cursor: pointer; background: #f8fafc; transition: all 0.2s;">
+            <i class="ti ti-upload" style="font-size: 2.5rem; background: linear-gradient(135deg, #9926F3, #1DD8FC); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 0.75rem;"></i>
+            <span style="font-size: 0.95rem; font-weight: 500; color: #334155;">Upload Image for Analysis</span>
+            <span style="font-size: 0.8rem; color: #64748b; margin-top: 0.25rem;">Supports JPG, PNG (max 10MB)</span>
+            <input type="file" id="visualAnalysisImage" accept="image/*" style="display: none;">
+        </label>
+    </div>
+    
+    <div id="imagePreview" style="display: none; margin-top: 1rem; text-align: center;">
+        <!-- Image preview populated by JavaScript -->
+    </div>
+    
+    <div id="visualAnalysisResults" style="display: none; margin-top: 1.5rem;">
+        <!-- Analysis results populated by JavaScript -->
+    </div>
+</div>
         </div>
 
         <!-- Right Panel: Preview & Results -->
@@ -916,5 +968,5 @@ console.log('✅ Platform selection script loaded');
 </script>
 
 
-<script src="/static/js/content.js?v=1"></script>
+<script src="/static/js/content.js?v=2"></script>
 {% endblock %}

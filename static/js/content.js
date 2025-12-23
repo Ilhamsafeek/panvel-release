@@ -18,28 +18,61 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeContentTypeSelector();
     loadClients();
     loadContentLibrary();
+    
+    // Visual analysis initialization
+    const imageInput = document.getElementById('visualAnalysisImage');
+    if (imageInput) {
+        imageInput.addEventListener('change', analyzeImageUpload);
+    }
 });
-
 // =====================================================
 // PLATFORM & CONTENT TYPE SELECTION
 // =====================================================
-
 function initializePlatformSelector() {
     const platforms = document.querySelectorAll('.platform-option');
     
     platforms.forEach(platform => {
         platform.addEventListener('click', function() {
-            // Remove active class from all
-            platforms.forEach(p => p.classList.remove('active'));
+            const platformValue = this.dataset.platform;
             
-            // Add active class to selected
-            this.classList.add('active');
-            selectedPlatform = this.dataset.platform;
+            // Toggle selection
+            if (this.classList.contains('active')) {
+                // Deselect
+                this.classList.remove('active');
+                selectedPlatforms = selectedPlatforms.filter(p => p !== platformValue);
+            } else {
+                // Select
+                this.classList.add('active');
+                if (!selectedPlatforms.includes(platformValue)) {
+                    selectedPlatforms.push(platformValue);
+                }
+            }
             
-            // Show platform guidelines
-            showPlatformGuidelines(selectedPlatform);
+            updateSelectedPlatformsDisplay();
+            
+            console.log('Selected platforms:', selectedPlatforms); // Debug
         });
     });
+}
+
+
+function updateSelectedPlatformsDisplay() {
+    const infoBox = document.getElementById('selectedPlatformsInfo');
+    const badgeContainer = document.getElementById('selectedPlatformsBadges');
+    
+    if (infoBox && badgeContainer) {
+        if (selectedPlatforms.length > 0) {
+            infoBox.classList.add('show');
+            badgeContainer.innerHTML = selectedPlatforms.map(p => `
+                <span class="platform-badge">
+                    <i class="ti ti-brand-${p}"></i> ${capitalize(p)}
+                </span>
+            `).join('');
+        } else {
+            infoBox.classList.remove('show');
+            badgeContainer.innerHTML = '';
+        }
+    }
 }
 
 function initializeContentTypeSelector() {
@@ -47,12 +80,14 @@ function initializeContentTypeSelector() {
     
     types.forEach(type => {
         type.addEventListener('click', function() {
-            // Remove active class from all
+            // Remove active from all
             types.forEach(t => t.classList.remove('active'));
             
-            // Add active class to selected
+            // Add active to clicked
             this.classList.add('active');
             selectedContentType = this.dataset.type;
+            
+            console.log('Selected content type:', selectedContentType); // Debug
         });
     });
 }
@@ -156,103 +191,77 @@ async function showPlatformGuidelines(platform) {
 // =====================================================
 // GENERATE CONTENT
 // =====================================================
-
 async function generateContent() {
+    const clientId = document.getElementById('clientSelect')?.value;
+    const topic = document.getElementById('contentTopic')?.value;
+    const tone = document.getElementById('toneSelect')?.value || 'professional';
+    
+    console.log('Generate clicked. Platforms:', selectedPlatforms); // Debug
+    
     // Validation
-    if (!selectedPlatform) {
-        showNotification('Please select a platform', 'error');
+    if (!clientId) {
+        alert('Please select a client');
+        return;
+    }
+    
+    if (!topic || topic.trim() === '') {
+        alert('Please enter a content topic');
+        return;
+    }
+    
+    if (selectedPlatforms.length === 0) {
+        alert('Please select at least one platform');
         return;
     }
     
     if (!selectedContentType) {
-        showNotification('Please select a content type', 'error');
+        alert('Please select a content type');
         return;
     }
     
-    const topic = document.getElementById('topicInput').value.trim();
-    if (!topic) {
-        showNotification('Please enter a topic or brief', 'error');
-        return;
+    const generateBtn = document.getElementById('generateContentBtn');
+    if (generateBtn) {
+        generateBtn.disabled = true;
+        generateBtn.innerHTML = '<i class="ti ti-loader"></i> Generating Content...';
     }
-    
-    const clientId = document.getElementById('clientSelect').value;
-    if (!clientId) {
-        showNotification('Please select a client', 'error');
-        return;
-    }
-    
-    currentClientId = parseInt(clientId);
-    
-    const generateBtn = document.getElementById('generateBtn');
-    const previewContainer = document.getElementById('previewContainer');
-    
-    // Show loading state
-    generateBtn.disabled = true;
-    generateBtn.innerHTML = '<i class="ti ti-loader"></i> Generating...';
-    
-    previewContainer.innerHTML = `
-        <div class="loading-state">
-            <div class="loader-spinner"></div>
-            <p>AI is generating your content...</p>
-        </div>
-    `;
     
     try {
-        const token = localStorage.getItem('access_token');
+        const token = localStorage.getItem('token');
         
-        // Get optional fields
-        const tone = document.getElementById('toneSelect').value;
-        const targetAudience = document.getElementById('audienceInput').value.trim();
-        const keywordsInput = document.getElementById('keywordsInput').value.trim();
-        const keywords = keywordsInput ? keywordsInput.split(',').map(k => k.trim()) : [];
-        
-        const response = await fetch(`${API_BASE}/generate`, {
+        const response = await fetch(`/api/v1/content/intelligence/generate`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                platform: selectedPlatform,
+                client_id: parseInt(clientId),
+                platforms: selectedPlatforms,
                 content_type: selectedContentType,
                 topic: topic,
                 tone: tone,
-                target_audience: targetAudience || null,
-                keywords: keywords,
-                client_id: currentClientId
+                generate_audience_insights: true
             })
         });
         
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Failed to generate content');
-        }
-        
         const result = await response.json();
         
-        if (result.success) {
-            generatedContent = result.data;
+        if (result.success && result.data) {
             displayGeneratedContent(result.data);
-            showNotification('Content generated successfully!', 'success');
+            alert('Content generated successfully!');
+        } else {
+            throw new Error(result.detail || 'Content generation failed');
         }
-        
     } catch (error) {
         console.error('Error generating content:', error);
-        showNotification(error.message || 'Failed to generate content', 'error');
-        
-        previewContainer.innerHTML = `
-            <div class="empty-state">
-                <i class="ti ti-alert-circle"></i>
-                <h3>Generation Failed</h3>
-                <p>${error.message}</p>
-            </div>
-        `;
+        alert('Error: ' + error.message);
     } finally {
-        generateBtn.disabled = false;
-        generateBtn.innerHTML = '<i class="ti ti-sparkles"></i> Generate Content';
+        if (generateBtn) {
+            generateBtn.disabled = false;
+            generateBtn.innerHTML = '<i class="ti ti-sparkles"></i> Generate Content';
+        }
     }
 }
-
 // =====================================================
 // DISPLAY GENERATED CONTENT
 // =====================================================
@@ -625,8 +634,8 @@ async function deleteContent(contentId) {
 // =====================================================
 // UTILITY FUNCTIONS
 // =====================================================
-
 function capitalize(str) {
+    if (!str) return '';
     return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
@@ -660,3 +669,264 @@ function showNotification(message, type = 'info') {
         setTimeout(() => notification.remove(), 300);
     }, 3000);
 }
+
+
+// ============================================
+// ADD THESE FUNCTIONS TO YOUR EXISTING content.js
+// DO NOT REPLACE YOUR EXISTING FILE
+// ============================================
+
+// Add this function for audience insights
+async function generateAudienceInsights() {
+    const clientId = document.getElementById('clientSelect')?.value;
+    const topic = document.getElementById('contentTopic')?.value;
+    
+    if (!clientId || !topic) {
+        alert('Please select a client and enter a topic');
+        return;
+    }
+    
+    const generateBtn = document.getElementById('generateAudienceBtn');
+    if (generateBtn) {
+        generateBtn.disabled = true;
+        generateBtn.innerHTML = '<i class="ti ti-loader"></i> Generating Insights...';
+    }
+    
+    try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`/api/v1/content/audience-insights`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                client_id: parseInt(clientId),
+                topic: topic,
+                platform: selectedPlatforms[0] || 'instagram'
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+            displayAudienceInsights(result.data);
+            alert('Audience insights generated successfully!');
+        } else {
+            throw new Error(result.detail || 'Failed to generate insights');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error: ' + error.message);
+    } finally {
+        if (generateBtn) {
+            generateBtn.disabled = false;
+            generateBtn.innerHTML = '<i class="ti ti-users"></i> Generate Audience Insights';
+        }
+    }
+}
+
+// Add this function to display audience insights
+function displayAudienceInsights(data) {
+    const container = document.getElementById('audienceInsightsDisplay');
+    if (!container) return;
+    
+    const audience = data.target_audience || {};
+    const keywords = data.keywords || {};
+    
+    container.innerHTML = `
+        <div style="background: linear-gradient(135deg, rgba(153, 38, 243, 0.05), rgba(29, 216, 252, 0.05)); padding: 1.5rem; border-radius: 12px; margin-bottom: 1rem;">
+            <h4 style="color: #1e293b; margin-bottom: 1rem;"><i class="ti ti-target"></i> Target Audience</h4>
+            <p style="color: #334155; line-height: 1.6;">${audience.description || 'No description available'}</p>
+            
+            ${audience.demographics ? `
+                <div style="margin-top: 1rem;">
+                    <strong>Demographics:</strong><br>
+                    ${audience.demographics.map(d => `<span style="display: inline-block; padding: 0.25rem 0.75rem; background: white; border: 1px solid #e2e8f0; border-radius: 4px; margin: 0.25rem; font-size: 0.85rem;">${d}</span>`).join('')}
+                </div>
+            ` : ''}
+            
+            ${audience.interests ? `
+                <div style="margin-top: 1rem;">
+                    <strong>Interests:</strong><br>
+                    ${audience.interests.map(i => `<span style="display: inline-block; padding: 0.25rem 0.75rem; background: white; border: 1px solid #e2e8f0; border-radius: 4px; margin: 0.25rem; font-size: 0.85rem;">${i}</span>`).join('')}
+                </div>
+            ` : ''}
+        </div>
+        
+        <div style="background: linear-gradient(135deg, rgba(153, 38, 243, 0.05), rgba(29, 216, 252, 0.05)); padding: 1.5rem; border-radius: 12px;">
+            <h4 style="color: #1e293b; margin-bottom: 1rem;"><i class="ti ti-key"></i> Recommended Keywords</h4>
+            
+            ${keywords.primary ? `
+                <div style="margin-bottom: 1rem;">
+                    <strong>Primary Keywords:</strong><br>
+                    ${keywords.primary.map(k => `<span style="display: inline-block; padding: 0.375rem 0.75rem; background: linear-gradient(135deg, rgba(153, 38, 243, 0.15), rgba(29, 216, 252, 0.15)); border: 1px solid #9926F3; border-radius: 4px; margin: 0.25rem; font-size: 0.85rem; color: #9926F3;">#${k}</span>`).join('')}
+                </div>
+            ` : ''}
+            
+            ${keywords.secondary ? `
+                <div>
+                    <strong>Secondary Keywords:</strong><br>
+                    ${keywords.secondary.map(k => `<span style="display: inline-block; padding: 0.375rem 0.75rem; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 4px; margin: 0.25rem; font-size: 0.85rem; color: #64748b;">#${k}</span>`).join('')}
+                </div>
+            ` : ''}
+        </div>
+    `;
+    
+    container.style.display = 'block';
+}
+
+// Add this function for visual analysis
+async function analyzeImageUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    if (!file.type.startsWith('image/')) {
+        alert('Please upload an image file');
+        return;
+    }
+    
+    // Show preview
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const preview = document.getElementById('imagePreview');
+        if (preview) {
+            preview.innerHTML = `<img src="${e.target.result}" style="max-width: 100%; border-radius: 8px;">`;
+            preview.style.display = 'block';
+        }
+    };
+    reader.readAsDataURL(file);
+    
+    // Convert to base64 for analysis
+    const base64Reader = new FileReader();
+    base64Reader.onload = async function(e) {
+        const base64 = e.target.result.split(',')[1];
+        await analyzeVisualContent(base64);
+    };
+    base64Reader.readAsDataURL(file);
+}
+
+async function analyzeVisualContent(base64Image) {
+    const analyzeBtn = document.getElementById('analyzeVisualBtn');
+    if (analyzeBtn) {
+        analyzeBtn.disabled = true;
+        analyzeBtn.innerHTML = '<i class="ti ti-loader"></i> Analyzing...';
+    }
+    
+    try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`/api/v1/content/analyze-visual`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                image_base64: base64Image,
+                platform: selectedPlatforms[0] || 'instagram'
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+            displayVisualAnalysis(result.data);
+            alert('Visual analysis complete!');
+        } else {
+            throw new Error(result.detail || 'Visual analysis failed');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error: ' + error.message);
+    } finally {
+        if (analyzeBtn) {
+            analyzeBtn.disabled = false;
+            analyzeBtn.innerHTML = '<i class="ti ti-scan"></i> Analyze Image';
+        }
+    }
+}
+
+function displayVisualAnalysis(analysis) {
+    const container = document.getElementById('visualAnalysisResults');
+    if (!container) return;
+    
+    const score = analysis.composition_score || 0;
+    const scoreColor = score >= 70 ? '#10b981' : '#f59e0b';
+    
+    container.innerHTML = `
+        <div style="background: white; border-radius: 12px; padding: 1.5rem;">
+            <div style="display: flex; align-items: center; gap: 2rem; margin-bottom: 1.5rem; padding-bottom: 1.5rem; border-bottom: 2px solid #f1f5f9;">
+                <div style="text-align: center;">
+                    <div style="font-size: 3rem; font-weight: bold; color: ${scoreColor};">${score}</div>
+                    <div style="font-size: 0.875rem; color: #64748b;">Composition Score</div>
+                    <div style="padding: 0.25rem 0.625rem; background: ${scoreColor}20; color: ${scoreColor}; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-top: 0.5rem;">
+                        ${analysis.visual_analysis_status || 'Unknown'}
+                    </div>
+                </div>
+                <div style="flex: 1;">
+                    <h4 style="color: #1e293b; margin-bottom: 1rem;">Analysis Results</h4>
+                    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                        <div style="padding: 0.75rem; background: ${analysis.face_detected ? '#d1fae5' : '#fef3c7'}; border-radius: 8px; font-size: 0.9rem;">
+                            <i class="ti ti-${analysis.face_detected ? 'user-check' : 'user-x'}"></i>
+                            <span>${analysis.face_detected ? `${analysis.faces_count} face(s) detected` : 'No faces detected'}</span>
+                            ${analysis.face_emotions && analysis.face_emotions.length > 0 ? `
+                                <div style="margin-top: 0.5rem; font-size: 0.8rem; color: #64748b;">
+                                    Emotions: ${analysis.face_emotions[0].joy}, ${analysis.face_emotions[0].surprise}
+                                </div>
+                            ` : ''}
+                        </div>
+                        
+                        ${analysis.labels && analysis.labels.length > 0 ? `
+                            <div style="padding: 0.75rem; background: #f8fafc; border-radius: 8px; font-size: 0.9rem;">
+                                <i class="ti ti-tags"></i>
+                                <span>Detected: ${analysis.labels.slice(0, 5).join(', ')}</span>
+                            </div>
+                        ` : ''}
+                        
+                        ${analysis.dominant_colors && analysis.dominant_colors.length > 0 ? `
+                            <div style="padding: 0.75rem; background: #f8fafc; border-radius: 8px; font-size: 0.9rem;">
+                                <i class="ti ti-palette"></i>
+                                <span>Dominant Colors:</span>
+                                <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                                    ${analysis.dominant_colors.map(c => `
+                                        <div style="width: 32px; height: 32px; background: ${c.rgb}; border-radius: 6px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" title="${c.hex}"></div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
+                        
+                        ${analysis.text_detected ? `
+                            <div style="padding: 0.75rem; background: #f8fafc; border-radius: 8px; font-size: 0.9rem;">
+                                <i class="ti ti-text"></i>
+                                <span>Text: "${analysis.text_detected}"</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+            
+            ${analysis.recommendations && analysis.recommendations.length > 0 ? `
+                <div>
+                    <h4 style="color: #1e293b; margin-bottom: 1rem;"><i class="ti ti-bulb"></i> Improvement Suggestions</h4>
+                    ${analysis.recommendations.map(rec => `
+                        <div style="background: linear-gradient(135deg, rgba(153, 38, 243, 0.05), rgba(29, 216, 252, 0.05)); padding: 1rem; border-radius: 8px; margin-bottom: 0.75rem; border-left: 3px solid #9926F3;">
+                            <p style="color: #334155; margin-bottom: 0.5rem;">${rec.tip}</p>
+                            <span style="padding: 0.25rem 0.625rem; background: #10b981; color: white; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Impact: ${rec.impact}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            ` : ''}
+        </div>
+    `;
+    
+    container.style.display = 'block';
+}
+
+// Initialize visual analysis when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    const imageInput = document.getElementById('visualAnalysisImage');
+    if (imageInput) {
+        imageInput.addEventListener('change', analyzeImageUpload);
+    }
+});
+

@@ -17,6 +17,8 @@ import os
 import uuid
 import hashlib
 from openai import OpenAI
+import hashlib
+import secrets
 
 import jwt
 from jwt import PyJWTError
@@ -30,6 +32,7 @@ from app.core.security import get_db_connection
 
 router = APIRouter()
 
+oauth_states = {}
 # Initialize OpenAI client
 openai_client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
@@ -38,6 +41,19 @@ MEDIA_STORAGE_DIR = os.path.join(settings.UPLOAD_DIR, "media_assets")
 
 # Ensure directory exists
 os.makedirs(MEDIA_STORAGE_DIR, exist_ok=True)
+
+
+
+
+def generate_code_verifier():
+    """Generate a cryptographically random code verifier"""
+    return base64.urlsafe_b64encode(secrets.token_bytes(32)).decode('utf-8').rstrip('=')
+
+def generate_code_challenge(verifier):
+    """Generate code challenge from verifier using SHA-256"""
+    digest = hashlib.sha256(verifier.encode('utf-8')).digest()
+    return base64.urlsafe_b64encode(digest).decode('utf-8').rstrip('=')
+
 
 
 # ========== UTILITY FUNCTIONS ==========
@@ -273,8 +289,9 @@ async def generate_synthesia_video(
         avatar = avatar_id or settings.SYNTHESIA_AVATAR_ID or "anna_costume1_cameraA"
         
         headers = {
-            "Authorization": settings.SYNTHESIA_API_KEY,
-            "Content-Type": "application/json"
+         "Authorization": f"Bearer {settings.SYNTHESIA_API_KEY}",  # ✅ Add "Bearer " prefix
+         "Content-Type": "application/json",
+         "Accept": "application/json"
         }
         
         payload = {
@@ -289,7 +306,13 @@ async def generate_synthesia_video(
             ]
         }
         
+        print(f"[SYNTHESIA] Sending request to: {api_url}")
+        print(f"[SYNTHESIA] Payload: {json.dumps(payload, indent=2)}")
+        
         response = requests.post(api_url, headers=headers, json=payload, timeout=30)
+        
+        print(f"[SYNTHESIA] Response Status: {response.status_code}")
+        print(f"[SYNTHESIA] Response: {response.text}")
         
         if response.status_code in [200, 201]:
             result = response.json()
@@ -304,17 +327,25 @@ async def generate_synthesia_video(
                 "message": "Video is being generated. Check status endpoint for updates."
             }
         else:
-            error_msg = response.json().get("message", "Unknown error")
+            error_data = response.json() if response.text else {}
+            error_msg = error_data.get("message") or error_data.get("error") or "Unknown error"
+            
+            print(f"[SYNTHESIA] Error: {error_msg}")
+            print(f"[SYNTHESIA] Full error response: {response.text}")
+            
             raise HTTPException(
                 status_code=response.status_code,
                 detail=f"Synthesia API error: {error_msg}"
             )
             
     except requests.exceptions.Timeout:
+        print(f"[SYNTHESIA] Request timeout")
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             detail="Synthesia API timeout"
         )
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"[SYNTHESIA] Error: {str(e)}")
         raise HTTPException(
@@ -323,6 +354,7 @@ async def generate_synthesia_video(
         )
 
 
+# ========== IDEOGRAM ANIMATION GENERATION ==========
 # ========== IDEOGRAM ANIMATION GENERATION ==========
 
 async def generate_ideogram_animation(
@@ -342,16 +374,50 @@ async def generate_ideogram_animation(
             "Content-Type": "application/json"
         }
         
+        # ✅ Map aspect ratios to Ideogram format
+        aspect_ratio_map = {
+            "1:1": "ASPECT_1_1",
+            "16:9": "ASPECT_16_9",
+            "9:16": "ASPECT_9_16",
+            "4:3": "ASPECT_4_3",
+            "3:4": "ASPECT_3_4",
+            "10:16": "ASPECT_10_16",
+            "16:10": "ASPECT_16_10",
+            "3:2": "ASPECT_3_2",
+            "2:3": "ASPECT_2_3",
+            "3:1": "ASPECT_3_1",
+            "1:3": "ASPECT_1_3"
+        }
+        
+        ideogram_aspect_ratio = aspect_ratio_map.get(aspect_ratio, "ASPECT_1_1")
+        
+        # ✅ Map styles to Ideogram style types
+        style_type_map = {
+            "modern": "DESIGN",
+            "realistic": "REALISTIC",
+            "3d": "RENDER_3D",
+            "anime": "ANIME",
+            "auto": "AUTO"
+        }
+        
+        ideogram_style = style_type_map.get(style.lower(), "AUTO")
+        
         payload = {
             "image_request": {
-                "prompt": f"animated {style} style: {prompt}",
+                "prompt": prompt,  # ✅ Don't modify the prompt
                 "model": "V_2",
-                "aspect_ratio": aspect_ratio,
-                "magic_prompt_option": "AUTO"
+                "aspect_ratio": ideogram_aspect_ratio,  # ✅ Use correct format
+                "magic_prompt_option": "AUTO",
+                "style_type": ideogram_style  # ✅ Add style
             }
         }
         
+        print(f"[IDEOGRAM] Request payload: {json.dumps(payload, indent=2)}")
+        
         response = requests.post(api_url, headers=headers, json=payload, timeout=60)
+        
+        print(f"[IDEOGRAM] Response Status: {response.status_code}")
+        print(f"[IDEOGRAM] Response: {response.text}")
         
         if response.status_code == 200:
             result = response.json()
@@ -367,6 +433,8 @@ async def generate_ideogram_animation(
                         file_extension='png'  # Ideogram returns PNG
                     )
                     
+                    print(f"[IDEOGRAM] Animation saved: {saved_file['file_path']}")
+                    
                     return {
                         "success": True,
                         "url": saved_file["file_url"],
@@ -380,17 +448,25 @@ async def generate_ideogram_animation(
                 detail="No animation generated"
             )
         else:
-            error_msg = response.json().get("message", "Unknown error")
+            error_data = response.json() if response.text else {}
+            error_msg = error_data.get("message") or error_data.get("error") or "Unknown error"
+            
+            print(f"[IDEOGRAM] Error: {error_msg}")
+            print(f"[IDEOGRAM] Full error response: {response.text}")
+            
             raise HTTPException(
                 status_code=response.status_code,
                 detail=f"Ideogram API error: {error_msg}"
             )
             
     except requests.exceptions.Timeout:
+        print(f"[IDEOGRAM] Request timeout")
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             detail="Ideogram API timeout"
         )
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"[IDEOGRAM] Error: {str(e)}")
         raise HTTPException(
@@ -462,7 +538,6 @@ async def create_canva_design(
             "title": title
         }
         
-        import requests
         response = requests.post(api_url, headers=headers, json=payload, timeout=30)
         
         if response.status_code in [200, 201]:
@@ -658,11 +733,15 @@ async def get_video_status(
     try:
         api_url = f"https://api.synthesia.io/v2/videos/{video_id}"
         
+        # ✅ CORRECTED HEADERS
         headers = {
-            "Authorization": settings.SYNTHESIA_API_KEY
+            "Authorization": f"Bearer {settings.SYNTHESIA_API_KEY}",
+            "Accept": "application/json"  # Add Accept header
         }
         
         response = requests.get(api_url, headers=headers, timeout=30)
+        
+        print(f"[SYNTHESIA] Status check for video {video_id}: {response.status_code}")
         
         if response.status_code == 200:
             result = response.json()
@@ -1020,15 +1099,14 @@ async def create_design(
 
 
 # ========== CANVA OAUTH FLOW ==========
-@router.get("/canva/connect", summary="Initiate Canva OAuth")
+@router.get("/canva/connect", summary="Initiate Canva OAuth with PKCE")
 async def connect_canva(
     client_id: int = Query(...),
     token: Optional[str] = Query(None),
     request: Request = None
 ):
-    """Start Canva OAuth authorization flow"""
+    """Start Canva OAuth authorization flow with PKCE"""
     
-    import secrets
     from urllib.parse import urlencode
     import jwt
     from jwt import PyJWTError
@@ -1062,36 +1140,44 @@ async def connect_canva(
         if role not in ['admin', 'employee']:
             raise Exception("Insufficient permissions")
         
+        # ✅ Generate PKCE parameters
+        code_verifier = generate_code_verifier()
+        code_challenge = generate_code_challenge(code_verifier)
+        
         # Generate state for CSRF protection
         state = secrets.token_urlsafe(32)
         
-        # Store state temporarily
+        # Store state and code_verifier temporarily
         oauth_states[state] = {
             'client_id': client_id,
             'user_id': user_id,
+            'code_verifier': code_verifier,  # ✅ Store for later use
             'timestamp': datetime.now()
         }
         
-        print(f"🔐 Canva OAuth initiated - Client: {client_id}, User: {user_id}, Role: {role}")
+        print(f"🔐 Canva OAuth initiated - Client: {client_id}, User: {user_id}")
+        print(f"📍 Code Verifier: {code_verifier[:20]}...")
+        print(f"📍 Code Challenge: {code_challenge[:20]}...")
         
-        # Build redirect URI
-        base_url = str(request.base_url).rstrip('/')
-        redirect_uri = settings.CANVA_REDIRECT_URI or f"{base_url}/api/v1/media-studio/canva/callback"
+        # Use the configured redirect URI
+        redirect_uri = settings.CANVA_REDIRECT_URI
         
         print(f"📍 Redirect URI: {redirect_uri}")
         
-        # Build authorization URL
+        # ✅ Build authorization URL with PKCE
         auth_params = {
+            'response_type': 'code',
             'client_id': settings.CANVA_CLIENT_ID,
             'redirect_uri': redirect_uri,
-            'response_type': 'code',
+            'scope': 'design:content:read design:content:write design:meta:read asset:read',
             'state': state,
-            'scope': 'design:content:read design:content:write design:meta:read asset:read'
+            'code_challenge': code_challenge,  # ✅ REQUIRED
+            'code_challenge_method': 's256'     # ✅ REQUIRED
         }
         
         auth_url = f"https://www.canva.com/api/oauth/authorize?{urlencode(auth_params)}"
         
-        print(f"🔄 Redirecting to Canva OAuth: {auth_url[:100]}...")
+        print(f"🔄 Full OAuth URL: {auth_url[:150]}...")
         
         return RedirectResponse(url=auth_url)
         
@@ -1102,7 +1188,6 @@ async def connect_canva(
                 <body style="font-family: Arial; text-align: center; padding: 50px;">
                     <h2>❌ Authentication Failed</h2>
                     <p>Invalid or expired token</p>
-                    <p style="font-size: 12px; color: #666;">{str(e)}</p>
                     <button onclick="window.close()">Close</button>
                 </body>
             </html>
@@ -1120,18 +1205,19 @@ async def connect_canva(
         """, status_code=401)
 
 
-@router.get("/canva/callback", summary="Handle Canva OAuth callback")
+
+@router.get("/canva/callback", summary="Handle Canva OAuth callback with PKCE")
 async def canva_callback(
     code: Optional[str] = Query(None),
     state: Optional[str] = Query(None),
     error: Optional[str] = Query(None)
 ):
-    """Handle OAuth callback from Canva"""
+    """Handle OAuth callback from Canva and exchange code for tokens"""
     
     if error:
         return HTMLResponse(f"""
             <html>
-                <body>
+                <body style="text-align: center; padding: 50px;">
                     <h2>❌ Authorization Failed</h2>
                     <p>{error}</p>
                     <button onclick="window.close()">Close</button>
@@ -1142,7 +1228,7 @@ async def canva_callback(
     if not code or not state:
         return HTMLResponse("""
             <html>
-                <body>
+                <body style="text-align: center; padding: 50px;">
                     <h2>❌ Invalid Request</h2>
                     <p>Missing authorization code or state</p>
                     <button onclick="window.close()">Close</button>
@@ -1153,7 +1239,7 @@ async def canva_callback(
     if state not in oauth_states:
         return HTMLResponse("""
             <html>
-                <body>
+                <body style="text-align: center; padding: 50px;">
                     <h2>❌ Invalid State</h2>
                     <p>Security validation failed</p>
                     <button onclick="window.close()">Close</button>
@@ -1162,18 +1248,19 @@ async def canva_callback(
         """, status_code=400)
     
     oauth_data = oauth_states[state]
-    
     connection = None
     cursor = None
     
     try:
-        # Exchange code for access token
-        import requests
-        
+        # ✅ Exchange code for access token with PKCE
         token_response = requests.post(
             'https://api.canva.com/rest/v1/oauth/token',
+            headers={
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
             data={
                 'grant_type': 'authorization_code',
+                'code_verifier': oauth_data['code_verifier'],  # ✅ REQUIRED for PKCE
                 'code': code,
                 'redirect_uri': settings.CANVA_REDIRECT_URI,
                 'client_id': settings.CANVA_CLIENT_ID,
@@ -1182,13 +1269,17 @@ async def canva_callback(
             timeout=30
         )
         
+        print(f"[CANVA] Token exchange status: {token_response.status_code}")
+        
         if not token_response.ok:
-            raise Exception(f"Token exchange failed: {token_response.text}")
+            error_text = token_response.text
+            print(f"[CANVA] Token exchange failed: {error_text}")
+            raise Exception(f"Token exchange failed: {error_text}")
         
         token_data = token_response.json()
         access_token = token_data.get('access_token')
         refresh_token = token_data.get('refresh_token')
-        expires_in = token_data.get('expires_in', 3600)
+        expires_in = token_data.get('expires_in', 14400)  # 4 hours default
         
         # Calculate expiration
         from datetime import timedelta
@@ -1215,6 +1306,8 @@ async def canva_callback(
         # Clean up state
         del oauth_states[state]
         
+        print(f"✅ Canva connected successfully for client {oauth_data['client_id']}")
+        
         return HTMLResponse("""
             <html>
                 <head>
@@ -1239,7 +1332,6 @@ async def canva_callback(
                             }
                             window.close();
                         }
-                        // Auto-close after 3 seconds
                         setTimeout(closeWindow, 3000);
                     </script>
                 </body>
@@ -1247,10 +1339,10 @@ async def canva_callback(
         """)
         
     except Exception as e:
-        print(f"❌ Canva OAuth error: {str(e)}")
+        print(f"❌ Canva OAuth callback error: {str(e)}")
         return HTMLResponse(f"""
             <html>
-                <body>
+                <body style="text-align: center; padding: 50px;">
                     <h2>❌ Connection Failed</h2>
                     <p>{str(e)}</p>
                     <button onclick="window.close()">Close</button>
@@ -1262,10 +1354,6 @@ async def canva_callback(
             cursor.close()
         if connection:
             connection.close()
-
-
-# Temporary OAuth states storage
-oauth_states = {}
 
 
 # ========== ASSET MANAGEMENT ENDPOINTS ==========

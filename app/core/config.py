@@ -112,7 +112,7 @@ class Settings(BaseSettings):
     CANVA_CLIENT_ID: str = ""
     CANVA_CLIENT_SECRET: str = ""
     CANVA_BRAND_KIT_ID: str = ""
-    CANVA_REDIRECT_URI: str = "http://localhost:8000/api/canva/callback"
+    CANVA_REDIRECT_URI: str = "https://panvel-iq.calim.ai/api/v1/media-studio/canva/callback"
     CANVA_ACCESS_TOKEN: Optional[str] = None  # Will be set after OAuth
 
     # Ideogram

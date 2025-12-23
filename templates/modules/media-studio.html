@@ -852,13 +852,18 @@
 
 {% block extra_js %}
 <script>
-    async function connectCanva() {
+      async function connectCanva() {
         const clientId = document.getElementById('designClient').value;
-
-
+        
+        // ✅ Validate client selection
+        if (!clientId) {
+            showNotification('Please select a client first', 'error');
+            return;
+        }
 
         const token = localStorage.getItem('access_token');
-        const oauthUrl = `/api/v1/media-studio/canva/connect?token=${encodeURIComponent(token)}`;
+        // ✅ Add client_id parameter
+        const oauthUrl = `/api/v1/media-studio/canva/connect?client_id=${clientId}&token=${encodeURIComponent(token)}`;
 
         const width = 600;
         const height = 700;

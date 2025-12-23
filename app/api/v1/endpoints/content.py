@@ -13,6 +13,9 @@ import pymysql
 import json
 import re
 from openai import OpenAI
+import base64
+from fastapi import Body
+
 
 from app.core.config import settings
 from app.core.security import require_admin_or_employee, get_current_user
@@ -26,6 +29,27 @@ try:
     openai_client = OpenAI(api_key=settings.OPENAI_API_KEY)
 except Exception as e:
     print(f"OpenAI client initialization failed: {e}")
+
+
+try:
+    from google.cloud import vision
+    import os
+    vision_available = True
+    
+    # Initialize Google Vision client
+    if hasattr(settings, 'GOOGLE_VISION_API_KEY') and settings.GOOGLE_VISION_API_KEY:
+        os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = ''  # Not needed for API key
+        os.environ['GOOGLE_API_KEY'] = settings.GOOGLE_VISION_API_KEY
+        vision_client = vision.ImageAnnotatorClient()
+    else:
+        vision_client = None
+        vision_available = False
+except ImportError:
+    vision_available = False
+    vision_client = None
+    print("Google Cloud Vision not installed. Install with: pip3 install google-cloud-vision")
+
+
 
 
 # ========== PYDANTIC MODELS ==========
@@ -996,3 +1020,198 @@ async def get_all_platform_guidelines():
         "success": True,
         "data": {platform: get_platform_guidelines(platform) for platform in platforms}
     }
+
+@router.post("/analyze-visual")
+async def analyze_visual(
+    image_base64: str = Body(...),
+    platform: str = Body("instagram"),
+    current_user: dict = Depends(require_admin_or_employee)
+):
+    """
+    Analyze visual content using Google Cloud Vision API
+    BRD REQUIREMENT: Visual Analysis (CV for composition, contrast, face detection)
+    """
+    
+    if not vision_available or not vision_client:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google Cloud Vision API is not available. Please install: pip3 install google-cloud-vision"
+        )
+    
+    try:
+        # Decode base64 image
+        image_content = base64.b64decode(image_base64)
+        image = vision.Image(content=image_content)
+        
+        # Perform multiple detection types
+        print("[Google Vision] Analyzing image...")
+        
+        # 1. Label Detection (objects, scenes)
+        response_labels = vision_client.label_detection(image=image)
+        labels = [label.description for label in response_labels.label_annotations[:10]]
+        
+        # 2. Face Detection
+        response_faces = vision_client.face_detection(image=image)
+        faces_detected = len(response_faces.face_annotations)
+        
+        face_emotions = []
+        if faces_detected > 0:
+            for face in response_faces.face_annotations:
+                face_emotions.append({
+                    "joy": face.joy_likelihood.name,
+                    "sorrow": face.sorrow_likelihood.name,
+                    "anger": face.anger_likelihood.name,
+                    "surprise": face.surprise_likelihood.name
+                })
+        
+        # 3. Image Properties (colors)
+        response_props = vision_client.image_properties(image=image)
+        dominant_colors = []
+        
+        if response_props.image_properties_annotation.dominant_colors.colors:
+            for color in response_props.image_properties_annotation.dominant_colors.colors[:5]:
+                dominant_colors.append({
+                    "rgb": f"rgb({int(color.color.red)}, {int(color.color.green)}, {int(color.color.blue)})",
+                    "hex": "#{:02x}{:02x}{:02x}".format(
+                        int(color.color.red),
+                        int(color.color.green),
+                        int(color.color.blue)
+                    ),
+                    "score": round(color.score, 2),
+                    "pixel_fraction": round(color.pixel_fraction, 3)
+                })
+        
+        # 4. Text Detection
+        response_text = vision_client.text_detection(image=image)
+        text_detected = ""
+        if response_text.text_annotations:
+            text_detected = response_text.text_annotations[0].description[:100]
+        
+        # 5. Safe Search Detection (optional - checks for inappropriate content)
+        response_safe = vision_client.safe_search_detection(image=image)
+        safe_search = response_safe.safe_search_annotation
+        
+        # Calculate composition score based on analysis
+        composition_score = 70  # Base score
+        
+        # Adjust based on faces (faces increase engagement)
+        if faces_detected > 0:
+            composition_score += 15
+            
+        # Adjust based on color variety
+        if len(dominant_colors) >= 3:
+            composition_score += 10
+            
+        # Adjust based on content relevance (labels)
+        if len(labels) >= 5:
+            composition_score += 5
+        
+        # Bonus for text overlay (good for social media)
+        if text_detected:
+            composition_score += 5
+            
+        composition_score = min(100, composition_score)
+        
+        # Generate improvement recommendations
+        recommendations = []
+        
+        if faces_detected == 0 and platform in ['instagram', 'facebook', 'linkedin']:
+            recommendations.append({
+                "tip": "Consider including faces to increase engagement by up to 38%",
+                "impact": "+38%"
+            })
+        
+        if len(dominant_colors) < 3:
+            recommendations.append({
+                "tip": "Use more vibrant and diverse colors to improve visual appeal",
+                "impact": "+15%"
+            })
+        
+        if not text_detected and platform in ['instagram', 'facebook', 'tiktok']:
+            recommendations.append({
+                "tip": "Add text overlay for better engagement, especially on mobile",
+                "impact": "+25%"
+            })
+        
+        if composition_score < 70:
+            recommendations.append({
+                "tip": "Improve composition by following rule of thirds and ensuring good balance",
+                "impact": "+20%"
+            })
+        
+        # Check if image is too dark or too bright
+        if dominant_colors:
+            avg_brightness = sum(
+                int(c['rgb'].split('(')[1].split(',')[0]) for c in dominant_colors
+            ) / len(dominant_colors)
+            
+            if avg_brightness < 50:
+                recommendations.append({
+                    "tip": "Image appears too dark - increase brightness for better visibility",
+                    "impact": "+12%"
+                })
+            elif avg_brightness > 230:
+                recommendations.append({
+                    "tip": "Image appears too bright - reduce exposure for better contrast",
+                    "impact": "+10%"
+                })
+        
+        print(f"[Google Vision] Analysis complete. Score: {composition_score}")
+        
+        return {
+            "success": True,
+            "data": {
+                "composition_score": round(composition_score, 1),
+                "face_detected": faces_detected > 0,
+                "faces_count": faces_detected,
+                "face_emotions": face_emotions,
+                "labels": labels,
+                "dominant_colors": dominant_colors,
+                "text_detected": text_detected,
+                "recommendations": recommendations,
+                "visual_analysis_status": "Optimized" if composition_score >= 70 else "Needs Improvement",
+                "safe_search": {
+                    "adult": safe_search.adult.name,
+                    "violence": safe_search.violence.name,
+                    "racy": safe_search.racy.name
+                } if safe_search else None
+            }
+        }
+        
+    except Exception as e:
+        print(f"[Google Vision] Error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Visual analysis failed: {str(e)}"
+        )
+
+# Add this new endpoint for audience insights  
+@router.post("/audience-insights")
+async def get_audience_insights_endpoint(
+    client_id: int = Body(...),
+    topic: str = Body(...),
+    platform: str = Body("instagram"),
+    current_user: dict = Depends(require_admin_or_employee)
+):
+    """
+    Get AI-generated audience insights and keywords
+    BRD REQUIREMENT: AI generate target audience & keywords based on client profile
+    """
+    try:
+        insights = await generate_audience_and_keywords(
+            client_id=client_id,
+            topic=topic,
+            platform=platform
+        )
+        
+        return {
+            "success": True,
+            "data": insights
+        }
+        
+    except Exception as e:
+        print(f"Error generating audience insights: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
