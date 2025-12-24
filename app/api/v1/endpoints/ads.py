@@ -12,13 +12,18 @@ COMPLETE implementation with ALL requirements from scope document:
 7. Live Dashboard & Report (COMPLETE)
 """
 
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends, Body
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime, date, timedelta
 import pymysql
 import json
 from openai import OpenAI
+
+# ADD THESE IMPORTS AT THE TOP OF THE FILE (if not already present)
+import re
+import traceback
+
 
 from app.core.config import settings
 from app.core.security import require_admin_or_employee, get_current_user, get_db_connection
@@ -961,3 +966,717 @@ async def get_ads_dashboard(
             cursor.close()
         if connection:
             connection.close()
+
+
+
+@router.get("/campaigns/list-all", summary="List all campaigns across all clients")
+async def list_all_campaigns(
+    platform: Optional[str] = None,
+    current_user: dict = Depends(require_admin_or_employee)
+):
+    """Get all campaigns across all clients (for admin/employee view)"""
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor(pymysql.cursors.DictCursor)
+        
+        query = """
+            SELECT c.*, 
+                   u.full_name as creator_name,
+                   client.full_name as client_name,
+                   COUNT(DISTINCT a.ad_id) as total_ads
+            FROM ad_campaigns c
+            JOIN users u ON c.created_by = u.user_id
+            JOIN users client ON c.client_id = client.user_id
+            LEFT JOIN ads a ON c.campaign_id = a.campaign_id
+            WHERE 1=1
+        """
+        params = []
+        
+        if platform:
+            query += " AND c.platform = %s"
+            params.append(platform)
+        
+        query += " GROUP BY c.campaign_id ORDER BY c.created_at DESC"
+        
+        cursor.execute(query, params)
+        campaigns = cursor.fetchall()
+        
+        for camp in campaigns:
+            if camp['target_audience']:
+                camp['target_audience'] = json.loads(camp['target_audience'])
+            if camp['placement_settings']:
+                camp['placement_settings'] = json.loads(camp['placement_settings'])
+        
+        return {"success": True, "campaigns": campaigns}
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch campaigns: {str(e)}"
+        )
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+@router.get("/audience/list-all", summary="List all audience segments across all clients")
+async def list_all_audience_segments(
+    current_user: dict = Depends(require_admin_or_employee)
+):
+    """Get all audience segments across all clients (for admin/employee view)"""
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor(pymysql.cursors.DictCursor)
+        
+        cursor.execute("""
+            SELECT s.*, 
+                   u.full_name as creator_name,
+                   client.full_name as client_name
+            FROM audience_segments s
+            JOIN users u ON s.created_by = u.user_id
+            JOIN users client ON s.client_id = client.user_id
+            ORDER BY s.created_at DESC
+        """)
+        
+        segments = cursor.fetchall()
+        
+        for seg in segments:
+            if seg['segment_criteria']:
+                seg['segment_criteria'] = json.loads(seg['segment_criteria'])
+        
+        return {"success": True, "segments": segments}
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch segments: {str(e)}"
+        )
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+@router.get("/campaigns/details/{campaign_id}", summary="Get single campaign details")
+async def get_campaign_details(
+    campaign_id: int,
+    current_user: dict = Depends(require_admin_or_employee)
+):
+    """Get detailed information about a specific campaign"""
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor(pymysql.cursors.DictCursor)
+        
+        cursor.execute("""
+            SELECT c.*, 
+                   u.full_name as creator_name,
+                   client.full_name as client_name,
+                   COUNT(DISTINCT a.ad_id) as total_ads
+            FROM ad_campaigns c
+            JOIN users u ON c.created_by = u.user_id
+            JOIN users client ON c.client_id = client.user_id
+            LEFT JOIN ads a ON c.campaign_id = a.campaign_id
+            WHERE c.campaign_id = %s
+            GROUP BY c.campaign_id
+        """, (campaign_id,))
+        
+        campaign = cursor.fetchone()
+        
+        if not campaign:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Campaign not found"
+            )
+        
+        if campaign['target_audience']:
+            campaign['target_audience'] = json.loads(campaign['target_audience'])
+        if campaign['placement_settings']:
+            campaign['placement_settings'] = json.loads(campaign['placement_settings'])
+        
+        return {"success": True, "campaign": campaign}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch campaign details: {str(e)}"
+        )
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+# =================================================================
+# COMPLETE FIX - Generate Audience Insights
+# This version removes ALL references to non-existent columns
+# Replace ENTIRE function in app/api/v1/endpoints/ads.py
+# =================================================================
+
+@router.post("/audience/generate-insights", summary="Generate AI insights for client")
+async def generate_audience_insights(
+    client_id: int = Body(...),
+    business_description: str = Body(None),
+    current_user: dict = Depends(require_admin_or_employee)
+):
+    """
+    Generate AI-powered audience insights based on client profile
+    FIXED: Uses correct table names and columns only
+    """
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor(pymysql.cursors.DictCursor)
+        
+        # STEP 1: Get basic user info
+        cursor.execute("""
+            SELECT 
+                user_id,
+                full_name, 
+                email,
+                role
+            FROM users
+            WHERE user_id = %s
+        """, (client_id,))
+        
+        user = cursor.fetchone()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="Client not found")
+        
+        # STEP 2: Get client profile data (business info)
+        cursor.execute("""
+            SELECT 
+                business_name,
+                business_type,
+                website_url,
+                current_budget
+            FROM client_profiles
+            WHERE client_id = %s
+        """, (client_id,))
+        
+        profile = cursor.fetchone()
+        
+        # STEP 3: Get latest project proposal data (if exists)
+        cursor.execute("""
+            SELECT 
+                target_audience,
+                business_type as proposal_business_type
+            FROM project_proposals
+            WHERE client_id = %s
+            ORDER BY created_at DESC
+            LIMIT 1
+        """, (client_id,))
+        
+        proposal = cursor.fetchone()
+        
+        # Build business context from available data
+        business_name = (profile.get('business_name') if profile else None) or user.get('full_name') or 'Unknown Business'
+        business_type = (profile.get('business_type') if profile else None) or (proposal.get('proposal_business_type') if proposal else None) or 'General Business'
+        website = (profile.get('website_url') if profile else None) or 'Not provided'
+        existing_audience = (proposal.get('target_audience') if proposal else None) or 'Not specified'
+        
+        print(f"[GENERATE_INSIGHTS] Client: {business_name}, Type: {business_type}")
+        
+        # Generate AI insights using OpenAI
+        prompt = f"""You are an expert digital marketing strategist. Analyze this business and generate COMPREHENSIVE audience insights and segmentation recommendations.
+
+Business Information:
+- Company: {business_name}
+- Business Type: {business_type}
+- Website: {website}
+- Existing Target Audience: {existing_audience}
+- Additional Notes: {business_description or 'Not provided'}
+
+Provide a detailed JSON response with these EXACT keys (respond with ONLY JSON, no markdown):
+{{
+    "audience_segments": [
+        {{
+            "segment_name": "Tech-Savvy Professionals",
+            "demographics": {{
+                "age_range": "25-45",
+                "gender": "All",
+                "income_level": "Middle to upper income",
+                "education": "College educated",
+                "location": "Urban areas"
+            }},
+            "interests": ["technology", "business", "innovation", "productivity", "professional development"],
+            "behaviors": ["online shoppers", "early adopters", "social media active", "content consumers"],
+            "pain_points": ["time management", "efficiency", "cost optimization"],
+            "platform_recommendations": ["meta", "google", "linkedin"],
+            "estimated_size": 250000,
+            "priority": "High"
+        }},
+        {{
+            "segment_name": "Decision Makers",
+            "demographics": {{
+                "age_range": "35-55",
+                "gender": "All",
+                "income_level": "Upper income",
+                "education": "Advanced degree",
+                "location": "Urban and suburban"
+            }},
+            "interests": ["business strategy", "leadership", "management", "ROI"],
+            "behaviors": ["B2B buyers", "conference attendees", "LinkedIn active"],
+            "pain_points": ["team efficiency", "budget constraints", "competitive pressure"],
+            "platform_recommendations": ["linkedin", "google"],
+            "estimated_size": 150000,
+            "priority": "Medium"
+        }}
+    ],
+    "platform_specific_targeting": {{
+        "meta": {{
+            "interests": ["Business Tools", "Technology", "Entrepreneurship"],
+            "behaviors": ["Small Business Owners", "Engaged Shoppers"],
+            "lookalike_potential": "High"
+        }},
+        "google": {{
+            "in_market": ["Business Software", "Professional Services"],
+            "affinity": ["Business Professionals", "Tech Enthusiasts"],
+            "custom_intent": ["business solutions", "productivity tools"]
+        }},
+        "linkedin": {{
+            "job_titles": ["Manager", "Director", "CEO", "Founder"],
+            "industries": ["Technology", "Business Services"],
+            "company_sizes": ["50-200", "200-1000"],
+            "seniority": ["Manager", "Director", "VP"]
+        }}
+    }},
+    "recommended_budget_allocation": {{
+        "meta": 40,
+        "google": 35,
+        "linkedin": 25
+    }},
+    "key_messaging_themes": [
+        "Increase efficiency and productivity",
+        "Reduce costs while improving quality",
+        "Stay ahead of competition"
+    ],
+    "content_recommendations": [
+        "Case studies showing ROI",
+        "How-to guides and tutorials",
+        "Industry trend reports"
+    ]
+}}
+
+Generate 2-3 relevant audience segments for {business_type} business.
+Respond ONLY with valid JSON."""
+        
+        response = openai_client.chat.completions.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=3000
+        )
+        
+        # Parse JSON response with multiple fallback strategies
+        response_text = response.choices[0].message.content.strip()
+        print(f"[GENERATE_INSIGHTS] AI Response length: {len(response_text)} chars")
+        
+        try:
+            # Try direct JSON parse
+            insights = json.loads(response_text)
+            print(f"[GENERATE_INSIGHTS] Successfully parsed JSON directly")
+        except json.JSONDecodeError as e:
+            print(f"[GENERATE_INSIGHTS] Direct parse failed: {str(e)}")
+            # Try to find JSON in markdown code blocks
+            import re
+            json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', response_text, re.DOTALL)
+            if json_match:
+                try:
+                    insights = json.loads(json_match.group(1))
+                    print(f"[GENERATE_INSIGHTS] Parsed JSON from markdown block")
+                except Exception as e2:
+                    print(f"[GENERATE_INSIGHTS] Markdown parse failed: {str(e2)}")
+                    # Try to find raw JSON
+                    json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+                    if json_match:
+                        insights = json.loads(json_match.group(0))
+                        print(f"[GENERATE_INSIGHTS] Parsed raw JSON")
+                    else:
+                        raise HTTPException(
+                            status_code=500,
+                            detail="AI response did not contain valid JSON. Please try again."
+                        )
+            else:
+                # Try to find raw JSON
+                json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+                if json_match:
+                    insights = json.loads(json_match.group(0))
+                    print(f"[GENERATE_INSIGHTS] Parsed raw JSON (no markdown)")
+                else:
+                    print(f"[GENERATE_INSIGHTS] Response text: {response_text[:500]}...")
+                    raise HTTPException(
+                        status_code=500,
+                        detail="AI response did not contain valid JSON. Please try again."
+                    )
+        
+        return {
+            "success": True,
+            "insights": insights,
+            "client_name": user.get('full_name'),
+            "business_name": business_name,
+            "business_type": business_type
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[GENERATE_INSIGHTS] Fatal error: {str(e)}")
+        import traceback
+        print(f"[GENERATE_INSIGHTS] Traceback: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate insights: {str(e)}"
+        )
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+            
+# =================================================================
+# FIXED MONITORING ENDPOINT - Add to app/api/v1/endpoints/ads.py
+# =================================================================
+
+# ========== FEATURE 3: REAL-TIME CAMPAIGN MONITORING (FIXED) ==========
+
+@router.get("/campaigns/monitor/active", summary="Monitor active campaigns with AI recommendations")
+async def monitor_active_campaigns(
+    current_user: dict = Depends(require_admin_or_employee)
+):
+    """
+    Get all active campaigns with real-time AI recommendations
+    Analyzes performance and provides actionable insights
+    """
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor(pymysql.cursors.DictCursor)
+        
+        # Get active campaigns with performance data
+        cursor.execute("""
+            SELECT c.*, 
+                   u.full_name as creator_name,
+                   client.full_name as client_name,
+                   COUNT(DISTINCT a.ad_id) as total_ads,
+                   COALESCE(SUM(ap.impressions), 0) as total_impressions,
+                   COALESCE(SUM(ap.clicks), 0) as total_clicks,
+                   COALESCE(AVG(ap.ctr), 0) as avg_ctr,
+                   COALESCE(AVG(ap.cpc), 0) as avg_cpc,
+                   COALESCE(SUM(ap.spend), 0) as total_spend,
+                   COALESCE(SUM(ap.conversions), 0) as total_conversions
+            FROM ad_campaigns c
+            JOIN users u ON c.created_by = u.user_id
+            JOIN users client ON c.client_id = client.user_id
+            LEFT JOIN ads a ON c.campaign_id = a.campaign_id
+            LEFT JOIN ad_performance ap ON a.ad_id = ap.ad_id 
+                AND ap.metric_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+            WHERE c.status = 'active'
+            GROUP BY c.campaign_id
+            ORDER BY c.created_at DESC
+        """)
+        
+        campaigns = cursor.fetchall()
+        
+        if not campaigns:
+            return {
+                "success": True,
+                "active_campaigns": [],
+                "total_active": 0
+            }
+        
+        # Generate AI recommendations for each campaign
+        monitored_campaigns = []
+        
+        for campaign in campaigns:
+            try:
+                # Parse JSON fields
+                if campaign.get('target_audience') and isinstance(campaign['target_audience'], str):
+                    campaign['target_audience'] = json.loads(campaign['target_audience'])
+                if campaign.get('placement_settings') and isinstance(campaign['placement_settings'], str):
+                    campaign['placement_settings'] = json.loads(campaign['placement_settings'])
+                
+                # Generate AI-powered recommendations
+                recommendations = await generate_campaign_recommendations(
+                    campaign_id=campaign['campaign_id'],
+                    performance_metrics={
+                        'impressions': int(campaign.get('total_impressions', 0)),
+                        'clicks': int(campaign.get('total_clicks', 0)),
+                        'ctr': float(campaign.get('avg_ctr', 0)),
+                        'cpc': float(campaign.get('avg_cpc', 0)),
+                        'spend': float(campaign.get('total_spend', 0)),
+                        'conversions': int(campaign.get('total_conversions', 0)),
+                        'budget': float(campaign.get('budget', 0))
+                    },
+                    platform=campaign.get('platform', 'unknown'),
+                    objective=campaign.get('objective', 'unknown')
+                )
+                
+                monitored_campaigns.append({
+                    **campaign,
+                    'ai_recommendations': recommendations
+                })
+            except Exception as e:
+                print(f"[MONITORING] Error processing campaign {campaign.get('campaign_id')}: {str(e)}")
+                # Add campaign without recommendations if AI fails
+                monitored_campaigns.append({
+                    **campaign,
+                    'ai_recommendations': {
+                        'status': 'Unknown',
+                        'status_color': 'gray',
+                        'priority_actions': [],
+                        'performance_analysis': {},
+                        'quick_wins': [],
+                        'budget_recommendation': 'Unable to analyze',
+                        'error': 'AI analysis failed'
+                    }
+                })
+        
+        return {
+            "success": True,
+            "active_campaigns": monitored_campaigns,
+            "total_active": len(monitored_campaigns)
+        }
+        
+    except Exception as e:
+        print(f"[MONITORING] Fatal error: {str(e)}")
+        print(f"[MONITORING] Traceback: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to monitor campaigns: {str(e)}"
+        )
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+async def generate_campaign_recommendations(
+    campaign_id: int,
+    performance_metrics: Dict[str, Any],
+    platform: str,
+    objective: str
+) -> Dict[str, Any]:
+    """Generate AI recommendations for campaign optimization"""
+    
+    try:
+        # Calculate some basic metrics
+        ctr = performance_metrics.get('ctr', 0)
+        cpc = performance_metrics.get('cpc', 0)
+        conversions = performance_metrics.get('conversions', 0)
+        spend = performance_metrics.get('spend', 0)
+        budget = performance_metrics.get('budget', 0)
+        
+        # Build prompt
+        prompt = f"""You are an expert digital advertising analyst. Analyze this campaign performance and provide ACTIONABLE recommendations.
+
+Campaign Details:
+- Platform: {platform}
+- Objective: {objective}
+- Budget: ${budget:.2f}
+
+Performance Metrics (Last 7 Days):
+- Impressions: {performance_metrics.get('impressions', 0):,}
+- Clicks: {performance_metrics.get('clicks', 0):,}
+- CTR: {ctr:.2f}%
+- CPC: ${cpc:.2f}
+- Total Spend: ${spend:.2f}
+- Conversions: {conversions}
+
+Provide a JSON response with these exact keys (respond ONLY with valid JSON, no markdown):
+{{
+    "status": "Excellent/Good/Needs Attention/Critical",
+    "status_color": "green/yellow/orange/red",
+    "priority_actions": [
+        {{
+            "action": "Specific action to take",
+            "reason": "Why this action is needed",
+            "impact": "Expected impact",
+            "priority": "High/Medium/Low"
+        }}
+    ],
+    "performance_analysis": {{
+        "ctr_assessment": "Analysis of CTR",
+        "cpc_assessment": "Analysis of CPC",
+        "spend_efficiency": "Budget utilization analysis",
+        "conversion_rate": "Conversion performance"
+    }},
+    "quick_wins": ["Quick improvement 1", "Quick improvement 2", "Quick improvement 3"],
+    "budget_recommendation": "Increase by X%/Decrease by X%/Maintain current",
+    "audience_refinement": ["Audience suggestion 1", "Audience suggestion 2"],
+    "creative_suggestions": ["Creative idea 1", "Creative idea 2"],
+    "estimated_improvement": "X% expected lift"
+}}"""
+        
+        response = openai_client.chat.completions.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=2000
+        )
+        
+        response_text = response.choices[0].message.content.strip()
+        
+        # Parse JSON with multiple fallback strategies
+        try:
+            # Try direct JSON parse
+            recommendations = json.loads(response_text)
+        except json.JSONDecodeError:
+            # Try to find JSON in markdown code blocks
+            json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', response_text, re.DOTALL)
+            if json_match:
+                try:
+                    recommendations = json.loads(json_match.group(1))
+                except:
+                    # Try to find raw JSON object
+                    json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+                    if json_match:
+                        recommendations = json.loads(json_match.group(0))
+                    else:
+                        raise ValueError("No valid JSON found")
+            else:
+                # Try to find raw JSON object
+                json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+                if json_match:
+                    recommendations = json.loads(json_match.group(0))
+                else:
+                    raise ValueError("No valid JSON found")
+        
+        # Validate required fields
+        required_fields = ['status', 'status_color', 'priority_actions', 'performance_analysis']
+        for field in required_fields:
+            if field not in recommendations:
+                recommendations[field] = get_default_field(field)
+        
+        return recommendations
+        
+    except Exception as e:
+        print(f"[CAMPAIGN_MONITOR] Error generating recommendations for campaign {campaign_id}: {str(e)}")
+        print(f"[CAMPAIGN_MONITOR] Response text: {response_text if 'response_text' in locals() else 'N/A'}")
+        
+        # Return basic recommendations based on metrics
+        return generate_basic_recommendations(performance_metrics, platform, objective)
+
+
+def get_default_field(field_name: str) -> Any:
+    """Get default value for missing field"""
+    defaults = {
+        'status': 'Unknown',
+        'status_color': 'gray',
+        'priority_actions': [],
+        'performance_analysis': {
+            'ctr_assessment': 'Unable to analyze',
+            'cpc_assessment': 'Unable to analyze',
+            'spend_efficiency': 'Unable to analyze',
+            'conversion_rate': 'Unable to analyze'
+        },
+        'quick_wins': [],
+        'budget_recommendation': 'Maintain current',
+        'audience_refinement': [],
+        'creative_suggestions': [],
+        'estimated_improvement': '0%'
+    }
+    return defaults.get(field_name, None)
+
+
+def generate_basic_recommendations(
+    metrics: Dict[str, Any],
+    platform: str,
+    objective: str
+) -> Dict[str, Any]:
+    """Generate basic recommendations without AI when API fails"""
+    
+    ctr = metrics.get('ctr', 0)
+    cpc = metrics.get('cpc', 0)
+    conversions = metrics.get('conversions', 0)
+    spend = metrics.get('spend', 0)
+    budget = metrics.get('budget', 0)
+    
+    priority_actions = []
+    quick_wins = []
+    status = 'Good'
+    status_color = 'green'
+    
+    # CTR Analysis
+    if ctr < 1.0:
+        status = 'Needs Attention'
+        status_color = 'orange'
+        priority_actions.append({
+            'action': 'Improve ad creative and copy',
+            'reason': f'CTR is {ctr:.2f}%, below industry benchmark of 1-2%',
+            'impact': 'Could increase CTR by 50-100%',
+            'priority': 'High'
+        })
+        quick_wins.append('Test new headline variations')
+    
+    # CPC Analysis
+    if cpc > 5.0:
+        priority_actions.append({
+            'action': 'Optimize bidding strategy',
+            'reason': f'CPC of ${cpc:.2f} is high for {platform}',
+            'impact': 'Could reduce CPC by 20-30%',
+            'priority': 'Medium'
+        })
+        quick_wins.append('Refine audience targeting to reduce costs')
+    
+    # Conversion Analysis
+    if conversions == 0 and spend > 0:
+        status = 'Critical'
+        status_color = 'red'
+        priority_actions.append({
+            'action': 'Review conversion tracking and landing page',
+            'reason': 'No conversions recorded despite active spend',
+            'impact': 'Essential for campaign success',
+            'priority': 'High'
+        })
+    
+    # Budget Analysis
+    budget_utilization = (spend / budget * 100) if budget > 0 else 0
+    if budget_utilization < 50:
+        quick_wins.append('Increase daily budget to accelerate learning phase')
+    elif budget_utilization > 90:
+        priority_actions.append({
+            'action': 'Monitor budget pacing',
+            'reason': f'{budget_utilization:.0f}% of budget spent',
+            'impact': 'Avoid budget exhaustion before campaign end',
+            'priority': 'Medium'
+        })
+    
+    return {
+        'status': status,
+        'status_color': status_color,
+        'priority_actions': priority_actions[:3],  # Max 3
+        'performance_analysis': {
+            'ctr_assessment': f'CTR is {ctr:.2f}%' + (' - below benchmark' if ctr < 1.0 else ' - performing well'),
+            'cpc_assessment': f'CPC is ${cpc:.2f}' + (' - optimize to reduce costs' if cpc > 5.0 else ' - within acceptable range'),
+            'spend_efficiency': f'{budget_utilization:.0f}% of budget utilized',
+            'conversion_rate': 'Tracking conversions' if conversions > 0 else 'No conversions yet - review tracking'
+        },
+        'quick_wins': quick_wins[:3] if quick_wins else ['Continue monitoring performance', 'Test new ad variations', 'Analyze audience insights'],
+        'budget_recommendation': 'Increase by 20%' if budget_utilization > 80 and status == 'Good' else 'Maintain current',
+        'audience_refinement': ['Add lookalike audiences', 'Exclude non-converting segments'],
+        'creative_suggestions': ['Test video ads', 'Add carousel format'],
+        'estimated_improvement': '15-25%' if priority_actions else '5-10%'
+    }
+

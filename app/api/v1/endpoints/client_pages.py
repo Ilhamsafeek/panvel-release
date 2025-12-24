@@ -12,8 +12,7 @@ import pymysql
 import json
 
 from app.core.config import settings
-from app.core.security import get_current_user
-from app.core.security import get_db_connection
+from app.core.security import require_admin_or_employee, get_current_user, get_db_connection
 
 router = APIRouter()
 
@@ -713,6 +712,106 @@ async def get_client_campaigns(current_user: dict = Depends(get_current_user)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch campaigns: {str(e)}"
+        )
+    
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+
+# Add this after the existing messages endpoints in client_pages.py
+
+@router.get("/messages/unread-count", summary="Get unread message count")
+async def get_unread_message_count(current_user: dict = Depends(get_current_user)):
+    """Get count of unread messages for current user - lightweight endpoint for polling"""
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # Count unread messages where user is the receiver
+        query = """
+            SELECT COUNT(*) as unread_count
+            FROM messages
+            WHERE receiver_id = %s AND is_read = FALSE
+        """
+        
+        cursor.execute(query, (current_user['user_id'],))
+        result = cursor.fetchone()
+        
+        return {
+            "status": "success",
+            "unread_count": result['unread_count'] if result else 0
+        }
+    
+    except Exception as e:
+        print(f"❌ Error getting unread count: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch unread count: {str(e)}"
+        )
+    
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+@router.get("/messages/client-alerts", summary="Get client message alerts for employees")
+async def get_client_message_alerts(
+    current_user: dict = Depends(require_admin_or_employee)
+):
+    """Get recent messages from clients - for employee/admin dashboard"""
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # Get recent messages from clients to this employee/admin
+        query = """
+            SELECT 
+                m.message_id,
+                m.subject,
+                m.message_body,
+                m.is_read,
+                m.created_at,
+                sender.user_id as client_id,
+                sender.full_name as client_name,
+                sender.email as client_email
+            FROM messages m
+            JOIN users sender ON m.sender_id = sender.user_id
+            WHERE m.receiver_id = %s 
+                AND sender.role = 'client'
+            ORDER BY m.created_at DESC
+            LIMIT 10
+        """
+        
+        cursor.execute(query, (current_user['user_id'],))
+        alerts = cursor.fetchall()
+        
+        # Count unread
+        unread_count = sum(1 for alert in alerts if not alert['is_read'])
+        
+        return {
+            "status": "success",
+            "alerts": alerts,
+            "total": len(alerts),
+            "unread_count": unread_count
+        }
+    
+    except Exception as e:
+        print(f"❌ Error getting client alerts: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch client alerts: {str(e)}"
         )
     
     finally:

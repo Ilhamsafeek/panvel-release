@@ -1,10 +1,10 @@
 """
 Task Management API Endpoints
-File: app/api/v1/endpoints/tasks.py - COMPLETE IMPLEMENTATION
+File: app/api/v1/endpoints/tasks.py - UPDATED FOR MULTIPLE ASSIGNEES
 """
 
 from fastapi import APIRouter, HTTPException, status, Depends
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel
 from datetime import datetime, date
 import pymysql
@@ -22,7 +22,7 @@ class TaskCreate(BaseModel):
     title: str
     description: Optional[str] = None
     client_id: int
-    assigned_to: Optional[int] = None
+    assigned_to: Optional[List[int]] = []  # Changed to list for multiple employees
     priority: str = "medium"  # low, medium, high, urgent
     due_date: Optional[date] = None
 
@@ -30,7 +30,7 @@ class TaskCreate(BaseModel):
 class TaskUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
-    assigned_to: Optional[int] = None
+    assigned_to: Optional[List[int]] = None  # Changed to list
     priority: Optional[str] = None
     status: Optional[str] = None  # pending, in_progress, completed
     due_date: Optional[date] = None
@@ -38,14 +38,14 @@ class TaskUpdate(BaseModel):
 
 # ========== TASK CRUD ENDPOINTS ==========
 
-@router.get("/all", summary="Get all tasks (Admin only)")
+@router.get("/all", summary="Get all tasks with multiple assignees")
 async def get_all_tasks(
     status: Optional[str] = None,
     priority: Optional[str] = None,
     current_user: dict = Depends(require_admin)
 ):
     """
-    Get all tasks in the system (Admin only)
+    Get all tasks in the system with their assigned employees
     """
     connection = None
     cursor = None
@@ -65,13 +65,15 @@ async def get_all_tasks(
                 t.created_at,
                 client.full_name as client_name,
                 client.user_id as client_id,
-                employee.full_name as assigned_to_name,
-                employee.user_id as assigned_to_id,
-                creator.full_name as created_by_name
+                creator.full_name as created_by_name,
+                creator.user_id as created_by_id,
+                GROUP_CONCAT(DISTINCT emp.user_id) as assigned_employee_ids,
+                GROUP_CONCAT(DISTINCT emp.full_name SEPARATOR ', ') as assigned_employees
             FROM tasks t
             LEFT JOIN users client ON t.client_id = client.user_id
-            LEFT JOIN users employee ON t.assigned_to = employee.user_id
             LEFT JOIN users creator ON t.assigned_by = creator.user_id
+            LEFT JOIN task_assignments ta ON t.task_id = ta.task_id
+            LEFT JOIN users emp ON ta.employee_id = emp.user_id
             WHERE 1=1
         """
         
@@ -85,17 +87,29 @@ async def get_all_tasks(
             query += " AND t.priority = %s"
             params.append(priority)
         
-        query += " ORDER BY t.due_date ASC, t.priority DESC, t.created_at DESC"
+        query += """ 
+            GROUP BY t.task_id, t.task_title, t.task_description, t.priority, 
+                     t.status, t.due_date, t.created_at, client.full_name, client.user_id,
+                     creator.full_name, creator.user_id
+            ORDER BY t.due_date ASC, t.priority DESC, t.created_at DESC
+        """
         
         cursor.execute(query, params)
         tasks = cursor.fetchall()
         
-        # Convert datetime to string
+        # Convert datetime to string and format assigned employees
         for task in tasks:
             if task.get('due_date'):
                 task['due_date'] = task['due_date'].isoformat()
             if task.get('created_at'):
                 task['created_at'] = task['created_at'].isoformat()
+            
+            # Convert comma-separated IDs to list
+            if task.get('assigned_employee_ids'):
+                task['assigned_employee_ids'] = [int(id) for id in task['assigned_employee_ids'].split(',')]
+            else:
+                task['assigned_employee_ids'] = []
+                task['assigned_employees'] = 'Unassigned'
         
         return {
             "success": True,
@@ -144,7 +158,8 @@ async def get_my_tasks(
                 u.user_id as client_id
             FROM tasks t
             LEFT JOIN users u ON t.client_id = u.user_id
-            WHERE t.assigned_to = %s
+            INNER JOIN task_assignments ta ON t.task_id = ta.task_id
+            WHERE ta.employee_id = %s
         """
         
         params = [current_user['user_id']]
@@ -184,7 +199,6 @@ async def get_my_tasks(
             connection.close()
 
 
-
 @router.get("/pending", summary="Get pending tasks")
 async def get_pending_tasks(
     limit: int = Query(5, ge=1, le=20),
@@ -207,12 +221,14 @@ async def get_pending_tasks(
                 t.status,
                 t.due_date,
                 t.created_at,
-                u.full_name as assigned_to_name,
-                c.full_name as client_name
+                c.full_name as client_name,
+                GROUP_CONCAT(DISTINCT emp.full_name SEPARATOR ', ') as assigned_to_name
             FROM tasks t
-            LEFT JOIN users u ON t.assigned_to = u.user_id
             LEFT JOIN users c ON t.client_id = c.user_id
+            LEFT JOIN task_assignments ta ON t.task_id = ta.task_id
+            LEFT JOIN users emp ON ta.employee_id = emp.user_id
             WHERE t.status IN ('pending', 'in_progress')
+            GROUP BY t.task_id
             ORDER BY 
                 CASE t.priority 
                     WHEN 'urgent' THEN 1 
@@ -283,13 +299,14 @@ async def get_task_stats(
             cursor.execute("""
                 SELECT 
                     COUNT(*) as total,
-                    SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
-                    SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress,
-                    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
-                    SUM(CASE WHEN status = 'completed' AND DATE(updated_at) = CURDATE() THEN 1 ELSE 0 END) as completed_today,
-                    SUM(CASE WHEN due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY) THEN 1 ELSE 0 END) as upcoming_deadlines
-                FROM tasks
-                WHERE assigned_to = %s
+                    SUM(CASE WHEN t.status = 'pending' THEN 1 ELSE 0 END) as pending,
+                    SUM(CASE WHEN t.status = 'in_progress' THEN 1 ELSE 0 END) as in_progress,
+                    SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) as completed,
+                    SUM(CASE WHEN t.status = 'completed' AND DATE(t.updated_at) = CURDATE() THEN 1 ELSE 0 END) as completed_today,
+                    SUM(CASE WHEN t.due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY) THEN 1 ELSE 0 END) as upcoming_deadlines
+                FROM tasks t
+                INNER JOIN task_assignments ta ON t.task_id = ta.task_id
+                WHERE ta.employee_id = %s
             """, (current_user['user_id'],))
         
         stats = cursor.fetchone()
@@ -321,13 +338,13 @@ async def get_task_stats(
             connection.close()
 
 
-@router.post("/create", summary="Create new task (Admin only)")
+@router.post("/create", summary="Create new task with multiple assignees")
 async def create_task(
     task: TaskCreate,
     current_user: dict = Depends(require_admin)
 ):
     """
-    Create a new task and assign it to an employee
+    Create a new task and assign it to multiple employees
     """
     connection = None
     cursor = None
@@ -336,15 +353,14 @@ async def create_task(
         connection = get_db_connection()
         cursor = connection.cursor()
         
-        # Insert task
+        # Insert task (assigned_to is NULL since we use task_assignments table)
         cursor.execute("""
             INSERT INTO tasks (
                 client_id, assigned_to, assigned_by,
                 task_title, task_description, priority, due_date, status
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, 'pending')
+            ) VALUES (%s, NULL, %s, %s, %s, %s, %s, 'pending')
         """, (
             task.client_id,
-            task.assigned_to,
             current_user['user_id'],
             task.title,
             task.description,
@@ -352,13 +368,23 @@ async def create_task(
             task.due_date
         ))
         
-        connection.commit()
         task_id = cursor.lastrowid
+        
+        # Insert multiple employee assignments
+        if task.assigned_to and len(task.assigned_to) > 0:
+            for employee_id in task.assigned_to:
+                cursor.execute("""
+                    INSERT INTO task_assignments (task_id, employee_id)
+                    VALUES (%s, %s)
+                """, (task_id, employee_id))
+        
+        connection.commit()
         
         return {
             "success": True,
-            "message": "Task created successfully",
-            "task_id": task_id
+            "message": f"Task created and assigned to {len(task.assigned_to) if task.assigned_to else 0} employee(s)",
+            "task_id": task_id,
+            "assigned_count": len(task.assigned_to) if task.assigned_to else 0
         }
         
     except Exception as e:
@@ -376,15 +402,14 @@ async def create_task(
             connection.close()
 
 
-@router.put("/{task_id}", summary="Update task")
+@router.patch("/{task_id}", summary="Update task")
 async def update_task(
     task_id: int,
-    task_update: TaskUpdate,
+    task: TaskUpdate,
     current_user: dict = Depends(require_admin_or_employee)
 ):
     """
-    Update task details
-    Admin can update any task, employees can only update their assigned tasks
+    Update task details including reassigning to different employees
     """
     connection = None
     cursor = None
@@ -393,65 +418,59 @@ async def update_task(
         connection = get_db_connection()
         cursor = connection.cursor()
         
-        # Check if task exists and user has permission
-        if current_user['role'] == 'employee':
-            cursor.execute("""
-                SELECT task_id FROM tasks 
-                WHERE task_id = %s AND assigned_to = %s
-            """, (task_id, current_user['user_id']))
-            
-            if not cursor.fetchone():
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="You can only update tasks assigned to you"
-                )
-        
-        # Build update query
-        update_fields = []
-        values = []
-        
-        if task_update.title is not None:
-            update_fields.append("task_title = %s")
-            values.append(task_update.title)
-        
-        if task_update.description is not None:
-            update_fields.append("task_description = %s")
-            values.append(task_update.description)
-        
-        if task_update.assigned_to is not None and current_user['role'] == 'admin':
-            update_fields.append("assigned_to = %s")
-            values.append(task_update.assigned_to)
-        
-        if task_update.priority is not None:
-            update_fields.append("priority = %s")
-            values.append(task_update.priority)
-        
-        if task_update.status is not None:
-            update_fields.append("status = %s")
-            values.append(task_update.status)
-        
-        if task_update.due_date is not None:
-            update_fields.append("due_date = %s")
-            values.append(task_update.due_date)
-        
-        if not update_fields:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No fields to update"
-            )
-        
-        update_fields.append("updated_at = NOW()")
-        values.append(task_id)
-        
-        query = f"UPDATE tasks SET {', '.join(update_fields)} WHERE task_id = %s"
-        cursor.execute(query, values)
-        connection.commit()
-        
-        if cursor.rowcount == 0:
+        # Check if task exists
+        cursor.execute("SELECT task_id FROM tasks WHERE task_id = %s", (task_id,))
+        if not cursor.fetchone():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Task not found"
             )
+        
+        # Build update query for basic task fields
+        update_fields = []
+        values = []
+        
+        if task.title is not None:
+            update_fields.append("task_title = %s")
+            values.append(task.title)
+        
+        if task.description is not None:
+            update_fields.append("task_description = %s")
+            values.append(task.description)
+        
+        if task.priority is not None:
+            update_fields.append("priority = %s")
+            values.append(task.priority)
+        
+        if task.status is not None:
+            update_fields.append("status = %s")
+            values.append(task.status)
+        
+        if task.due_date is not None:
+            update_fields.append("due_date = %s")
+            values.append(task.due_date)
+        
+        # Update basic task fields if any
+        if update_fields:
+            update_fields.append("updated_at = CURRENT_TIMESTAMP")
+            values.append(task_id)
+            query = f"UPDATE tasks SET {', '.join(update_fields)} WHERE task_id = %s"
+            cursor.execute(query, values)
+        
+        # Update employee assignments if provided
+        if task.assigned_to is not None:
+            # Delete existing assignments
+            cursor.execute("DELETE FROM task_assignments WHERE task_id = %s", (task_id,))
+            
+            # Insert new assignments
+            if len(task.assigned_to) > 0:
+                for employee_id in task.assigned_to:
+                    cursor.execute("""
+                        INSERT INTO task_assignments (task_id, employee_id)
+                        VALUES (%s, %s)
+                    """, (task_id, employee_id))
+        
+        connection.commit()
         
         return {
             "success": True,
@@ -475,13 +494,13 @@ async def update_task(
             connection.close()
 
 
-@router.delete("/{task_id}", summary="Delete task (Admin only)")
+@router.delete("/{task_id}", summary="Delete task")
 async def delete_task(
     task_id: int,
     current_user: dict = Depends(require_admin)
 ):
     """
-    Delete a task
+    Delete a task (assignments will be deleted automatically via CASCADE)
     """
     connection = None
     cursor = None
@@ -521,14 +540,13 @@ async def delete_task(
             connection.close()
 
 
-@router.get("/{task_id}", summary="Get task details")
+@router.get("/{task_id}", summary="Get task details with all assigned employees")
 async def get_task_details(
     task_id: int,
     current_user: dict = Depends(require_admin_or_employee)
 ):
-
     """
-    Get detailed information about a specific task
+    Get detailed information about a specific task including all assigned employees
     """
     connection = None
     cursor = None
@@ -537,6 +555,7 @@ async def get_task_details(
         connection = get_db_connection()
         cursor = connection.cursor()
         
+        # Get task details
         cursor.execute("""
             SELECT 
                 t.task_id,
@@ -549,12 +568,10 @@ async def get_task_details(
                 t.updated_at,
                 client.full_name as client_name,
                 client.user_id as client_id,
-                employee.full_name as assigned_to_name,
-                employee.user_id as assigned_to_id,
-                creator.full_name as created_by_name
+                creator.full_name as created_by_name,
+                creator.user_id as created_by_id
             FROM tasks t
             LEFT JOIN users client ON t.client_id = client.user_id
-            LEFT JOIN users employee ON t.assigned_to = employee.user_id
             LEFT JOIN users creator ON t.assigned_by = creator.user_id
             WHERE t.task_id = %s
         """, (task_id,))
@@ -567,12 +584,29 @@ async def get_task_details(
                 detail="Task not found"
             )
         
-        # Check permission for employees
-        if current_user['role'] == 'employee' and task['assigned_to_id'] != current_user['user_id']:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You can only view tasks assigned to you"
-            )
+        # Get all assigned employees for this task
+        cursor.execute("""
+            SELECT 
+                emp.user_id,
+                emp.full_name,
+                emp.email,
+                ta.assigned_at
+            FROM task_assignments ta
+            JOIN users emp ON ta.employee_id = emp.user_id
+            WHERE ta.task_id = %s
+            ORDER BY ta.assigned_at ASC
+        """, (task_id,))
+        
+        assigned_employees = cursor.fetchall()
+        
+        # Check permission for employees - only if they are assigned to this task
+        if current_user['role'] == 'employee':
+            employee_ids = [emp['user_id'] for emp in assigned_employees]
+            if current_user['user_id'] not in employee_ids:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You can only view tasks assigned to you"
+                )
         
         # Convert datetime to string
         if task.get('due_date'):
@@ -581,6 +615,15 @@ async def get_task_details(
             task['created_at'] = task['created_at'].isoformat()
         if task.get('updated_at'):
             task['updated_at'] = task['updated_at'].isoformat()
+        
+        # Format assigned employees
+        for emp in assigned_employees:
+            if emp.get('assigned_at'):
+                emp['assigned_at'] = emp['assigned_at'].isoformat()
+        
+        task['assigned_employees'] = assigned_employees
+        task['assigned_employee_ids'] = [emp['user_id'] for emp in assigned_employees]
+        task['assigned_count'] = len(assigned_employees)
         
         return {
             "success": True,
@@ -600,6 +643,3 @@ async def get_task_details(
             cursor.close()
         if connection:
             connection.close()
-
-
-

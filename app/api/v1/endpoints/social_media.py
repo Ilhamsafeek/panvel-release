@@ -28,6 +28,7 @@ from app.core.config import settings
 from app.core.security import require_admin_or_employee, get_current_user
 from app.core.security import get_db_connection
 from app.services.social_media_service import SocialMediaService
+from collections import defaultdict
 
 router = APIRouter()
 
@@ -77,6 +78,10 @@ class BestTimeResponse(BaseModel):
     recommended_times: List[Dict[str, Any]]
     engagement_score: float
 
+
+class MessageReplyRequest(BaseModel):
+    message_id: int
+    reply_text: str
 
 # ========== CREATE POST ==========
 
@@ -988,13 +993,15 @@ async def get_media_library(
 
 
 # ========== AI BEST TIME RECOMMENDATIONS ==========
+# ========== AI BEST TIME RECOMMENDATIONS (REAL DATA ANALYSIS) ==========
 @router.post("/best-times", summary="Get AI-powered best posting times")
 async def get_best_times(
     request: BestTimeRequest,
     current_user: dict = Depends(require_admin_or_employee)
 ):
     """
-    AI-powered best time recommendations based on platform and engagement patterns
+    AI-powered best time recommendations based on REAL historical performance data
+    Analyzes actual post engagement patterns to suggest optimal posting times
     """
     connection = None
     cursor = None
@@ -1003,107 +1010,300 @@ async def get_best_times(
         connection = get_db_connection()
         cursor = connection.cursor(pymysql.cursors.DictCursor)
         
-        # Check existing best times data
+        # Check if we have recent calculations (within last 7 days)
         cursor.execute("""
             SELECT day_of_week, hour_of_day, engagement_score
             FROM platform_best_times
             WHERE client_id = %s AND platform = %s
+            AND last_calculated >= DATE_SUB(NOW(), INTERVAL 7 DAY)
             ORDER BY engagement_score DESC
-            LIMIT 5
+            LIMIT 10
         """, (request.client_id, request.platform))
         
         existing_times = cursor.fetchall()
         
-        if existing_times:
-            # Return existing data
+        # If we have recent data, return it
+        if existing_times and len(existing_times) >= 5:
             day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
             recommendations = []
             
-            for time_data in existing_times:
+            # Primary recommendations (top 5)
+            for i, time_data in enumerate(existing_times[:5]):
                 recommendations.append({
                     "day": day_names[time_data['day_of_week']],
                     "hour": time_data['hour_of_day'],
                     "time_formatted": f"{time_data['hour_of_day']:02d}:00",
-                    "engagement_score": float(time_data['engagement_score'])
+                    "engagement_score": float(time_data['engagement_score']),
+                    "rank": i + 1,
+                    "type": "primary"
+                })
+            
+            # Alternative slots for A/B testing (next 3)
+            for i, time_data in enumerate(existing_times[5:8]):
+                recommendations.append({
+                    "day": day_names[time_data['day_of_week']],
+                    "hour": time_data['hour_of_day'],
+                    "time_formatted": f"{time_data['hour_of_day']:02d}:00",
+                    "engagement_score": float(time_data['engagement_score']),
+                    "rank": i + 6,
+                    "type": "alternative"
                 })
             
             return {
                 "success": True,
                 "platform": request.platform,
-                "recommended_times": recommendations
+                "recommended_times": recommendations,
+                "data_source": "historical_analysis",
+                "last_calculated": existing_times[0].get('last_calculated').isoformat() if existing_times[0].get('last_calculated') else None
             }
         
-        # Generate AI recommendations if no data exists
-        prompt = f"""Based on industry best practices for {request.platform}, suggest the top 5 best times to post for maximum engagement.
+        # ========== CALCULATE NEW RECOMMENDATIONS FROM REAL DATA ==========
+        print(f"[BEST TIMES] Calculating new recommendations for client {request.client_id}, platform {request.platform}")
+        
+        # Query historical published posts with analytics
+        cursor.execute("""
+            SELECT 
+                p.post_id,
+                p.published_at,
+                DAYOFWEEK(p.published_at) - 1 as day_of_week,
+                HOUR(p.published_at) as hour_of_day,
+                a.impressions,
+                a.reach,
+                a.engagement_count,
+                (a.engagement_count / GREATEST(a.reach, 1)) * 100 as engagement_rate
+            FROM social_media_posts p
+            LEFT JOIN social_media_analytics a ON (
+                a.client_id = p.client_id 
+                AND a.platform = p.platform
+                AND a.metric_date = DATE(p.published_at)
+            )
+            WHERE p.client_id = %s 
+            AND p.platform = %s
+            AND p.status = 'published'
+            AND p.published_at IS NOT NULL
+            AND p.published_at >= DATE_SUB(NOW(), INTERVAL 90 DAY)
+            ORDER BY p.published_at DESC
+        """, (request.client_id, request.platform))
+        
+        posts = cursor.fetchall()
+        
+        if not posts or len(posts) < 5:
+            # Not enough historical data - use AI-powered industry best practices
+            print(f"[BEST TIMES] Insufficient historical data ({len(posts) if posts else 0} posts), using AI recommendations")
+            
+            prompt = f"""Based on industry best practices and social media research for {request.platform}, provide the top 8 optimal posting times for maximum engagement.
 
-Consider:
-- Platform: {request.platform}
-- General audience behavior patterns
-- Peak engagement times
+Consider factors like:
+- Peak user activity hours
+- Day of week patterns
+- Platform-specific algorithms
+- Typical audience behavior
 
-Provide response in JSON format:
+Return ONLY a JSON array with this exact format:
 [
-  {{"day": "Monday", "hour": 9, "engagement_score": 85.5}},
-  {{"day": "Tuesday", "hour": 14, "engagement_score": 82.3}}
+  {{"day": 1, "hour": 9, "score": 85.5}},
+  {{"day": 1, "hour": 12, "score": 82.3}}
 ]
 
-Day should be day name, hour in 24h format (0-23), engagement_score (0-100)
-"""
+Where day is 0-6 (Monday=0, Sunday=6) and hour is 0-23.
+Provide exactly 8 time slots ranked by engagement potential (score 0-100)."""
+
+            response = openai_client.chat.completions.create(
+                model="gpt-4",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=500
+            )
+            
+            ai_response = response.choices[0].message.content.strip()
+            
+            # Extract JSON from response
+            import re
+            json_match = re.search(r'\[.*\]', ai_response, re.DOTALL)
+            if json_match:
+                ai_times = json.loads(json_match.group())
+            else:
+                ai_times = json.loads(ai_response)
+            
+            # Store AI recommendations in database
+            for time_slot in ai_times:
+                cursor.execute("""
+                    INSERT INTO platform_best_times 
+                    (client_id, platform, day_of_week, hour_of_day, engagement_score, last_calculated)
+                    VALUES (%s, %s, %s, %s, %s, NOW())
+                    ON DUPLICATE KEY UPDATE 
+                    engagement_score = VALUES(engagement_score),
+                    last_calculated = NOW()
+                """, (
+                    request.client_id,
+                    request.platform,
+                    time_slot['day'],
+                    time_slot['hour'],
+                    time_slot['score']
+                ))
+            
+            connection.commit()
+            
+            # Format response
+            day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+            recommendations = []
+            
+            for i, time_slot in enumerate(ai_times[:5]):
+                recommendations.append({
+                    "day": day_names[time_slot['day']],
+                    "hour": time_slot['hour'],
+                    "time_formatted": f"{time_slot['hour']:02d}:00",
+                    "engagement_score": float(time_slot['score']),
+                    "rank": i + 1,
+                    "type": "primary"
+                })
+            
+            for i, time_slot in enumerate(ai_times[5:8]):
+                recommendations.append({
+                    "day": day_names[time_slot['day']],
+                    "hour": time_slot['hour'],
+                    "time_formatted": f"{time_slot['hour']:02d}:00",
+                    "engagement_score": float(time_slot['score']),
+                    "rank": i + 6,
+                    "type": "alternative"
+                })
+            
+            return {
+                "success": True,
+                "platform": request.platform,
+                "recommended_times": recommendations,
+                "data_source": "ai_industry_best_practices",
+                "note": f"Using AI-powered recommendations. Only {len(posts) if posts else 0} historical posts found. Recommendations will improve with more data."
+            }
         
-        response = openai_client.chat.completions.create(
-            model=settings.OPENAI_MODEL,
-            messages=[
-                {"role": "system", "content": "You are a social media analytics expert specializing in optimal posting times."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.3,
-            max_tokens=500
-        )
+        # ========== ANALYZE REAL HISTORICAL DATA ==========
+        print(f"[BEST TIMES] Analyzing {len(posts)} historical posts")
         
-        ai_recommendations = json.loads(response.choices[0].message.content)
+        # Group by day/hour and calculate average engagement
+        time_slots = defaultdict(lambda: {'total_engagement': 0, 'count': 0, 'total_rate': 0})
         
-        # Save recommendations to database
-        day_map = {'Monday': 0, 'Tuesday': 1, 'Wednesday': 2, 'Thursday': 3, 'Friday': 4, 'Saturday': 5, 'Sunday': 6}
+        for post in posts:
+            if post['day_of_week'] is not None and post['hour_of_day'] is not None:
+                key = (post['day_of_week'], post['hour_of_day'])
+                engagement_rate = float(post['engagement_rate'] or 0)
+                
+                time_slots[key]['total_engagement'] += engagement_rate
+                time_slots[key]['total_rate'] += engagement_rate
+                time_slots[key]['count'] += 1
         
-        for rec in ai_recommendations:
-            day_num = day_map.get(rec['day'], 0)
+        # Calculate averages and scores
+        scored_times = []
+        for (day, hour), data in time_slots.items():
+            if data['count'] > 0:
+                avg_engagement_rate = data['total_rate'] / data['count']
+                # Normalize score to 0-100 range
+                score = min(avg_engagement_rate, 100.0)
+                
+                scored_times.append({
+                    'day': day,
+                    'hour': hour,
+                    'score': score,
+                    'post_count': data['count']
+                })
+        
+        # Sort by score
+        scored_times.sort(key=lambda x: x['score'], reverse=True)
+        
+        # If we still don't have enough data points
+        if len(scored_times) < 5:
+            # Fill with AI recommendations for missing time slots
+            print(f"[BEST TIMES] Only {len(scored_times)} time slots found, supplementing with AI")
+            
+            # Use OpenAI to fill gaps
+            prompt = f"""Based on industry best practices for {request.platform}, suggest 8 optimal posting times.
+Return ONLY a JSON array: [{{"day": 1, "hour": 9, "score": 85.5}}]
+Where day is 0-6 (Monday=0) and hour is 0-23."""
+            
+            response = openai_client.chat.completions.create(
+                model="gpt-4",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=300
+            )
+            
+            ai_response = response.choices[0].message.content.strip()
+            import re
+            json_match = re.search(r'\[.*\]', ai_response, re.DOTALL)
+            if json_match:
+                ai_times = json.loads(json_match.group())
+                scored_times.extend([{'day': t['day'], 'hour': t['hour'], 'score': t['score'], 'post_count': 0} for t in ai_times])
+            
+            # Remove duplicates and resort
+            seen = set()
+            unique_times = []
+            for t in scored_times:
+                key = (t['day'], t['hour'])
+                if key not in seen:
+                    seen.add(key)
+                    unique_times.append(t)
+            scored_times = sorted(unique_times, key=lambda x: x['score'], reverse=True)
+        
+        # Take top 10 and store in database
+        top_times = scored_times[:10]
+        
+        for time_slot in top_times:
             cursor.execute("""
                 INSERT INTO platform_best_times 
                 (client_id, platform, day_of_week, hour_of_day, engagement_score, last_calculated)
                 VALUES (%s, %s, %s, %s, %s, NOW())
                 ON DUPLICATE KEY UPDATE 
-                engagement_score = %s, last_calculated = NOW()
+                engagement_score = VALUES(engagement_score),
+                last_calculated = NOW()
             """, (
                 request.client_id,
                 request.platform,
-                day_num,
-                rec['hour'],
-                rec['engagement_score'],
-                rec['engagement_score']
+                time_slot['day'],
+                time_slot['hour'],
+                time_slot['score']
             ))
         
         connection.commit()
         
         # Format response
+        day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
         recommendations = []
-        for rec in ai_recommendations:
+        
+        # Primary recommendations (top 5)
+        for i, time_slot in enumerate(top_times[:5]):
             recommendations.append({
-                "day": rec['day'],
-                "hour": rec['hour'],
-                "time_formatted": f"{rec['hour']:02d}:00",
-                "engagement_score": rec['engagement_score']
+                "day": day_names[time_slot['day']],
+                "hour": time_slot['hour'],
+                "time_formatted": f"{time_slot['hour']:02d}:00",
+                "engagement_score": round(time_slot['score'], 2),
+                "rank": i + 1,
+                "type": "primary",
+                "based_on_posts": time_slot['post_count']
+            })
+        
+        # Alternative slots for A/B testing (next 3)
+        for i, time_slot in enumerate(top_times[5:8]):
+            recommendations.append({
+                "day": day_names[time_slot['day']],
+                "hour": time_slot['hour'],
+                "time_formatted": f"{time_slot['hour']:02d}:00",
+                "engagement_score": round(time_slot['score'], 2),
+                "rank": i + 6,
+                "type": "alternative",
+                "based_on_posts": time_slot['post_count']
             })
         
         return {
             "success": True,
             "platform": request.platform,
-            "recommended_times": recommendations
+            "recommended_times": recommendations,
+            "data_source": "real_historical_analysis",
+            "analyzed_posts": len(posts),
+            "note": "Recommendations based on your actual post performance over the last 90 days"
         }
-    
+        
     except Exception as e:
-        if connection:
-            connection.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"[BEST TIMES ERROR] {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to analyze best times: {str(e)}")
     finally:
         if cursor:
             cursor.close()
@@ -2464,6 +2664,285 @@ async def disconnect_account(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to disconnect account: {str(e)}"
         )
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+
+# ========== CONFLICT DETECTION ==========
+@router.post("/check-conflicts", summary="Check for scheduling conflicts")
+async def check_scheduling_conflicts(
+    client_id: int,
+    platform: str,
+    scheduled_at: str,  # ISO format datetime
+    current_user: dict = Depends(require_admin_or_employee)
+):
+    """
+    Check if scheduling this post will create conflicts (posts too close together)
+    Alerts when posts are within 2 hours of each other on the same platform
+    """
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor(pymysql.cursors.DictCursor)
+        
+        # Parse the scheduled time
+        try:
+            schedule_time = datetime.fromisoformat(scheduled_at.replace('Z', '+00:00'))
+        except:
+            raise HTTPException(status_code=400, detail="Invalid datetime format. Use ISO format (YYYY-MM-DDTHH:MM:SS)")
+        
+        # Calculate 2-hour window
+        time_before = schedule_time - timedelta(hours=2)
+        time_after = schedule_time + timedelta(hours=2)
+        
+        # Check for conflicts
+        cursor.execute("""
+            SELECT 
+                post_id,
+                caption,
+                scheduled_at,
+                TIMESTAMPDIFF(MINUTE, scheduled_at, %s) as minutes_diff
+            FROM social_media_posts
+            WHERE client_id = %s
+            AND platform = %s
+            AND status IN ('scheduled', 'draft')
+            AND scheduled_at IS NOT NULL
+            AND scheduled_at BETWEEN %s AND %s
+            ORDER BY scheduled_at
+        """, (scheduled_at, client_id, platform, time_before, time_after))
+        
+        conflicts = cursor.fetchall()
+        
+        has_conflicts = len(conflicts) > 0
+        
+        # Format conflicts
+        conflict_details = []
+        for conflict in conflicts:
+            minutes = abs(conflict['minutes_diff'])
+            hours = minutes // 60
+            mins = minutes % 60
+            
+            time_diff = f"{hours}h {mins}m" if hours > 0 else f"{mins}m"
+            
+            conflict_details.append({
+                "post_id": conflict['post_id'],
+                "caption_preview": conflict['caption'][:50] + "..." if len(conflict['caption']) > 50 else conflict['caption'],
+                "scheduled_at": conflict['scheduled_at'].isoformat(),
+                "time_difference": time_diff,
+                "minutes_apart": minutes
+            })
+        
+        return {
+            "success": True,
+            "has_conflicts": has_conflicts,
+            "conflict_count": len(conflicts),
+            "conflicts": conflict_details,
+            "warning": "⚠️ Posts scheduled too close together may reduce engagement effectiveness" if has_conflicts else None,
+            "recommendation": "Consider spacing posts at least 2-3 hours apart for optimal reach" if has_conflicts else "No conflicts detected"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+# ========== UNIFIED INBOX ENDPOINTS ==========
+
+@router.get("/inbox/{client_id}", summary="Get unified inbox messages")
+async def get_unified_inbox(
+    client_id: int,
+    platform: Optional[str] = None,
+    is_read: Optional[bool] = None,
+    limit: int = 50,
+    current_user: dict = Depends(require_admin_or_employee)
+):
+    """
+    Get all messages from unified inbox across platforms
+    Supports filtering by platform and read status
+    """
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor(pymysql.cursors.DictCursor)
+        
+        # Build query with filters
+        query = """
+            SELECT 
+                m.*,
+                u.full_name as replied_by_name
+            FROM social_media_messages m
+            LEFT JOIN users u ON m.replied_by = u.user_id
+            WHERE m.client_id = %s
+        """
+        params = [client_id]
+        
+        if platform:
+            query += " AND m.platform = %s"
+            params.append(platform)
+        
+        if is_read is not None:
+            query += " AND m.is_read = %s"
+            params.append(is_read)
+        
+        query += " ORDER BY m.created_at DESC LIMIT %s"
+        params.append(limit)
+        
+        cursor.execute(query, tuple(params))
+        messages = cursor.fetchall()
+        
+        # Format dates
+        for msg in messages:
+            if msg.get('created_at'):
+                msg['created_at'] = msg['created_at'].isoformat()
+            if msg.get('replied_at'):
+                msg['replied_at'] = msg['replied_at'].isoformat()
+            if msg.get('updated_at'):
+                msg['updated_at'] = msg['updated_at'].isoformat()
+            
+            # Parse JSON fields
+            if msg.get('tags'):
+                try:
+                    msg['tags'] = json.loads(msg['tags']) if isinstance(msg['tags'], str) else msg['tags']
+                except:
+                    msg['tags'] = []
+        
+        # Get summary stats
+        cursor.execute("""
+            SELECT 
+                platform,
+                COUNT(*) as total_messages,
+                SUM(CASE WHEN is_read = FALSE THEN 1 ELSE 0 END) as unread_count,
+                SUM(CASE WHEN urgency_score >= 4 THEN 1 ELSE 0 END) as urgent_count
+            FROM social_media_messages
+            WHERE client_id = %s
+            GROUP BY platform
+        """, (client_id,))
+        
+        stats = cursor.fetchall()
+        
+        return {
+            "success": True,
+            "messages": messages,
+            "total_count": len(messages),
+            "platform_stats": stats,
+            "note": "Instagram/Facebook Messenger requires Meta Business verification (pending)"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+@router.post("/inbox/reply", summary="Reply to a message")
+async def reply_to_message(
+    request: MessageReplyRequest,
+    current_user: dict = Depends(require_admin_or_employee)
+):
+    """
+    Reply to a message in unified inbox
+    Routes message through correct platform API
+    """
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor(pymysql.cursors.DictCursor)
+        
+        # Get message details
+        cursor.execute("""
+            SELECT *
+            FROM social_media_messages
+            WHERE message_id = %s
+        """, (request.message_id,))
+        
+        message = cursor.fetchone()
+        
+        if not message:
+            raise HTTPException(status_code=404, detail="Message not found")
+        
+        # TODO: Route reply through platform API
+        # For now, just store the reply in database
+        
+        cursor.execute("""
+            UPDATE social_media_messages
+            SET 
+                is_replied = TRUE,
+                replied_at = NOW(),
+                replied_by = %s,
+                reply_text = %s
+            WHERE message_id = %s
+        """, (current_user['user_id'], request.reply_text, request.message_id))
+        
+        connection.commit()
+        
+        return {
+            "success": True,
+            "message": "Reply sent successfully",
+            "note": "Platform API integration pending for actual message delivery"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+@router.patch("/inbox/{message_id}/mark-read", summary="Mark message as read")
+async def mark_message_as_read(
+    message_id: int,
+    current_user: dict = Depends(require_admin_or_employee)
+):
+    """Mark a message as read"""
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        cursor.execute("""
+            UPDATE social_media_messages
+            SET is_read = TRUE
+            WHERE message_id = %s
+        """, (message_id,))
+        
+        connection.commit()
+        
+        return {
+            "success": True,
+            "message": "Message marked as read"
+        }
+        
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         if cursor:
             cursor.close()

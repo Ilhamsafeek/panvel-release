@@ -372,6 +372,161 @@
         font-size: 64px;
         margin-bottom: 1rem;
     }
+
+
+    /* Multi-Select Employees Styling */
+    .multi-select-wrapper {
+        position: relative;
+    }
+
+    .selected-employees {
+        min-height: 42px;
+        padding: 0.5rem;
+        background: var(--color-gray-50);
+        border: 1px solid var(--color-gray-300);
+        border-radius: var(--radius-md);
+        cursor: pointer;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+        transition: all 0.2s;
+    }
+
+    .selected-employees:hover {
+        border-color: var(--primary-purple);
+        background: white;
+    }
+
+    .selected-employees .placeholder-text {
+        color: var(--color-gray-400);
+        font-size: 14px;
+    }
+
+    .employee-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.25rem 0.75rem;
+        background: var(--gradient-primary);
+        color: white;
+        border-radius: var(--radius-full);
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    .employee-tag .remove-tag {
+        cursor: pointer;
+        margin-left: 0.25rem;
+        font-size: 16px;
+        line-height: 1;
+    }
+
+    .employee-tag .remove-tag:hover {
+        opacity: 0.8;
+    }
+
+    .employee-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        margin-top: 0.5rem;
+        background: white;
+        border: 1px solid var(--color-gray-300);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-lg);
+        z-index: 1000;
+        max-height: 300px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .dropdown-search {
+        padding: 0.75rem;
+        border-bottom: 1px solid var(--color-gray-200);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .dropdown-search i {
+        color: var(--color-gray-400);
+        font-size: 18px;
+    }
+
+    .dropdown-search-input {
+        flex: 1;
+        border: none;
+        outline: none;
+        font-size: 14px;
+        font-family: 'Gilroy', sans-serif;
+    }
+
+    .employee-list {
+        overflow-y: auto;
+        max-height: 240px;
+    }
+
+    .employee-option {
+        padding: 0.75rem 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        cursor: pointer;
+        transition: all 0.2s;
+        border-bottom: 1px solid var(--color-gray-100);
+    }
+
+    .employee-option:hover {
+        background: var(--color-gray-50);
+    }
+
+    .employee-option:last-child {
+        border-bottom: none;
+    }
+
+    .employee-checkbox {
+        width: 18px;
+        height: 18px;
+        border: 2px solid var(--color-gray-300);
+        border-radius: 4px;
+        position: relative;
+        flex-shrink: 0;
+    }
+
+    .employee-checkbox.checked {
+        background: var(--gradient-primary);
+        border-color: var(--primary-purple);
+    }
+
+    .employee-checkbox.checked::after {
+        content: '\2713';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: white;
+        font-size: 12px;
+        font-weight: bold;
+    }
+
+    .employee-info {
+        flex: 1;
+    }
+
+    .employee-info .name {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--color-gray-900);
+        margin-bottom: 0.125rem;
+    }
+
+    .employee-info .email {
+        font-size: 12px;
+        color: var(--color-gray-500);
+    }
 </style>
 {% endblock %}
 
@@ -497,10 +652,26 @@
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label">Assign To</label>
-                    <select class="form-select" id="taskAssignee">
-                        <option value="">Unassigned</option>
-                    </select>
+                    <label class="form-label">
+                        <i class="ti ti-users"></i>
+                        Assign To (Multiple Employees)
+                    </label>
+                    <div class="multi-select-wrapper">
+                        <div class="selected-employees" id="selectedEmployees">
+                            <span class="placeholder-text">Select employees...</span>
+                        </div>
+                        <div class="employee-dropdown" id="employeeDropdown" style="display: none;">
+                            <div class="dropdown-search">
+                                <i class="ti ti-search"></i>
+                                <input type="text" placeholder="Search employees..." id="employeeSearchInput"
+                                    class="dropdown-search-input">
+                            </div>
+                            <div class="employee-list" id="employeeList">
+                                <!-- Employee checkboxes will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="taskAssignees" value="">
                 </div>
 
                 <div class="form-group">
@@ -537,6 +708,10 @@
     let allTasks = [];
     let allClients = [];
     let allEmployees = [];
+    let selectedEmployeeIds = [];
+    let allEmployeesForSelect = [];
+
+
 
     // Initialize page
     document.addEventListener('DOMContentLoaded', async () => {
@@ -549,42 +724,38 @@
 
         await loadInitialData(token);
         await loadTasks(token);
+
+        initMultiSelect();
+        checkAuth();
     });
+
+
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return text.replace(/[&<>"']/g, m => map[m]);
+    }
+
+
 
     async function loadInitialData(token) {
         try {
-            // Load clients - Try the correct endpoint
-            let clientsRes = await fetch(`${APP_CONFIG.apiBaseUrl}/clients/all`, {
+            // Load clients
+            const clientsRes = await fetch(`${APP_CONFIG.apiBaseUrl}/clients/all`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
-            // If that fails, try alternative endpoint
-            if (!clientsRes.ok) {
-                console.log('Trying alternative clients endpoint...');
-                clientsRes = await fetch(`${APP_CONFIG.apiBaseUrl}/admin/clients`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-            }
-
             if (clientsRes.ok) {
                 const data = await clientsRes.json();
-                console.log('Clients API response:', data);
-
-                // Handle different response structures
-                if (data.clients) {
-                    allClients = data.clients;
-                } else if (Array.isArray(data)) {
-                    allClients = data;
-                } else {
-                    console.error('Unexpected clients response format:', data);
-                    allClients = [];
-                }
-
-                console.log('Loaded clients:', allClients);
+                allClients = data.clients || data || [];
                 populateClientDropdown();
-            } else {
-                console.error('Failed to load clients. Status:', clientsRes.status);
-                alert('Failed to load clients. Please refresh the page.');
             }
 
             // Load employees
@@ -594,21 +765,8 @@
 
             if (employeesRes.ok) {
                 const data = await employeesRes.json();
-                console.log('Employees API response:', data);
-
-                if (data.employees) {
-                    allEmployees = data.employees;
-                } else if (Array.isArray(data)) {
-                    allEmployees = data;
-                } else {
-                    console.error('Unexpected employees response format:', data);
-                    allEmployees = [];
-                }
-
-                console.log('Loaded employees:', allEmployees);
-                populateEmployeeDropdown();
-            } else {
-                console.error('Failed to load employees. Status:', employeesRes.status);
+                allEmployees = data.employees || data || [];
+                populateEmployeeList(allEmployees);
             }
         } catch (error) {
             console.error('Error loading initial data:', error);
@@ -683,9 +841,14 @@
     }
 
     function renderTasks(tasks) {
-        const grid = document.getElementById('tasksGrid');
+        const grid = document.getElementById('tasksGrid');  // ✅ CORRECT - matches your HTML
 
-        if (tasks.length === 0) {
+        if (!grid) {
+            console.error('tasksGrid element not found');
+            return;
+        }
+
+        if (!tasks || tasks.length === 0) {
             grid.innerHTML = `
             <div class="empty-state">
                 <i class="ti ti-clipboard-off"></i>
@@ -695,11 +858,25 @@
             return;
         }
 
-        grid.innerHTML = tasks.map(task => `
+        grid.innerHTML = tasks.map(task => {
+            // Format assigned employees
+            let assignedHTML = '';
+            if (task.assigned_employees && task.assigned_employees !== 'Unassigned') {
+                const employees = task.assigned_employees.split(', ');
+                if (employees.length === 1) {
+                    assignedHTML = employees[0];
+                } else {
+                    assignedHTML = `${employees[0]} <span style="background: var(--gradient-primary); color: white; padding: 0.125rem 0.5rem; border-radius: var(--radius-full); font-size: 11px; margin-left: 0.25rem;">+${employees.length - 1}</span>`;
+                }
+            } else {
+                assignedHTML = '<span style="color: var(--color-gray-400); font-style: italic;">Unassigned</span>';
+            }
+
+            return `
         <div class="task-card priority-${task.priority}" onclick="editTask(${task.task_id})">
             <div class="task-header">
                 <div>
-                    <div class="task-title">${task.title}</div>
+                    <div class="task-title">${task.title || 'Untitled Task'}</div>
                     <div class="task-description">${task.description || 'No description'}</div>
                 </div>
                 <div class="task-actions" onclick="event.stopPropagation()">
@@ -717,18 +894,21 @@
                     ${task.client_name || 'No client'}
                 </div>
                 <div class="task-meta-item">
-                    <i class="ti ti-user-check"></i>
-                    ${task.assigned_to_name || 'Unassigned'}
+                    <i class="ti ti-users"></i>
+                    ${assignedHTML}
                 </div>
                 <div class="task-meta-item">
                     <i class="ti ti-calendar"></i>
                     ${task.due_date ? formatDate(task.due_date) : 'No due date'}
                 </div>
+                <span class="badge ${task.priority}">${task.priority}</span>
                 <span class="badge ${task.status}">${task.status.replace('_', ' ')}</span>
             </div>
         </div>
-    `).join('');
+    `;
+        }).join('');
     }
+
 
     function filterTasks() {
         const search = document.getElementById('searchInput').value.toLowerCase();
@@ -752,15 +932,18 @@
         document.getElementById('taskForm').reset();
         document.getElementById('taskId').value = '';
 
-        // Ensure dropdowns are populated
+        // Reset multi-select
+        selectedEmployeeIds = [];
+        updateSelectedEmployeesDisplay();
+
+        const token = localStorage.getItem('access_token');
         if (allClients.length === 0 || allEmployees.length === 0) {
-            const token = localStorage.getItem('access_token');
             loadInitialData(token).then(() => {
                 document.getElementById('taskModal').classList.add('active');
             });
         } else {
             populateClientDropdown();
-            populateEmployeeDropdown();
+            populateEmployeeList(allEmployees);
             document.getElementById('taskModal').classList.add('active');
         }
     }
@@ -777,21 +960,9 @@
         // Get form values
         const title = document.getElementById('taskTitle').value.trim();
         const description = document.getElementById('taskDescription').value.trim();
-        const clientSelect = document.getElementById('taskClient');
-        const clientId = clientSelect.value;
-        const assigneeSelect = document.getElementById('taskAssignee');
-        const assignedTo = assigneeSelect.value;
+        const clientId = document.getElementById('taskClient').value;
         const priority = document.getElementById('taskPriority').value;
         const dueDate = document.getElementById('taskDueDate').value;
-
-        console.log('Raw form values:', {
-            title,
-            clientId,
-            assignedTo,
-            priority,
-            dueDate,
-            description
-        });
 
         // Validation
         if (!title) {
@@ -800,56 +971,33 @@
         }
 
         if (!clientId || clientId === '' || clientId === 'null') {
-            alert('Please select a client. Available clients: ' + allClients.length);
-            console.error('Client ID invalid:', clientId);
-            console.error('Client select HTML:', clientSelect.innerHTML);
+            alert('Please select a client');
             return;
         }
 
-        // Parse and validate client_id
-        const parsedClientId = parseInt(clientId);
-        if (isNaN(parsedClientId)) {
-            alert('Invalid client selected. Please try again or refresh the page.');
-            console.error('Cannot parse client ID:', clientId);
-            return;
-        }
-
-        if (!priority) {
-            alert('Please select a priority');
-            return;
-        }
-
-        // Build task data object
-        const taskData = {
-            title: title,
-            client_id: parsedClientId,
-            priority: priority
-        };
-
-        // Add optional fields
-        if (description) {
-            taskData.description = description;
-        }
-
-        if (assignedTo && assignedTo !== '' && assignedTo !== 'null') {
-            const parsedAssignedTo = parseInt(assignedTo);
-            if (!isNaN(parsedAssignedTo)) {
-                taskData.assigned_to = parsedAssignedTo;
+        if (selectedEmployeeIds.length === 0) {
+            if (!confirm('No employees selected. Do you want to create an unassigned task?')) {
+                return;
             }
         }
 
-        if (dueDate) {
-            taskData.due_date = dueDate;
-        }
+        const payload = {
+            client_id: parseInt(clientId),
+            assigned_to: selectedEmployeeIds,  // Array of employee IDs
+            title: title,
+            description: description,
+            priority: priority,
+            due_date: dueDate || null
+        };
 
-        console.log('Sending task data:', taskData);
+        console.log('Task payload:', payload);
 
         try {
             const url = isEdit
                 ? `${APP_CONFIG.apiBaseUrl}/tasks/${taskId}`
                 : `${APP_CONFIG.apiBaseUrl}/tasks/create`;
 
-            const method = isEdit ? 'PUT' : 'POST';
+            const method = isEdit ? 'PATCH' : 'POST'; 
 
             const response = await fetch(url, {
                 method: method,
@@ -857,42 +1005,95 @@
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(taskData)
+                body: JSON.stringify(payload)
             });
 
             const data = await response.json();
-            console.log('Response:', data);
 
-            if (response.ok) {
-                alert(isEdit ? 'Task updated successfully!' : 'Task created successfully!');
+            if (response.ok && data.success) {
+                showSuccess(data.message || `Task ${isEdit ? 'updated' : 'created'} successfully`);
                 closeTaskModal();
-                await loadTasks(token);
+                loadTasks();
             } else {
-                console.error('Error response:', data);
-                alert('Error: ' + (data.detail || 'Failed to save task'));
+                console.error('Task save error:', data);
+                showError(data.detail || data.message || 'Failed to save task');
             }
         } catch (error) {
             console.error('Error saving task:', error);
-            alert('Failed to save task: ' + error.message);
+            showError('An error occurred while saving the task');
         }
     }
 
     async function editTask(taskId) {
-        const task = allTasks.find(t => t.task_id === taskId);
-        if (!task) return;
+        const token = localStorage.getItem('access_token');
 
-        document.getElementById('modalTitle').textContent = 'Edit Task';
-        document.getElementById('taskId').value = task.task_id;
-        document.getElementById('taskTitle').value = task.title;
-        document.getElementById('taskDescription').value = task.description || '';
-        document.getElementById('taskClient').value = task.client_id;
-        document.getElementById('taskAssignee').value = task.assigned_to_id || '';
-        document.getElementById('taskPriority').value = task.priority;
-        document.getElementById('taskDueDate').value = task.due_date || '';
+        try {
+            // Load task details from API to get assigned employees
+            const response = await fetch(`${APP_CONFIG.apiBaseUrl}/tasks/${taskId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
 
-        document.getElementById('taskModal').classList.add('active');
+            if (!response.ok) {
+                alert('Failed to load task details');
+                return;
+            }
+
+            const data = await response.json();
+            const task = data.task;
+
+            console.log('Editing task:', task);
+
+            // Populate form fields
+            document.getElementById('modalTitle').textContent = 'Edit Task';
+            document.getElementById('taskId').value = task.task_id;
+            document.getElementById('taskTitle').value = task.title;
+            document.getElementById('taskDescription').value = task.description || '';
+            document.getElementById('taskClient').value = task.client_id;
+            document.getElementById('taskPriority').value = task.priority;
+            document.getElementById('taskDueDate').value = task.due_date || '';
+
+            // Set selected employees for multi-select
+            selectedEmployeeIds = task.assigned_employee_ids || [];
+            console.log('Selected employee IDs:', selectedEmployeeIds);
+
+            updateSelectedEmployeesDisplay();
+
+            // Make sure employee list is populated
+            if (allEmployeesForSelect.length === 0) {
+                await loadInitialData(token);
+            }
+
+            renderEmployeeList(allEmployeesForSelect);
+
+            // Ensure client dropdown is populated
+            if (allClients.length === 0) {
+                await loadInitialData(token);
+                populateClientDropdown();
+            }
+
+            // Open modal
+            document.getElementById('taskModal').classList.add('active');
+
+        } catch (error) {
+            console.error('Error loading task for edit:', error);
+            alert('Failed to load task details: ' + error.message);
+        }
     }
 
+    function showSuccess(message) {
+        alert(message);
+    }
+
+    function showError(message) {
+        alert('Error: ' + message);
+    }
+
+    function checkAuth() {
+        const token = localStorage.getItem('access_token');
+        if (!token) {
+            window.location.href = '/auth/login';
+        }
+    }
     async function deleteTask(taskId) {
         if (!confirm('Are you sure you want to delete this task?')) return;
 
@@ -926,5 +1127,144 @@
         const parts = value.split(`; ${name}=`);
         if (parts.length === 2) return parts.pop().split(';').shift();
     }
+
+
+    // Initialize multi-select dropdown
+    function initMultiSelect() {
+        const selectedBox = document.getElementById('selectedEmployees');
+        const dropdown = document.getElementById('employeeDropdown');
+        const searchInput = document.getElementById('employeeSearchInput');
+
+        // Toggle dropdown
+        selectedBox.addEventListener('click', function (e) {
+            if (!e.target.classList.contains('remove-tag')) {
+                dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+            }
+        });
+
+        // Search employees
+        searchInput.addEventListener('input', function () {
+            filterEmployeeList(this.value);
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function (e) {
+            if (!e.target.closest('.multi-select-wrapper')) {
+                dropdown.style.display = 'none';
+            }
+        });
+    }
+
+
+    // Populate employee list for multi-select
+    function populateEmployeeList(employees) {
+        allEmployeesForSelect = employees;
+        renderEmployeeList(employees);
+    }
+
+
+    // Render employee list
+    function renderEmployeeList(employees) {
+        const list = document.getElementById('employeeList');
+
+        if (!employees || employees.length === 0) {
+            list.innerHTML = '<div style="padding: 1rem; text-align: center; color: var(--color-gray-400);">No employees found</div>';
+            return;
+        }
+
+        list.innerHTML = employees.map(emp => {
+            const empId = emp.user_id || emp.employee_id || emp.id;
+            const empName = emp.full_name || emp.name || 'Unknown';
+            const empEmail = emp.email || '';
+            const isChecked = selectedEmployeeIds.includes(empId);
+
+            return `
+            <div class="employee-option" data-employee-id="${empId}" data-employee-name="${empName}" data-employee-email="${empEmail}">
+                <div class="employee-checkbox ${isChecked ? 'checked' : ''}"></div>
+                <div class="employee-info">
+                    <div class="name">${empName}</div>
+                    <div class="email">${empEmail}</div>
+                </div>
+            </div>
+        `;
+        }).join('');
+
+        // Add click handlers
+        list.querySelectorAll('.employee-option').forEach(option => {
+            option.addEventListener('click', function () {
+                toggleEmployeeSelection(
+                    parseInt(this.dataset.employeeId),
+                    this.dataset.employeeName
+                );
+            });
+        });
+    }
+
+    // Toggle employee selection
+    function toggleEmployeeSelection(employeeId, employeeName) {
+        const index = selectedEmployeeIds.indexOf(employeeId);
+
+        if (index > -1) {
+            // Remove from selection
+            selectedEmployeeIds.splice(index, 1);
+        } else {
+            // Add to selection
+            selectedEmployeeIds.push(employeeId);
+        }
+
+        updateSelectedEmployeesDisplay();
+        renderEmployeeList(allEmployeesForSelect);
+    }
+
+    // Update selected employees display
+    function updateSelectedEmployeesDisplay() {
+        const selectedBox = document.getElementById('selectedEmployees');
+        const hiddenInput = document.getElementById('taskAssignees');
+
+        if (selectedEmployeeIds.length === 0) {
+            selectedBox.innerHTML = '<span class="placeholder-text">Select employees...</span>';
+        } else {
+            const tags = selectedEmployeeIds.map(empId => {
+                const emp = allEmployeesForSelect.find(e => (e.user_id || e.employee_id || e.id) === empId);
+                const empName = emp ? (emp.full_name || emp.name) : 'Unknown';
+                return `
+                <span class="employee-tag">
+                    ${empName}
+                    <span class="remove-tag" onclick="removeEmployeeTag(${empId}, event)">×</span>
+                </span>
+            `;
+            }).join('');
+
+            selectedBox.innerHTML = tags;
+        }
+
+        // Update hidden input
+        hiddenInput.value = selectedEmployeeIds.join(',');
+    }
+
+    // Remove employee tag
+    function removeEmployeeTag(employeeId, event) {
+        event.stopPropagation();
+        const index = selectedEmployeeIds.indexOf(employeeId);
+        if (index > -1) {
+            selectedEmployeeIds.splice(index, 1);
+            updateSelectedEmployeesDisplay();
+            renderEmployeeList(allEmployeesForSelect);
+        }
+    }
+
+    // Filter employee list
+    function filterEmployeeList(searchTerm) {
+        const filtered = allEmployeesForSelect.filter(emp => {
+            const name = (emp.full_name || emp.name || '').toLowerCase();
+            const email = (emp.email || '').toLowerCase();
+            const term = searchTerm.toLowerCase();
+            return name.includes(term) || email.includes(term);
+        });
+
+        renderEmployeeList(filtered);
+    }
+
+
 </script>
 {% endblock %}

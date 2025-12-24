@@ -459,7 +459,6 @@ function displayAudienceInsights(data) {
 // =====================================================
 // VISUAL ANALYSIS FEATURE (GOOGLE VISION API)
 // =====================================================
-
 async function analyzeImageUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -488,13 +487,31 @@ async function analyzeImageUpload(event) {
     // Convert to base64 for analysis
     const base64Reader = new FileReader();
     base64Reader.onload = async function(e) {
-        // FIXED: Properly extract base64 without data URL prefix
-        const base64String = e.target.result;
-        const base64Data = base64String.split(',')[1]; // Remove "data:image/jpeg;base64," prefix
-        await analyzeVisualContent(base64Data);
+        try {
+            // FIXED: Clean base64 extraction
+            const base64String = e.target.result;
+            
+            // Remove the data URL prefix (e.g., "data:image/jpeg;base64,")
+            const base64Data = base64String.split(',')[1];
+            
+            // Remove any whitespace or newlines
+            const cleanBase64 = base64Data.replace(/\s/g, '').replace(/\n/g, '').replace(/\r/g, '');
+            
+            if (!cleanBase64 || cleanBase64.length === 0) {
+                throw new Error('Failed to encode image');
+            }
+            
+            console.log('Base64 length:', cleanBase64.length);
+            
+            await analyzeVisualContent(cleanBase64);
+        } catch (error) {
+            console.error('Error processing image:', error);
+            alert('Error processing image: ' + error.message);
+        }
     };
     base64Reader.readAsDataURL(file);
 }
+
 
 async function analyzeVisualContent(base64Image) {
     const analyzeBtn = document.getElementById('analyzeVisualBtn');
@@ -737,7 +754,6 @@ async function loadContentLibrary() {
 // =====================================================
 // CONTENT ACTIONS
 // =====================================================
-
 async function viewContent(contentId) {
     try {
         const token = localStorage.getItem('access_token');
@@ -753,9 +769,14 @@ async function viewContent(contentId) {
         
         const result = await response.json();
         
-        if (result.success) {
-            // Display in modal or preview panel
-            alert('Content details:\n\n' + result.data.content_text);
+        if (result.success && result.data) {
+            displayContentPreview(result.data);
+            
+            // Scroll to preview area
+            document.getElementById('previewContainer').scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'nearest' 
+            });
         }
         
     } catch (error) {
@@ -764,6 +785,153 @@ async function viewContent(contentId) {
     }
 }
 
+function displayContentPreview(content) {
+    const previewContainer = document.getElementById('previewContainer');
+    if (!previewContainer) return;
+    
+    const hashtags = Array.isArray(content.hashtags) ? content.hashtags : 
+                     (typeof content.hashtags === 'string' ? JSON.parse(content.hashtags || '[]') : []);
+    
+    const scoreColor = content.optimization_score >= 80 ? '#16a34a' : 
+                      content.optimization_score >= 60 ? '#eab308' : '#ef4444';
+    
+    const isOptimized = content.optimization_score >= 70;
+    
+    previewContainer.innerHTML = `
+        <div class="platform-variant" style="background: white; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; border: 2px solid ${isOptimized ? '#16a34a' : '#e2e8f0'};">
+            <!-- Platform Header -->
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 2px solid #f1f5f9;">
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <i class="ti ti-brand-${content.platform}" style="font-size: 1.5rem; color: #9926F3;"></i>
+                    <h3 style="font-size: 1.1rem; font-weight: 600; color: #1e293b; margin: 0;">${capitalize(content.platform)}</h3>
+                </div>
+                ${content.optimization_score ? `
+                    <div class="score-badge" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: ${scoreColor}15; border-radius: 8px;">
+                        <i class="ti ti-chart-line" style="color: ${scoreColor};"></i>
+                        <span style="font-weight: 600; color: ${scoreColor};">${Math.round(content.optimization_score)}/100</span>
+                        <span style="font-size: 0.75rem; color: #64748b;">${content.optimization_score >= 70 ? 'Optimized' : 'Needs Work'}</span>
+                    </div>
+                ` : ''}
+            </div>
+
+            <!-- Content -->
+            ${content.title ? `
+                <div style="margin-bottom: 1rem;">
+                    <label style="font-size: 0.75rem; font-weight: 600; color: #64748b; text-transform: uppercase; margin-bottom: 0.5rem; display: block;">Headline</label>
+                    <div style="font-size: 1.05rem; font-weight: 600; color: #1e293b; line-height: 1.5;">${content.title}</div>
+                </div>
+            ` : ''}
+
+            <div style="margin-bottom: 1rem;">
+                <label style="font-size: 0.75rem; font-weight: 600; color: #64748b; text-transform: uppercase; margin-bottom: 0.5rem; display: block;">Content Text</label>
+                <div style="color: #334155; line-height: 1.8; white-space: pre-wrap;">${content.content_text || 'No content text available'}</div>
+            </div>
+
+            ${content.cta_text ? `
+                <div style="margin-bottom: 1rem;">
+                    <label style="font-size: 0.75rem; font-weight: 600; color: #64748b; text-transform: uppercase; margin-bottom: 0.5rem; display: block;">Call to Action</label>
+                    <div style="font-size: 0.95rem; font-weight: 500; color: #9926F3;">${content.cta_text}</div>
+                </div>
+            ` : ''}
+
+            <!-- Hashtags -->
+            ${hashtags.length > 0 ? `
+                <div style="margin-bottom: 1.5rem;">
+                    <label style="font-size: 0.875rem; font-weight: 600; color: #334155; margin-bottom: 0.75rem; display: block;">
+                        <i class="ti ti-hash"></i> Suggested Hashtags (${hashtags.length})
+                    </label>
+                    <div class="hashtag-container">
+                        ${hashtags.map(tag => 
+                            `<span class="hashtag-tag" style="display: inline-block; padding: 0.375rem 0.75rem; background: linear-gradient(135deg, rgba(153, 38, 243, 0.1), rgba(29, 216, 252, 0.1)); border: 1px solid #9926F3; border-radius: 4px; margin: 0.25rem; font-size: 0.85rem; color: #9926F3;">#${tag}</span>`
+                        ).join('')}
+                    </div>
+                </div>
+            ` : ''}
+
+            <!-- Metadata Info -->
+            <div style="background: #f8fafc; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; font-size: 0.875rem;">
+                    <div>
+                        <span style="color: #64748b; display: block; margin-bottom: 0.25rem;">Type</span>
+                        <strong style="color: #1e293b;">${capitalize(content.content_type)}</strong>
+                    </div>
+                    <div>
+                        <span style="color: #64748b; display: block; margin-bottom: 0.25rem;">Status</span>
+                        <strong style="color: #1e293b; text-transform: capitalize;">${content.status}</strong>
+                    </div>
+                    ${content.client_name ? `
+                        <div>
+                            <span style="color: #64748b; display: block; margin-bottom: 0.25rem;">Client</span>
+                            <strong style="color: #1e293b;">${content.client_name}</strong>
+                        </div>
+                    ` : ''}
+                    ${content.creator_name ? `
+                        <div>
+                            <span style="color: #64748b; display: block; margin-bottom: 0.25rem;">Created By</span>
+                            <strong style="color: #1e293b;">${content.creator_name}</strong>
+                        </div>
+                    ` : ''}
+                    ${content.ai_generated ? `
+                        <div>
+                            <span style="color: #64748b; display: block; margin-bottom: 0.25rem;">AI Generated</span>
+                            <strong style="color: #9926F3;">✨ Yes</strong>
+                        </div>
+                    ` : ''}
+                    ${content.created_at ? `
+                        <div>
+                            <span style="color: #64748b; display: block; margin-bottom: 0.25rem;">Created</span>
+                            <strong style="color: #1e293b;">${new Date(content.created_at).toLocaleDateString()}</strong>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
+                <button class="btn-primary" onclick="editContent(${content.content_id})" style="flex: 1;">
+                    <i class="ti ti-edit"></i>
+                    Edit
+                </button>
+                <button class="btn-secondary" onclick="copyContentText(${content.content_id}, '${encodeURIComponent(content.content_text)}', '${encodeURIComponent(JSON.stringify(hashtags))}', '${encodeURIComponent(content.cta_text || '')}')">
+                    <i class="ti ti-copy"></i>
+                    Copy
+                </button>
+                <button class="btn-secondary" onclick="deleteContent(${content.content_id})" style="background: white; color: #dc2626; border: 2px solid #dc2626;">
+                    <i class="ti ti-trash"></i>
+                    Delete
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+// Helper function to copy content text
+function copyContentText(contentId, contentText, hashtagsStr, ctaText) {
+    try {
+        const hashtags = JSON.parse(decodeURIComponent(hashtagsStr));
+        const cta = decodeURIComponent(ctaText);
+        
+        let textToCopy = decodeURIComponent(contentText) + '\n\n';
+        
+        if (cta && cta !== 'undefined' && cta !== '') {
+            textToCopy += cta + '\n\n';
+        }
+        
+        if (hashtags && hashtags.length > 0) {
+            textToCopy += hashtags.map(tag => `#${tag}`).join(' ');
+        }
+        
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            showNotification('Content copied to clipboard!', 'success');
+        }).catch(err => {
+            console.error('Failed to copy:', err);
+            showNotification('Failed to copy content', 'error');
+        });
+    } catch (error) {
+        console.error('Copy error:', error);
+        showNotification('Failed to copy content', 'error');
+    }
+}
 async function deleteContent(contentId) {
     if (!confirm('Are you sure you want to delete this content?')) {
         return;

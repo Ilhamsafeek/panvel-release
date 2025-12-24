@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse
 import os
 
 from app.core.security import get_current_user, require_admin, get_db_connection
-
+from app.api.v1.endpoints import brand_kit
 from app.core.config import settings
 from app.api.v1.router import api_router
 
@@ -48,7 +48,7 @@ templates = Jinja2Templates(directory="templates")
 
 # Include API routes
 app.include_router(api_router, prefix=f"/api/{settings.API_VERSION}")
-
+app.include_router(brand_kit.router)
 
 
 # Custom StaticFiles class that disables caching

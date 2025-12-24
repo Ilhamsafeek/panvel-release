@@ -49,6 +49,8 @@ class Settings(BaseSettings):
     # OpenAI
     OPENAI_API_KEY: Optional[str] = None
     OPENAI_MODEL: str = "gpt-4"
+
+    GOOGLE_VISION_API_KEY: Optional[str] = None
     
     # DALL-E
     DALLE_API_KEY: Optional[str] = None

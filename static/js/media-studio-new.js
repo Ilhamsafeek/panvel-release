@@ -5,6 +5,8 @@
 
 const API_BASE = '/api/v1/media-studio';
 let selectedImageSize = '1024x1024';
+let currentClientId = null;
+let currentBrandKit = null;
 
 // =====================================================
 // INITIALIZATION
@@ -12,9 +14,253 @@ let selectedImageSize = '1024x1024';
 
 document.addEventListener('DOMContentLoaded', function() {
     initializeSizeSelector();
+    initializeColorPickers();
     loadClients();
     loadMediaAssets();
+    getCurrentUserClientId();
 });
+
+// =====================================================
+// BRAND KIT - COLOR PICKER INITIALIZATION
+// =====================================================
+
+function initializeColorPickers() {
+    const colorInputs = [
+        { picker: 'brandPrimaryColor', text: 'brandPrimaryColorText' },
+        { picker: 'brandSecondaryColor', text: 'brandSecondaryColorText' },
+        { picker: 'brandAccentColor', text: 'brandAccentColorText' }
+    ];
+    
+    colorInputs.forEach(({ picker, text }) => {
+        const pickerEl = document.getElementById(picker);
+        const textEl = document.getElementById(text);
+        
+        if (pickerEl && textEl) {
+            pickerEl.addEventListener('input', function() {
+                textEl.value = this.value.toUpperCase();
+            });
+        }
+    });
+}
+
+// =====================================================
+// BRAND KIT - GET CURRENT USER CLIENT ID
+// =====================================================
+
+async function getCurrentUserClientId() {
+    try {
+        const response = await fetch('/api/v1/auth/me', {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.user) {
+            // If user is a client, use their user_id
+            if (data.user.role === 'client') {
+                currentClientId = data.user.user_id;
+                loadBrandKit(currentClientId);
+            } else {
+                // For admin/employee, check if there's a client filter
+                const clientSelect = document.getElementById('filterClient');
+                if (clientSelect && clientSelect.value) {
+                    currentClientId = parseInt(clientSelect.value);
+                    loadBrandKit(currentClientId);
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error getting current user:', error);
+    }
+}
+
+// =====================================================
+// BRAND KIT - MODAL FUNCTIONS
+// =====================================================
+
+function openBrandKitManager() {
+    const modal = document.getElementById('brandKitModal');
+    if (!modal) {
+        console.error('Brand Kit modal not found');
+        return;
+    }
+    
+    // Load existing brand kit data if available
+    if (currentClientId) {
+        loadBrandKitForEdit(currentClientId);
+    }
+    
+    modal.classList.add('show');
+}
+
+function closeBrandKitManager() {
+    const modal = document.getElementById('brandKitModal');
+    if (modal) {
+        modal.classList.remove('show');
+    }
+}
+
+// =====================================================
+// BRAND KIT - LOAD FOR EDITING
+// =====================================================
+
+async function loadBrandKitForEdit(clientId) {
+    try {
+        const response = await fetch(`/api/v1/brand-kit/client/${clientId}`, {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.brand_kit) {
+            const kit = data.brand_kit;
+            
+            // Pre-fill form
+            document.getElementById('brandPrimaryColor').value = kit.primary_color || '#9926F3';
+            document.getElementById('brandPrimaryColorText').value = kit.primary_color || '#9926F3';
+            
+            document.getElementById('brandSecondaryColor').value = kit.secondary_color || '#1DD8FC';
+            document.getElementById('brandSecondaryColorText').value = kit.secondary_color || '#1DD8FC';
+            
+            document.getElementById('brandAccentColor').value = kit.accent_color || '#FF6B6B';
+            document.getElementById('brandAccentColorText').value = kit.accent_color || '#FF6B6B';
+            
+            document.getElementById('brandPrimaryFont').value = kit.primary_font || 'Gilroy';
+            document.getElementById('brandSecondaryFont').value = kit.secondary_font || 'Arial';
+            document.getElementById('brandVoice').value = kit.brand_voice || 'professional';
+        }
+    } catch (error) {
+        console.error('Error loading brand kit for edit:', error);
+    }
+}
+
+// =====================================================
+// BRAND KIT - SAVE
+// =====================================================
+
+async function saveBrandKit() {
+    // Try multiple ways to get client ID
+    let clientId = currentClientId;
+    
+    if (!clientId) {
+        // Try to get from any client dropdown
+        const clientSelects = ['imageClient', 'videoClient', 'filterClient'];
+        for (const selectId of clientSelects) {
+            const select = document.getElementById(selectId);
+            if (select && select.value) {
+                clientId = parseInt(select.value);
+                break;
+            }
+        }
+    }
+    
+    if (!clientId) {
+        showNotification('Unable to determine client. Please select a client and try again.', 'error');
+        console.error('No client ID available');
+        return;
+    }
+    
+    const brandData = {
+        client_id: clientId,
+        primary_color: document.getElementById('brandPrimaryColor').value,
+        secondary_color: document.getElementById('brandSecondaryColor').value,
+        accent_color: document.getElementById('brandAccentColor').value,
+        primary_font: document.getElementById('brandPrimaryFont').value,
+        secondary_font: document.getElementById('brandSecondaryFont').value,
+        brand_voice: document.getElementById('brandVoice').value
+    };
+    
+    console.log('Saving brand kit for client:', clientId, brandData);
+    
+    try {
+        const response = await fetch('/api/v1/brand-kit/create', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+            },
+            body: JSON.stringify(brandData)
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification('✓ Brand kit saved successfully! It will be applied to all AI generations.', 'success');
+            closeBrandKitManager();
+            currentClientId = clientId;
+            loadBrandKit(clientId);
+        } else {
+            showNotification('Failed to save brand kit: ' + (data.message || 'Unknown error'), 'error');
+        }
+    } catch (error) {
+        console.error('Error saving brand kit:', error);
+        showNotification('Error saving brand kit. Please try again.', 'error');
+    }
+}
+
+// =====================================================
+// BRAND KIT - LOAD AND DISPLAY
+// =====================================================
+
+async function loadBrandKit(clientId) {
+    try {
+        const response = await fetch(`/api/v1/brand-kit/client/${clientId}`, {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.brand_kit) {
+            currentClientId = clientId;
+            currentBrandKit = data.brand_kit;
+            displayBrandKitIndicator(data.brand_kit);
+            console.log('[BRAND KIT] Loaded:', data.brand_kit);
+        } else {
+            // No brand kit found - clear indicator
+            currentBrandKit = null;
+            const indicator = document.getElementById('brandKitIndicator');
+            if (indicator) {
+                indicator.innerHTML = '';
+            }
+            console.log('[BRAND KIT] No brand kit found for client:', clientId);
+        }
+    } catch (error) {
+        console.error('Error loading brand kit:', error);
+    }
+}
+
+// =====================================================
+// BRAND KIT - DISPLAY INDICATOR
+// =====================================================
+
+function displayBrandKitIndicator(brandKit) {
+    const indicator = document.getElementById('brandKitIndicator');
+    if (!indicator) return;
+    
+    indicator.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1rem; background: linear-gradient(135deg, rgba(153, 38, 243, 0.1), rgba(29, 216, 252, 0.1)); border-radius: 8px; border: 1px solid rgba(153, 38, 243, 0.2);">
+            <i class="ti ti-palette" style="font-size: 1.25rem; background: linear-gradient(135deg, #9926F3, #1DD8FC); -webkit-background-clip: text; -webkit-text-fill-color: transparent;"></i>
+            <div style="flex: 1;">
+                <div style="font-weight: 600; font-size: 0.9rem; color: #1e293b;">Brand Kit Active</div>
+                <div style="font-size: 0.75rem; color: #64748b;">Colors & fonts will be applied automatically to AI generations</div>
+            </div>
+            <div style="display: flex; gap: 0.25rem;">
+                ${brandKit.primary_color ? `<div style="width: 24px; height: 24px; border-radius: 4px; background: ${brandKit.primary_color}; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"></div>` : ''}
+                ${brandKit.secondary_color ? `<div style="width: 24px; height: 24px; border-radius: 4px; background: ${brandKit.secondary_color}; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"></div>` : ''}
+                ${brandKit.accent_color ? `<div style="width: 24px; height: 24px; border-radius: 4px; background: ${brandKit.accent_color}; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"></div>` : ''}
+            </div>
+            <button onclick="openBrandKitManager()" class="btn-icon" style="background: white;">
+                <i class="ti ti-settings"></i>
+            </button>
+        </div>
+    `;
+}
 
 // =====================================================
 // SIZE SELECTOR
@@ -38,10 +284,22 @@ function initializeSizeSelector() {
 
 function openImageGenerator() {
     document.getElementById('imageModal').classList.add('show');
+    
+    // Load brand kit for selected client
+    const clientSelect = document.getElementById('imageClient');
+    if (clientSelect && clientSelect.value) {
+        loadBrandKit(parseInt(clientSelect.value));
+    }
 }
 
 function openVideoGenerator() {
     document.getElementById('videoModal').classList.add('show');
+    
+    // Load brand kit for selected client
+    const clientSelect = document.getElementById('videoClient');
+    if (clientSelect && clientSelect.value) {
+        loadBrandKit(parseInt(clientSelect.value));
+    }
 }
 
 function openDesignStudio() {
@@ -50,6 +308,12 @@ function openDesignStudio() {
 
 function openAnimationGenerator() {
     document.getElementById('animationModal').classList.add('show');
+    
+    // Load brand kit for selected client
+    const clientSelect = document.getElementById('animationClient');
+    if (clientSelect && clientSelect.value) {
+        loadBrandKit(parseInt(clientSelect.value));
+    }
 }
 
 function openImageToVideo() {
@@ -101,6 +365,20 @@ async function loadClients() {
                     option.value = client.user_id;
                     option.textContent = client.company_name || client.email;
                     select.appendChild(option);
+                });
+                
+                // Add change listener to load brand kit
+                select.addEventListener('change', function() {
+                    const clientId = parseInt(this.value);
+                    if (clientId) {
+                        currentClientId = clientId;
+                        loadBrandKit(clientId);
+                    } else {
+                        currentClientId = null;
+                        currentBrandKit = null;
+                        const indicator = document.getElementById('brandKitIndicator');
+                        if (indicator) indicator.innerHTML = '';
+                    }
                 });
             }
         });
@@ -181,7 +459,11 @@ async function generateImage(event) {
         const result = await response.json();
         
         if (result.success) {
-            showNotification('Image generated successfully!', 'success');
+            let message = 'Image generated successfully!';
+            if (result.brand_applied) {
+                message += ' (Brand kit applied ✓)';
+            }
+            showNotification(message, 'success');
             closeModal('imageModal');
             document.getElementById('imageForm').reset();
             loadMediaAssets();
@@ -238,7 +520,11 @@ async function generateVideo(event) {
         const result = await response.json();
         
         if (result.success) {
-            showNotification('Video generation started! This may take a few minutes.', 'success');
+            let message = 'Video generation started! This may take a few minutes.';
+            if (result.brand_applied) {
+                message += ' (Brand kit applied ✓)';
+            }
+            showNotification(message, 'success');
             closeModal('videoModal');
             document.getElementById('videoForm').reset();
             
@@ -345,7 +631,11 @@ async function generateAnimation(event) {
         const result = await response.json();
         
         if (result.success) {
-            showNotification('Animation generated successfully!', 'success');
+            let message = 'Animation generated successfully!';
+            if (result.brand_applied) {
+                message += ' (Brand kit applied ✓)';
+            }
+            showNotification(message, 'success');
             closeModal('animationModal');
             document.getElementById('animationForm').reset();
             loadMediaAssets();
@@ -523,7 +813,6 @@ async function createDesign(event) {
         const title = document.getElementById('designTitle').value;
         const designType = document.getElementById('designType').value;
         
-        // ✅ FIXED - Changed from /generate/design to /create-design
         const response = await fetch(`${API_BASE}/create-design`, {
             method: 'POST',
             headers: {
@@ -564,6 +853,7 @@ async function createDesign(event) {
         createBtn.innerHTML = originalBtnText;
     }
 }
+
 // =====================================================
 // LOAD MEDIA ASSETS
 // =====================================================
@@ -687,13 +977,13 @@ function createAssetCard(asset) {
 // =====================================================
 // ASSET ACTIONS
 // =====================================================
+
 async function downloadAsset(assetId) {
     try {
         showNotification('Starting download...', 'info');
         
         const token = localStorage.getItem('access_token');
         
-        // Use the new download endpoint
         const response = await fetch(`${API_BASE}/assets/${assetId}/download`, {
             headers: {
                 'Authorization': `Bearer ${token}`
@@ -704,7 +994,6 @@ async function downloadAsset(assetId) {
             throw new Error('Download failed');
         }
         
-        // Check if it's a redirect response
         const contentType = response.headers.get('content-type');
         if (contentType && contentType.includes('application/json')) {
             const data = await response.json();
@@ -714,7 +1003,6 @@ async function downloadAsset(assetId) {
             }
         }
         
-        // Handle direct file download
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -734,14 +1022,12 @@ async function downloadAsset(assetId) {
 }
 
 function viewAsset(url) {
-    alert(url);
     if (url && (url.startsWith('http') || url.startsWith('/static'))) {
         window.open(url, '_blank');
     } else {
         showNotification('View URL not available', 'error');
     }
 }
-
 
 async function deleteAsset(assetId) {
     if (!confirm('Are you sure you want to delete this asset?')) {

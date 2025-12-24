@@ -19,6 +19,7 @@ import hashlib
 from openai import OpenAI
 import hashlib
 import secrets
+import pymysql.cursors
 
 import jwt
 from jwt import PyJWTError
@@ -29,6 +30,7 @@ import secrets
 from app.core.config import settings
 from app.core.security import require_admin_or_employee, get_current_user
 from app.core.security import get_db_connection
+from app.api.v1.endpoints.brand_kit import get_brand_kit_by_client, apply_brand_to_prompt
 
 router = APIRouter()
 
@@ -579,18 +581,18 @@ async def create_canva_design(
 
 
 # ========== API ENDPOINTS ==========
-
 @router.post("/generate/image")
 async def generate_image(
     request: ImageGenerateRequest,
     current_user: dict = Depends(require_admin_or_employee)
 ):
-    """Generate images using DALL-E and save locally"""
+    """Generate images using DALL-E 3"""
     
     connection = None
     cursor = None
     
     try:
+        # Generate image
         result = await generate_dalle_image(
             prompt=request.prompt,
             size=request.size,
@@ -599,8 +601,9 @@ async def generate_image(
             n=request.n
         )
         
+        # Save to database - NO dictionary=True here!
         connection = get_db_connection()
-        cursor = connection.cursor()
+        cursor = connection.cursor()  # ← This is correct
         
         saved_assets = []
         
@@ -615,8 +618,8 @@ async def generate_image(
                 current_user['user_id'],
                 'image',
                 f"DALL-E Image {idx + 1}",
-                image["url"],  # Local URL
-                image.get("file_path", ""),  # Local file path
+                image["url"],
+                image.get("file_path", ""),
                 True,
                 "dall-e-3",
                 request.prompt
@@ -636,13 +639,11 @@ async def generate_image(
             "model": "dall-e-3"
         }
         
-    except HTTPException:
-        raise
     except Exception as e:
         if connection:
             connection.rollback()
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail=f"Failed to generate image: {str(e)}"
         )
     finally:
@@ -651,28 +652,37 @@ async def generate_image(
         if connection:
             connection.close()
 
-
 @router.post("/generate/video")
 async def generate_video(
     request: VideoGenerateRequest,
     current_user: dict = Depends(require_admin_or_employee)
 ):
-    """Generate video using Synthesia"""
+    """Generate video using Synthesia with automatic brand kit application"""
     
     connection = None
     cursor = None
     
     try:
+        # ✅ GET BRAND KIT FOR METADATA
+        brand_kit = get_brand_kit_by_client(request.client_id)
+        
+        # For video, include brand voice in the script if available
+        enhanced_script = request.script
+        if brand_kit and brand_kit.get('brand_voice'):
+            enhanced_script = f"[Brand Voice: {brand_kit['brand_voice']}]\n\n{request.script}"
+        
+        print(f"[BRAND KIT] Video generation with brand voice: {brand_kit.get('brand_voice') if brand_kit else 'None'}")
+        
         result = await generate_synthesia_video(
-            script=request.script,
+            script=enhanced_script,  # ✅ Use enhanced script
             avatar_id=request.avatar_id,
             voice_id=request.voice_id,
-            background=request.background,
+            background=brand_kit.get('primary_color') if brand_kit and request.background == 'white' else request.background,
             title=request.title
         )
         
         connection = get_db_connection()
-        cursor = connection.cursor()
+        cursor = connection.cursor()  # ✅ Standard cursor
         
         # Save video asset with processing status
         cursor.execute("""
@@ -686,11 +696,17 @@ async def generate_video(
             current_user['user_id'],
             'video',
             request.title or "Synthesia Video",
-            "",  # Will be updated when video is ready
+            "",
             True,
             "synthesia",
             request.script,
-            json.dumps({"video_id": result["video_id"], "status": "processing"})
+            json.dumps({
+                "video_id": result["video_id"],
+                "status": "processing",
+                "brand_applied": brand_kit is not None,
+                "brand_voice": brand_kit.get('brand_voice') if brand_kit else None,
+                "background_color": brand_kit.get('primary_color') if brand_kit else None
+            })
         ))
         
         asset_id = cursor.lastrowid
@@ -701,7 +717,9 @@ async def generate_video(
             "asset_id": asset_id,
             "video_id": result["video_id"],
             "status": "processing",
-            "message": "Video is being generated. Check status for updates."
+            "message": "Video is being generated. Check status for updates.",
+            "brand_applied": brand_kit is not None,
+            "brand_voice": brand_kit.get('brand_voice') if brand_kit else None
         }
         
     except HTTPException:
@@ -709,6 +727,7 @@ async def generate_video(
     except Exception as e:
         if connection:
             connection.rollback()
+        print(f"[ERROR] Failed to generate video: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to generate video: {str(e)}"
@@ -718,6 +737,7 @@ async def generate_video(
             cursor.close()
         if connection:
             connection.close()
+
 
 
 @router.get("/video-status/{video_id}")
@@ -804,41 +824,57 @@ async def get_video_status(
         if connection:
             connection.close()
 
-
 @router.post("/generate/animation")
 async def generate_animation(
     request: AnimationGenerateRequest,
     current_user: dict = Depends(require_admin_or_employee)
 ):
-    """Generate animation using Ideogram"""
+    """Generate animation using Ideogram with automatic brand kit application"""
     
     connection = None
     cursor = None
     
     try:
+        # ✅ GET BRAND KIT AND APPLY TO PROMPT
+        brand_kit = get_brand_kit_by_client(request.client_id)
+        enhanced_prompt = apply_brand_to_prompt(request.prompt, brand_kit) if brand_kit else request.prompt
+        
+        print(f"[BRAND KIT] Animation - Original prompt: {request.prompt}")
+        print(f"[BRAND KIT] Animation - Enhanced prompt: {enhanced_prompt}")
+        
         result = await generate_ideogram_animation(
-            prompt=request.prompt,
-            style=request.style
+            prompt=enhanced_prompt,  # ✅ Use enhanced prompt
+            style=request.style,
+            aspect_ratio="16:9"
         )
         
         connection = get_db_connection()
-        cursor = connection.cursor()
-        
+        cursor = connection.cursor()  # ✅ Standard cursor
+      
         cursor.execute("""
             INSERT INTO media_assets (
                 client_id, created_by, asset_type, asset_name,
-                file_url, file_path, ai_generated, generation_type, prompt_used
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                file_url, file_path, ai_generated, generation_type, prompt_used,
+                metadata
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             request.client_id,
             current_user['user_id'],
             'animation',
             request.title,
-            result["url"],  # Local URL
+            result["url"],
             result.get("file_path", ""),
             True,
             "ideogram",
-            request.prompt
+            request.prompt,
+            json.dumps({
+                "original_prompt": request.prompt,
+                "enhanced_prompt": enhanced_prompt,
+                "brand_applied": brand_kit is not None,
+                "brand_colors": {
+                    "primary": brand_kit.get('primary_color') if brand_kit else None
+                }
+            })
         ))
         
         asset_id = cursor.lastrowid
@@ -847,7 +883,8 @@ async def generate_animation(
         return {
             "success": True,
             "asset_id": asset_id,
-            "url": result["url"]
+            "url": result["url"],
+            "brand_applied": brand_kit is not None
         }
         
     except HTTPException:
@@ -855,6 +892,7 @@ async def generate_animation(
     except Exception as e:
         if connection:
             connection.rollback()
+        print(f"[ERROR] Failed to generate animation: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to generate animation: {str(e)}"
@@ -864,7 +902,6 @@ async def generate_animation(
             cursor.close()
         if connection:
             connection.close()
-
 
 @router.post("/image-to-video")
 async def image_to_video(

@@ -206,6 +206,9 @@ function updateStats(posts) {
 // =====================================================
 // LOAD POSTS (LIST VIEW)
 // =====================================================
+// =====================================================
+// LOAD POSTS (LIST VIEW) - WITH CONFLICT DETECTION
+// =====================================================
 
 async function loadPosts() {
     const postsList = document.getElementById('postsList');
@@ -256,6 +259,9 @@ async function loadPosts() {
             }
             return;
         }
+
+        // ✅ DETECT CONFLICTS BETWEEN POSTS
+        const conflicts = detectPostConflicts(posts);
 
         // Platform colors
         const platformColors = {
@@ -312,72 +318,95 @@ async function loadPosts() {
 
             // Publish button for draft/scheduled posts
             const publishButton = (post.status === 'draft' || post.status === 'scheduled')
-                ? `<button onclick="publishPost(${post.post_id})" title="Publish Now" 
-                    style="background: #10b981; color: white; border: none; padding: 0.5rem 0.75rem; 
-                    border-radius: 8px; cursor: pointer; transition: all 0.3s ease;">
-                        <i class="ti ti-send"></i>
-                   </button>`
+                ? `<button onclick="publishPost(${post.post_id})" title="Publish Now"
+                    style="background: linear-gradient(135deg, #10b981, #059669); color: white; 
+                    border: none; padding: 0.5rem 0.75rem; border-radius: 8px; cursor: pointer;
+                    transition: all 0.3s ease; display: flex; align-items: center; gap: 0.25rem;">
+                    <i class="ti ti-send"></i>
+                </button>`
                 : '';
 
+            // ✅ CHECK IF THIS POST HAS CONFLICTS
+            const postConflicts = conflicts[post.post_id] || [];
+            const hasConflicts = postConflicts.length > 0;
+
             html += `
-                <div class="post-item" style="background: white; border: 2px solid #e2e8f0; border-radius: 12px; 
-                    padding: 1.25rem; margin-bottom: 1rem; transition: all 0.3s ease;">
-                    <div style="display: flex; gap: 1rem; align-items: start;">
-                        <!-- Platform Icon -->
-                        <div class="post-platform-icon ${platformClass}" 
-                            style="width: 48px; height: 48px; border-radius: 50%; 
-                            background: linear-gradient(135deg, ${platformColor}22, ${platformColor}44);
-                            display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                            <i class="ti ti-brand-${post.platform}" 
-                                style="font-size: 1.5rem; color: ${platformColor};"></i>
-                        </div>
-                        
-                        <!-- Post Content -->
-                        <div class="post-content" style="flex: 1; min-width: 0;">
-                            <div class="post-header" style="display: flex; align-items: center; 
-                                justify-content: space-between; margin-bottom: 0.5rem;">
-                                <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-                                    <div class="post-client" style="font-weight: 600; color: #1e293b; font-size: 0.95rem;">
-                                        ${post.client_name || 'Unknown Client'}
-                                    </div>
-                                    <span class="post-status ${statusClass}" 
-                                        style="padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.75rem; 
-                                        font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
-                                        background-color: ${statusColor}20; color: ${statusColor};">
-                                        ${post.status}
-                                    </span>
+                <div class="post-card" style="display: flex; gap: 1.5rem; padding: 1.5rem; 
+                    background: white; border-radius: 16px; border: 2px solid ${hasConflicts ? '#f59e0b' : '#e2e8f0'}; 
+                    margin-bottom: 1rem; transition: all 0.3s ease;
+                    ${hasConflicts ? 'box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);' : ''}">
+                    
+                    <!-- Platform Icon -->
+                    <div style="width: 56px; height: 56px; border-radius: 12px; 
+                        background: ${platformColor}; display: flex; align-items: center; 
+                        justify-content: center; flex-shrink: 0;">
+                        <i class="ti ti-brand-${post.platform}" style="font-size: 1.75rem; color: white;"></i>
+                    </div>
+                    
+                    <!-- Post Content -->
+                    <div style="flex: 1; min-width: 0;">
+                        <!-- Header -->
+                        <div style="display: flex; justify-content: space-between; align-items: start; 
+                            margin-bottom: 0.75rem;">
+                            <div>
+                                <div style="font-weight: 600; color: #1e293b; font-size: 15px; 
+                                    margin-bottom: 0.25rem;">
+                                    ${post.client_name || 'Unknown Client'}
                                 </div>
-                            </div>
-                            
-                            <div class="post-caption" style="color: #475569; margin-bottom: 0.75rem; 
-                                line-height: 1.6; font-size: 0.9rem;">
-                                ${(post.caption || '').substring(0, 200)}${(post.caption || '').length > 200 ? '...' : ''}
-                            </div>
-                            
-                            <div class="post-meta" style="display: flex; gap: 1rem; flex-wrap: wrap; 
-                                font-size: 0.85rem; color: #64748b;">
-                                ${dateDisplay}
-                                <span><i class="ti ti-photo"></i> ${mediaCount} media</span>
-                                <span><i class="ti ti-hash"></i> ${hashtags.length} hashtags</span>
+                                <span style="display: inline-block; padding: 0.25rem 0.625rem; 
+                                    border-radius: 6px; font-size: 12px; font-weight: 600; 
+                                    background: ${statusColor}20; color: ${statusColor};">
+                                    ${post.status.toUpperCase()}
+                                </span>
                             </div>
                         </div>
                         
-                        <!-- Post Actions -->
-                        <div class="post-actions" style="display: flex; gap: 0.5rem; flex-shrink: 0;">
-                            ${publishButton}
-                            <button onclick="editPost(${post.post_id})" title="Edit"
-                                style="background: #f1f5f9; color: #475569; border: none; 
-                                padding: 0.5rem 0.75rem; border-radius: 8px; cursor: pointer;
-                                transition: all 0.3s ease;">
-                                <i class="ti ti-pencil"></i>
-                            </button>
-                            <button onclick="deletePost(${post.post_id})" title="Delete"
-                                style="background: #fef2f2; color: #ef4444; border: none; 
-                                padding: 0.5rem 0.75rem; border-radius: 8px; cursor: pointer;
-                                transition: all 0.3s ease;">
-                                <i class="ti ti-trash"></i>
-                            </button>
+                        <!-- Caption -->
+                        <div style="color: #475569; font-size: 14px; line-height: 1.6; 
+                            margin-bottom: 0.75rem;">
+                            ${truncateText(post.caption, 150) || 'No caption...'}
                         </div>
+                        
+                        <!-- ✅ CONFLICT WARNING -->
+                        ${hasConflicts ? `
+                            <div class="conflict-warning" style="display: inline-flex; align-items: center; gap: 0.375rem; 
+                                padding: 0.375rem 0.75rem; background: #fef3c7; border: 1px solid #f59e0b; 
+                                border-radius: 6px; font-size: 12px; font-weight: 600; color: #92400e; 
+                                margin-top: 0.5rem;">
+                                <i class="ti ti-alert-triangle" style="color: #f59e0b;"></i>
+                                <span>Scheduling Conflict: ${postConflicts.length} post(s) within 2 hours</span>
+                            </div>
+                            <div style="font-size: 11px; color: #78350f; margin-top: 0.25rem;">
+                                ${postConflicts.map(c => 
+                                    `• "${truncateText(c.caption, 40)}" scheduled ${c.time_difference}`
+                                ).join('<br>')}
+                            </div>
+                        ` : ''}
+                        
+                        <!-- Meta Info -->
+                        <div style="display: flex; gap: 1rem; flex-wrap: wrap; 
+                            font-size: 0.85rem; color: #64748b; margin-top: 0.75rem;">
+                            ${dateDisplay}
+                            <span><i class="ti ti-photo"></i> ${mediaCount} media</span>
+                            <span><i class="ti ti-hash"></i> ${hashtags.length} hashtags</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Post Actions -->
+                    <div style="display: flex; gap: 0.5rem; flex-shrink: 0; align-items: start;">
+                        ${publishButton}
+                        <button onclick="editPost(${post.post_id})" title="Edit"
+                            style="background: #f1f5f9; color: #475569; border: none; 
+                            padding: 0.5rem 0.75rem; border-radius: 8px; cursor: pointer;
+                            transition: all 0.3s ease;">
+                            <i class="ti ti-pencil"></i>
+                        </button>
+                        <button onclick="deletePost(${post.post_id})" title="Delete"
+                            style="background: #fef2f2; color: #ef4444; border: none; 
+                            padding: 0.5rem 0.75rem; border-radius: 8px; cursor: pointer;
+                            transition: all 0.3s ease;">
+                            <i class="ti ti-trash"></i>
+                        </button>
                     </div>
                 </div>
             `;
@@ -403,6 +432,49 @@ async function loadPosts() {
     }
 }
 
+
+
+// ✅ NEW: DETECT CONFLICTS BETWEEN POSTS
+function detectPostConflicts(posts) {
+    const conflicts = {};
+    
+    // Only check scheduled posts
+    const scheduledPosts = posts.filter(p => 
+        p.status === 'scheduled' && p.scheduled_at
+    );
+    
+    scheduledPosts.forEach(post => {
+        const postTime = new Date(post.scheduled_at);
+        const twoHoursBefore = new Date(postTime.getTime() - (2 * 60 * 60 * 1000));
+        const twoHoursAfter = new Date(postTime.getTime() + (2 * 60 * 60 * 1000));
+        
+        const conflictingPosts = scheduledPosts.filter(other => {
+            if (other.post_id === post.post_id) return false;
+            if (other.platform !== post.platform) return false;
+            if (other.client_id !== post.client_id) return false;
+            
+            const otherTime = new Date(other.scheduled_at);
+            return otherTime > twoHoursBefore && otherTime < twoHoursAfter;
+        });
+        
+        if (conflictingPosts.length > 0) {
+            conflicts[post.post_id] = conflictingPosts.map(c => {
+                const diff = Math.abs(new Date(c.scheduled_at) - postTime);
+                const hours = Math.floor(diff / (1000 * 60 * 60));
+                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                
+                return {
+                    post_id: c.post_id,
+                    caption: c.caption,
+                    scheduled_at: c.scheduled_at,
+                    time_difference: hours > 0 ? `${hours}h ${minutes}m away` : `${minutes}m away`
+                };
+            });
+        }
+    });
+    
+    return conflicts;
+}
 // Helper function for text truncation
 function truncateText(text, maxLength) {
     if (!text) return '';
@@ -1042,19 +1114,32 @@ function showDayPosts(dateStr) {
 // =====================================================
 // VIEW SWITCHING
 // =====================================================
-
 function switchView(view) {
-    document.querySelectorAll('.view-tab').forEach(tab => tab.classList.remove('active'));
-    document.querySelectorAll('.calendar-view, .list-view').forEach(v => v.classList.remove('active'));
+    // Hide all views
+   
+    document.getElementById('calendarView')?.classList.remove('active');
+    document.getElementById('listView')?.classList.remove('active');
+    document.getElementById('inboxView')?.classList.remove('active');
 
-    if (view === 'calendar') {
-        document.querySelector('.view-tab:first-child')?.classList.add('active');
-        document.getElementById('calendarView')?.classList.add('active');
-    } else {
-        document.querySelector('.view-tab:last-child')?.classList.add('active');
+    // Remove active state from all tabs
+    document.querySelectorAll('.view-tab').forEach(tab => tab.classList.remove('active'));
+
+    // Show selected view
+    if (view === 'list') {
         document.getElementById('listView')?.classList.add('active');
+        document.querySelector('.view-tab:first-child')?.classList.add('active');
+        loadPosts();
+    } else if (view === 'calendar') {
+        document.getElementById('calendarView')?.classList.add('active');
+        document.querySelector('.view-tab:nth-child(2)')?.classList.add('active');
+        loadCalendar();
+    } else if (view === 'inbox') {
+        document.getElementById('inboxView')?.classList.add('active');
+        document.querySelector('.view-tab:nth-child(3)')?.classList.add('active');
+        loadInboxMessages();
     }
 }
+
 
 // =====================================================
 // CREATE/EDIT POST MODAL
@@ -1145,6 +1230,9 @@ function closePostModal() {
 // =====================================================
 // SAVE POST
 // =====================================================
+// =====================================================
+// SAVE POST (WITH CONFLICT DETECTION)
+// =====================================================
 
 async function savePost(event) {
     event.preventDefault();
@@ -1178,6 +1266,58 @@ async function savePost(event) {
         if (!caption.trim()) {
             showNotification('Please enter a caption', 'error');
             throw new Error('Caption required');
+        }
+
+        // ✅ NEW: Check for scheduling conflicts if scheduling a post
+        if (status === 'scheduled' && scheduledAt) {
+            const platformList = platforms.split(',').filter(p => p.trim());
+            const firstPlatform = platformList[0].trim();
+            
+            try {
+                const conflictResponse = await fetch(`${API_BASE}/check-conflicts`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        client_id: parseInt(clientId),
+                        platform: firstPlatform,
+                        scheduled_at: scheduledAt
+                    })
+                });
+                
+                if (conflictResponse.ok) {
+                    const conflictData = await conflictResponse.json();
+                    
+                    if (conflictData.has_conflicts) {
+                        // Build detailed conflict message
+                        let conflictMessage = `⚠️ SCHEDULING CONFLICT DETECTED!\n\n`;
+                        conflictMessage += `Found ${conflictData.conflict_count} post(s) scheduled within 2 hours:\n\n`;
+                        
+                        conflictData.conflicts.forEach((conflict, index) => {
+                            conflictMessage += `${index + 1}. "${conflict.caption_preview}"\n`;
+                            conflictMessage += `   Scheduled: ${new Date(conflict.scheduled_at).toLocaleString()}\n`;
+                            conflictMessage += `   Time difference: ${conflict.time_difference}\n\n`;
+                        });
+                        
+                        conflictMessage += `${conflictData.recommendation}\n\n`;
+                        conflictMessage += `Do you want to proceed anyway?`;
+                        
+                        const proceed = confirm(conflictMessage);
+                        
+                        if (!proceed) {
+                            throw new Error('Cancelled due to scheduling conflicts');
+                        }
+                    }
+                }
+            } catch (error) {
+                if (error.message === 'Cancelled due to scheduling conflicts') {
+                    throw error;
+                }
+                console.error('Conflict check failed:', error);
+                // Continue even if conflict check fails
+            }
         }
 
         const platformList = platforms.split(',').filter(p => p.trim());
@@ -1229,7 +1369,7 @@ async function savePost(event) {
 
     } catch (error) {
         console.error('Error saving post:', error);
-        if (!['Client required', 'Platform required', 'Caption required'].includes(error.message)) {
+        if (!['Client required', 'Platform required', 'Caption required', 'Cancelled due to scheduling conflicts'].includes(error.message)) {
             showNotification(error.message || 'Failed to save post', 'error');
         }
     } finally {

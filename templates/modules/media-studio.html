@@ -432,11 +432,48 @@
             grid-template-columns: 1fr;
         }
     }
+
+
+    .brand-applied-badge {
+        animation: brandBadgePulse 2s ease-in-out infinite;
+    }
+
+    @keyframes brandBadgePulse {
+
+        0%,
+        100% {
+            transform: scale(1);
+            box-shadow: 0 2px 8px rgba(153, 38, 243, 0.3);
+        }
+
+        50% {
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(153, 38, 243, 0.4);
+        }
+    }
+
+    .brand-colors-preview {
+        display: flex;
+        gap: 2px;
+        margin-left: 0.25rem;
+    }
+
+    .brand-colors-preview div {
+        width: 12px;
+        height: 12px;
+        border-radius: 2px;
+        border: 1px solid rgba(255, 255, 255, 0.5);
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="media-studio-container">
+
+    <div id="brandKitIndicator" style="margin-bottom: 2rem;"></div>
+
+
+
     <!-- Header -->
     <div class="header-hero">
         <div>
@@ -444,10 +481,16 @@
             <p>AI-powered visual content creation with DALL-E, Synthesia, and Canva</p>
         </div>
 
-        <button onclick="connectCanva()" class="btn-secondary" style="margin-bottom: 1rem;">
-            <i class="ti ti-brand-canva"></i>
-            Connect Canva Account
-        </button>
+        <div style="display: flex; gap: 1rem; align-items: center;">
+            <button onclick="openBrandKitManager()" class="btn-secondary">
+                <i class="ti ti-palette"></i>
+                Manage Brand Kit
+            </button>
+            <button onclick="connectCanva()" class="btn-secondary">
+                <i class="ti ti-brand-canva"></i>
+                Connect Canva Account
+            </button>
+        </div>
     </div>
 
     <!-- Creation Tools -->
@@ -848,13 +891,211 @@
     </div>
 </div>
 
+
+<!-- ========================================== -->
+<!-- BRAND KIT MANAGER MODAL -->
+<!-- Add this modal at the end, before closing </div> of media-studio-container -->
+<!-- ========================================== -->
+
+<!-- Brand Kit Manager Modal -->
+<div id="brandKitModal" class="modal">
+    <div class="modal-content" style="max-width: 700px;">
+        <div class="modal-header">
+            <h2><i class="ti ti-palette"></i> Brand Kit Manager</h2>
+            <button class="modal-close" onclick="closeBrandKitManager()">
+                <i class="ti ti-x"></i>
+            </button>
+        </div>
+
+        <div class="modal-body">
+            <!-- Brand Colors Section -->
+            <div class="modal-section">
+                <h3><i class="ti ti-color-swatch"></i> Brand Colors</h3>
+                <p style="color: #64748b; font-size: 0.9rem; margin-bottom: 1rem;">
+                    These colors will be automatically applied to AI-generated images, videos, and animations
+                </p>
+
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
+                    <div class="form-group">
+                        <label for="brandPrimaryColor">
+                            Primary Color <span style="color: #ef4444;">*</span>
+                        </label>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <input type="color" id="brandPrimaryColor" value="#9926F3"
+                                style="width: 50px; height: 40px; border: 2px solid #cbd5e1; border-radius: 6px; cursor: pointer;">
+                            <input type="text" class="form-control" id="brandPrimaryColorText" value="#9926F3" readonly
+                                style="flex: 1; background: #f8fafc; cursor: pointer;"
+                                onclick="document.getElementById('brandPrimaryColor').click()">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="brandSecondaryColor">Secondary Color</label>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <input type="color" id="brandSecondaryColor" value="#1DD8FC"
+                                style="width: 50px; height: 40px; border: 2px solid #cbd5e1; border-radius: 6px; cursor: pointer;">
+                            <input type="text" class="form-control" id="brandSecondaryColorText" value="#1DD8FC"
+                                readonly style="flex: 1; background: #f8fafc; cursor: pointer;"
+                                onclick="document.getElementById('brandSecondaryColor').click()">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="brandAccentColor">Accent Color</label>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <input type="color" id="brandAccentColor" value="#FF6B6B"
+                                style="width: 50px; height: 40px; border: 2px solid #cbd5e1; border-radius: 6px; cursor: pointer;">
+                            <input type="text" class="form-control" id="brandAccentColorText" value="#FF6B6B" readonly
+                                style="flex: 1; background: #f8fafc; cursor: pointer;"
+                                onclick="document.getElementById('brandAccentColor').click()">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Brand Fonts Section -->
+            <div class="modal-section">
+                <h3><i class="ti ti-typography"></i> Brand Fonts</h3>
+                <p style="color: #64748b; font-size: 0.9rem; margin-bottom: 1rem;">
+                    Specify fonts to be used in text-based content generation
+                </p>
+
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
+                    <div class="form-group">
+                        <label for="brandPrimaryFont">
+                            Primary Font <span style="color: #ef4444;">*</span>
+                        </label>
+                        <select id="brandPrimaryFont" class="form-control">
+                            <option value="Gilroy">Gilroy</option>
+                            <option value="Arial">Arial</option>
+                            <option value="Helvetica">Helvetica</option>
+                            <option value="Inter">Inter</option>
+                            <option value="Roboto">Roboto</option>
+                            <option value="Open Sans">Open Sans</option>
+                            <option value="Montserrat">Montserrat</option>
+                            <option value="Poppins">Poppins</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="brandSecondaryFont">Secondary Font</label>
+                        <select id="brandSecondaryFont" class="form-control">
+                            <option value="Arial">Arial</option>
+                            <option value="Gilroy">Gilroy</option>
+                            <option value="Helvetica">Helvetica</option>
+                            <option value="Inter">Inter</option>
+                            <option value="Roboto">Roboto</option>
+                            <option value="Open Sans">Open Sans</option>
+                            <option value="Georgia">Georgia</option>
+                            <option value="Times New Roman">Times New Roman</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Brand Voice Section -->
+            <div class="modal-section">
+                <h3><i class="ti ti-message-circle"></i> Brand Voice</h3>
+                <p style="color: #64748b; font-size: 0.9rem; margin-bottom: 1rem;">
+                    Define the tone and style for AI-generated content
+                </p>
+
+                <div class="form-group">
+                    <label for="brandVoice">Brand Voice Tone</label>
+                    <select id="brandVoice" class="form-control">
+                        <option value="professional">Professional</option>
+                        <option value="casual">Casual</option>
+                        <option value="friendly">Friendly</option>
+                        <option value="formal">Formal</option>
+                        <option value="playful">Playful</option>
+                        <option value="authoritative">Authoritative</option>
+                        <option value="conversational">Conversational</option>
+                        <option value="luxury">Luxury</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Brand Logo Section -->
+            <div class="modal-section">
+                <h3><i class="ti ti-brand-slack"></i> Brand Logo</h3>
+                <p style="color: #64748b; font-size: 0.9rem; margin-bottom: 1rem;">
+                    Optional: Provide logo URL for reference (logos will not be auto-inserted into AI generations)
+                </p>
+
+                <div class="form-group">
+                    <label for="brandLogoUrl">Logo URL</label>
+                    <input type="url" id="brandLogoUrl" class="form-control" placeholder="https://example.com/logo.png">
+                    <small style="color: #64748b; margin-top: 0.25rem; display: block;">
+                        Store logo URL for team reference
+                    </small>
+                </div>
+            </div>
+
+            <!-- Info Box -->
+            <div
+                style="background: linear-gradient(135deg, rgba(153, 38, 243, 0.05), rgba(29, 216, 252, 0.05)); padding: 1rem; border-radius: 8px; border: 1px solid rgba(153, 38, 243, 0.1); margin-top: 1rem;">
+                <div style="display: flex; align-items: start; gap: 0.75rem;">
+                    <i class="ti ti-info-circle" style="font-size: 1.25rem; color: #9926F3; margin-top: 0.125rem;"></i>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; color: #1e293b; margin-bottom: 0.25rem;">How Brand Kit Works</div>
+                        <div style="font-size: 0.875rem; color: #64748b; line-height: 1.6;">
+                            Brand colors, fonts, and voice will be automatically incorporated into AI generation
+                            prompts. This ensures consistent brand identity across all AI-created images, videos, and
+                            animations.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-footer">
+            <button type="button" class="btn-secondary" onclick="closeBrandKitManager()">
+                Cancel
+            </button>
+            <button type="button" class="btn-primary" onclick="saveBrandKit()">
+                <i class="ti ti-device-floppy"></i>
+                Save Brand Kit
+            </button>
+        </div>
+    </div>
+</div>
+
+
+
+
+
 {% endblock %}
 
 {% block extra_js %}
+
+
 <script>
-      async function connectCanva() {
+    // Sync color pickers with text inputs
+    document.addEventListener('DOMContentLoaded', function () {
+        const colorInputs = [
+            { picker: 'brandPrimaryColor', text: 'brandPrimaryColorText' },
+            { picker: 'brandSecondaryColor', text: 'brandSecondaryColorText' },
+            { picker: 'brandAccentColor', text: 'brandAccentColorText' }
+        ];
+
+        colorInputs.forEach(({ picker, text }) => {
+            const pickerEl = document.getElementById(picker);
+            const textEl = document.getElementById(text);
+
+            if (pickerEl && textEl) {
+                pickerEl.addEventListener('input', function () {
+                    textEl.value = this.value.toUpperCase();
+                });
+            }
+        });
+    });
+</script>
+
+
+<script>
+    async function connectCanva() {
         const clientId = document.getElementById('designClient').value;
-        
+
         // ✅ Validate client selection
         if (!clientId) {
             showNotification('Please select a client first', 'error');
@@ -884,5 +1125,5 @@
         });
     }
 </script>
-<script src="/static/js/media-studio-new.js?=2"></script>
+<script src="/static/js/media-studio-new.js?=6"></script>
 {% endblock %}

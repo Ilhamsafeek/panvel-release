@@ -345,6 +345,16 @@
         display: block;
     }
 
+
+     /* List View */
+    .inbox-view {
+        display: none;
+    }
+
+    .inbox-view.active {
+        display: block;
+    }
+
     .posts-list {
         background: white;
         border-radius: 16px;
@@ -1856,29 +1866,556 @@
     }
 
     /* Account Connection Modal - Centered */
-#accountConnectionModal {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(4px);
-    z-index: 1001;
-    overflow-y: auto;
-}
+    #accountConnectionModal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(4px);
+        z-index: 1001;
+        overflow-y: auto;
+    }
 
-#accountConnectionModal.show,
-#accountConnectionModal[style*="display: flex"] {
-    display: flex !important;
+    #accountConnectionModal.show,
+    #accountConnectionModal[style*="display: flex"] {
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+    }
+
+    #accountConnectionModal .modal-content {
+        margin: auto;
+    }
+
+
+    /* ============================================
+   UNIFIED INBOX STYLES
+   ============================================ */
+
+    .inbox-container {
+        background: white;
+        border-radius: 16px;
+        border: 2px solid #e2e8f0;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .inbox-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid #e2e8f0;
+    }
+
+    .inbox-header h2 {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: #1e293b;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin: 0;
+    }
+
+    .inbox-header h2 i {
+        background: linear-gradient(135deg, #9926F3, #1DD8FC);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+
+    .inbox-filters {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .inbox-filters select,
+    .inbox-filters button {
+        padding: 0.625rem 1rem;
+        border-radius: 8px;
+        border: 1px solid #e2e8f0;
+        font-size: 14px;
+        font-weight: 500;
+    }
+
+    .inbox-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .inbox-stat-card {
+        background: linear-gradient(135deg, rgba(153, 38, 243, 0.05), rgba(29, 216, 252, 0.05));
+        border-radius: 12px;
+        padding: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        border: 1px solid #e2e8f0;
+    }
+
+    .inbox-stat-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .inbox-stat-icon.whatsapp {
+        background: #25D366;
+        color: white;
+    }
+
+    .inbox-stat-icon.instagram {
+        background: linear-gradient(135deg, #f58529, #dd2a7b);
+        color: white;
+    }
+
+    .inbox-stat-icon.facebook {
+        background: #1877F2;
+        color: white;
+    }
+
+    .inbox-stat-icon.linkedin {
+        background: #0A66C2;
+        color: white;
+    }
+
+    .inbox-stat-icon i {
+        font-size: 1.25rem;
+    }
+
+    .inbox-stat-info {
+        flex: 1;
+    }
+
+    .inbox-stat-label {
+        font-size: 12px;
+        color: #64748b;
+        margin: 0;
+    }
+
+    .inbox-stat-value {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #1e293b;
+        margin: 0;
+    }
+
+    .inbox-stat-unread {
+        font-size: 11px;
+        color: #ef4444;
+        font-weight: 600;
+    }
+
+    /* Message List */
+    .messages-list {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .message-card {
+        background: white;
+        border-radius: 12px;
+        border: 2px solid #e2e8f0;
+        padding: 1.25rem;
+        transition: all 0.3s;
+        cursor: pointer;
+        position: relative;
+    }
+
+    .message-card:hover {
+        border-color: #9926F3;
+        box-shadow: 0 4px 12px rgba(153, 38, 243, 0.1);
+        transform: translateY(-2px);
+    }
+
+    .message-card.unread {
+        background: linear-gradient(135deg, rgba(153, 38, 243, 0.02), rgba(29, 216, 252, 0.02));
+        border-left: 4px solid #9926F3;
+    }
+
+    .message-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: start;
+        margin-bottom: 0.75rem;
+    }
+
+    .message-sender {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex: 1;
+    }
+
+    .sender-avatar {
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #9926F3, #1DD8FC);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 700;
+        font-size: 16px;
+    }
+
+    .sender-info {
+        flex: 1;
+    }
+
+    .sender-name {
+        font-weight: 600;
+        color: #1e293b;
+        font-size: 15px;
+        margin: 0 0 0.25rem 0;
+    }
+
+    .sender-handle {
+        color: #64748b;
+        font-size: 13px;
+        margin: 0;
+    }
+
+    .message-meta {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+    }
+
+    .platform-badge-small {
+        padding: 0.25rem 0.5rem;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        color: white;
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .platform-badge-small.whatsapp {
+        background: #25D366;
+    }
+
+    .platform-badge-small.instagram {
+        background: linear-gradient(135deg, #f58529, #dd2a7b);
+    }
+
+    .platform-badge-small.facebook {
+        background: #1877F2;
+    }
+
+    .platform-badge-small.linkedin {
+        background: #0A66C2;
+    }
+
+    .message-time {
+        color: #94a3b8;
+        font-size: 12px;
+    }
+
+    .message-text {
+        color: #475569;
+        font-size: 14px;
+        line-height: 1.6;
+        margin-bottom: 0.75rem;
+    }
+
+    .message-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .message-tags {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .tag-badge {
+        padding: 0.25rem 0.625rem;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        background: #f1f5f9;
+        color: #475569;
+    }
+
+    .urgency-indicator {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.25rem 0.625rem;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+
+    .urgency-low {
+        background: #d1fae5;
+        color: #065f46;
+    }
+
+    .urgency-medium {
+        background: #fef3c7;
+        color: #92400e;
+    }
+
+    .urgency-high {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .urgency-critical {
+        background: #ef4444;
+        color: white;
+    }
+
+    .sentiment-badge {
+        padding: 0.25rem 0.625rem;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .sentiment-positive {
+        background: #d1fae5;
+        color: #065f46;
+    }
+
+    .sentiment-neutral {
+        background: #f1f5f9;
+        color: #475569;
+    }
+
+    .sentiment-negative {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .message-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .message-actions button {
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        border: 1px solid #e2e8f0;
+        background: white;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        transition: all 0.2s;
+    }
+
+    .message-actions button:hover {
+        border-color: #9926F3;
+        background: #f8f4ff;
+    }
+
+    .message-actions button.primary {
+        background: linear-gradient(135deg, #9926F3, #1DD8FC);
+        color: white;
+        border: none;
+    }
+
+    .message-actions button.primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(153, 38, 243, 0.3);
+    }
+
+    /* Reply Modal */
+    .reply-modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(4px);
+        z-index: 1001;
+        padding: 2rem;
+        overflow-y: auto;
+    }
+
+    .reply-modal.active {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .reply-modal-content {
+        background: white;
+        border-radius: 16px;
+        padding: 2rem;
+        max-width: 600px;
+        width: 100%;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+    .reply-modal-header {
+        margin-bottom: 1.5rem;
+    }
+
+    .reply-modal-header h3 {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #1e293b;
+        margin: 0 0 0.5rem 0;
+    }
+
+    .original-message {
+        background: #f8fafc;
+        border-left: 4px solid #9926F3;
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1.5rem;
+    }
+
+    .original-message p {
+        margin: 0;
+        color: #475569;
+        font-size: 14px;
+        line-height: 1.6;
+    }
+
+    .reply-form {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .form-group label {
+        display: block;
+        font-weight: 500;
+        color: #1e293b;
+        margin-bottom: 0.5rem;
+        font-size: 14px;
+    }
+
+    .form-group textarea {
+        width: 100%;
+        padding: 0.875rem;
+        border: 2px solid #e2e8f0;
+        border-radius: 8px;
+        font-size: 14px;
+        font-family: 'Gilroy', sans-serif;
+        resize: vertical;
+        min-height: 120px;
+        transition: border-color 0.2s;
+    }
+
+    .form-group textarea:focus {
+        outline: none;
+        border-color: #9926F3;
+    }
+
+    .reply-actions {
+        display: flex;
+        gap: 1rem;
+        justify-content: flex-end;
+    }
+
+    .empty-inbox {
+        text-align: center;
+        padding: 4rem 2rem;
+    }
+
+    .empty-inbox i {
+        font-size: 4rem;
+        color: #cbd5e1;
+        margin-bottom: 1rem;
+    }
+
+    .empty-inbox h3 {
+        color: #475569;
+        margin-bottom: 0.5rem;
+    }
+
+    .empty-inbox p {
+        color: #94a3b8;
+    }
+
+    .pending-notice {
+        background: linear-gradient(135deg, rgba(251, 191, 36, 0.1), rgba(251, 191, 36, 0.05));
+        border: 2px solid #fbbf24;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .pending-notice h4 {
+        color: #92400e;
+        margin: 0 0 0.5rem 0;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .pending-notice p {
+        color: #78350f;
+        margin: 0;
+        font-size: 14px;
+    }
+
+
+    /* Conflict Warning Badge */
+.conflict-warning {
+    display: inline-flex;
     align-items: center;
-    justify-content: center;
-    padding: 2rem;
+    gap: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #92400e;
+    margin-top: 0.5rem;
+    animation: pulse 2s infinite;
 }
 
-#accountConnectionModal .modal-content {
-    margin: auto;
+.conflict-warning i {
+    color: #f59e0b;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.8;
+    }
+}
+
+.conflict-details {
+    font-size: 11px;
+    color: #78350f;
+    margin-top: 0.25rem;
 }
 </style>
 
@@ -2012,11 +2549,15 @@
 
     <!-- View Tabs -->
     <div class="view-tabs">
+      
         <button class="view-tab active" onclick="switchView('calendar')">
             <i class="ti ti-calendar"></i> Calendar View
         </button>
-        <button class="view-tab" onclick="switchView('list')">
+          <button class="view-tab" onclick="switchView('list')">
             <i class="ti ti-list"></i> List View
+        </button>
+        <button class="view-tab" onclick="switchView('inbox')">
+            <i class="ti ti-inbox"></i> Unified Inbox
         </button>
     </div>
 
@@ -2048,6 +2589,99 @@
             </div>
         </div>
     </div>
+
+
+    <!-- ============================================
+     UNIFIED INBOX VIEW
+     ============================================ -->
+<div id="inboxView" class="inbox-view">
+    <div class="inbox-container">
+        <!-- Inbox Header -->
+        <div class="inbox-header">
+            <h2>
+                <i class="ti ti-inbox"></i>
+                Unified Inbox
+            </h2>
+            <div class="inbox-filters">
+                <select id="inboxPlatformFilter" onchange="loadInboxMessages()">
+                    <option value="">All Platforms</option>
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="instagram">Instagram</option>
+                    <option value="facebook">Facebook</option>
+                    <option value="linkedin">LinkedIn</option>
+                </select>
+                <select id="inboxStatusFilter" onchange="loadInboxMessages()">
+                    <option value="">All Messages</option>
+                    <option value="unread">Unread Only</option>
+                    <option value="read">Read Only</option>
+                </select>
+                <button class="btn btn-secondary" onclick="loadInboxMessages()">
+                    <i class="ti ti-refresh"></i> Refresh
+                </button>
+            </div>
+        </div>
+
+        <!-- Pending Verification Notice -->
+        <div class="pending-notice">
+            <h4>
+                <i class="ti ti-alert-circle"></i>
+                Meta Business Verification Pending
+            </h4>
+            <p>
+                Instagram and Facebook Messenger integration requires Meta Business verification (4-6 week approval process). 
+                WhatsApp Business API is functional and ready to use. Messages from verified platforms will appear here automatically.
+            </p>
+        </div>
+
+        <!-- Inbox Stats -->
+        <div id="inboxStats" class="inbox-stats">
+            <!-- Stats will be loaded dynamically -->
+        </div>
+
+        <!-- Messages List -->
+        <div id="messagesList" class="messages-list">
+            <div class="loading-state">
+                <div class="loader-spinner"></div>
+                <p>Loading messages...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================
+     REPLY MODAL
+     ============================================ -->
+<div id="replyModal" class="reply-modal">
+    <div class="reply-modal-content">
+        <div class="reply-modal-header">
+            <h3>Reply to Message</h3>
+        </div>
+
+        <div class="original-message" id="originalMessage">
+            <!-- Original message will be displayed here -->
+        </div>
+
+        <form class="reply-form" onsubmit="sendReply(event)">
+            <input type="hidden" id="replyMessageId">
+            
+            <div class="form-group">
+                <label for="replyText">Your Reply</label>
+                <textarea id="replyText" placeholder="Type your reply here..." required></textarea>
+            </div>
+
+            <div class="reply-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeReplyModal()">
+                    Cancel
+                </button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="ti ti-send"></i> Send Reply
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+
 </div>
 
 
@@ -2115,7 +2749,7 @@
 
                 <div id="instructionsContent"></div>
 
-             
+
             </div>
         </div>
     </div>
@@ -2277,32 +2911,306 @@
     </div>
 </div>
 
-<script src="/static/js/social-media-c.js"></script>
-
 <script>
-    // Ensure functions are bound after DOM and script are loaded
-    document.addEventListener('DOMContentLoaded', function () {
-        // Bind create post button
-        const createPostBtn = document.getElementById('createPostBtn');
-        if (createPostBtn) {
-            createPostBtn.addEventListener('click', function () {
-                if (typeof openCreatePostModal === 'function') {
-                    openCreatePostModal();
-                } else {
-                    console.error('openCreatePostModal function not found');
-                }
-            });
-        }
-    });
+    // =====================================================
+    // UNIFIED INBOX FUNCTIONS
+    // =====================================================
 
-    // Expose functions to global scope for onclick handlers
-    window.openCreatePostModal = openCreatePostModal;
-    window.closePostModal = closePostModal;
-    window.editPost = editPost;
-    window.deletePost = deletePost;
-    window.savePost = savePost;
-    
+    async function loadInboxMessages() {
+        const clientId = document.getElementById('filterClient').value;
+        const platformFilter = document.getElementById('inboxPlatformFilter').value;
+        const statusFilter = document.getElementById('inboxStatusFilter').value;
+        const messagesList = document.getElementById('messagesList');
+
+        if (!clientId) {
+            messagesList.innerHTML = `
+            <div class="empty-inbox">
+                <i class="ti ti-inbox-off"></i>
+                <h3>Select a Client</h3>
+                <p>Please select a client to view their messages</p>
+            </div>
+        `;
+            return;
+        }
+
+        messagesList.innerHTML = '<div class="loading-state"><div class="loader-spinner"></div><p>Loading messages...</p></div>';
+
+        try {
+            const token = localStorage.getItem('access_token');
+
+            // Build query parameters
+            let url = `${API_BASE}/inbox/${clientId}?limit=50`;
+            if (platformFilter) url += `&platform=${platformFilter}`;
+            if (statusFilter === 'unread') url += `&is_read=false`;
+            if (statusFilter === 'read') url += `&is_read=true`;
+
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!response.ok) throw new Error('Failed to load messages');
+
+            const data = await response.json();
+            displayInboxMessages(data.messages || []);
+            displayInboxStats(data.platform_stats || []);
+
+        } catch (error) {
+            console.error('Error loading inbox:', error);
+            messagesList.innerHTML = `
+            <div class="empty-inbox">
+                <i class="ti ti-alert-circle"></i>
+                <h3>Failed to Load Messages</h3>
+                <p>${error.message}</p>
+            </div>
+        `;
+        }
+    }
+
+    function displayInboxStats(stats) {
+        const statsContainer = document.getElementById('inboxStats');
+
+        if (!stats || stats.length === 0) {
+            statsContainer.innerHTML = '';
+            return;
+        }
+
+        const platformIcons = {
+            'whatsapp': 'ti-brand-whatsapp',
+            'instagram': 'ti-brand-instagram',
+            'facebook': 'ti-brand-facebook',
+            'linkedin': 'ti-brand-linkedin'
+        };
+
+        statsContainer.innerHTML = stats.map(stat => `
+        <div class="inbox-stat-card">
+            <div class="inbox-stat-icon ${stat.platform}">
+                <i class="ti ${platformIcons[stat.platform] || 'ti-message'}"></i>
+            </div>
+            <div class="inbox-stat-info">
+                <p class="inbox-stat-label">${capitalizeFirst(stat.platform)}</p>
+                <p class="inbox-stat-value">${stat.total_messages}</p>
+                ${stat.unread_count > 0 ? `<p class="inbox-stat-unread">${stat.unread_count} unread</p>` : ''}
+            </div>
+        </div>
+    `).join('');
+    }
+
+    function displayInboxMessages(messages) {
+        const messagesList = document.getElementById('messagesList');
+
+        if (!messages || messages.length === 0) {
+            messagesList.innerHTML = `
+            <div class="empty-inbox">
+                <i class="ti ti-inbox"></i>
+                <h3>No Messages Yet</h3>
+                <p>Messages from connected platforms will appear here</p>
+            </div>
+        `;
+            return;
+        }
+
+        const platformIcons = {
+            'whatsapp': 'ti-brand-whatsapp',
+            'instagram': 'ti-brand-instagram',
+            'facebook': 'ti-brand-facebook',
+            'linkedin': 'ti-brand-linkedin'
+        };
+
+        messagesList.innerHTML = messages.map(msg => {
+            const unreadClass = !msg.is_read ? 'unread' : '';
+            const urgencyClass = getUrgencyClass(msg.urgency_score);
+            const sentimentClass = getSentimentClass(msg.sentiment);
+            const timeAgo = formatTimeAgo(msg.created_at);
+            const initials = getInitials(msg.sender_name);
+
+            return `
+            <div class="message-card ${unreadClass}" onclick="viewMessage(${msg.message_id})">
+                <div class="message-header">
+                    <div class="message-sender">
+                        <div class="sender-avatar">${initials}</div>
+                        <div class="sender-info">
+                            <p class="sender-name">${msg.sender_name || 'Unknown'}</p>
+                            <p class="sender-handle">${msg.sender_handle || ''}</p>
+                        </div>
+                    </div>
+                    <div class="message-meta">
+                        <span class="platform-badge-small ${msg.platform}">
+                            <i class="ti ${platformIcons[msg.platform] || 'ti-message'}"></i>
+                            ${capitalizeFirst(msg.platform)}
+                        </span>
+                        <span class="message-time">${timeAgo}</span>
+                    </div>
+                </div>
+
+                <div class="message-text">
+                    ${truncateText(msg.message_text || '', 150)}
+                </div>
+
+                <div class="message-footer">
+                    <div class="message-tags">
+                        ${msg.urgency_score >= 4 ? `
+                            <span class="urgency-indicator urgency-${urgencyClass}">
+                                <i class="ti ti-alert-triangle"></i>
+                                ${getUrgencyLabel(msg.urgency_score)}
+                            </span>
+                        ` : ''}
+                        ${msg.sentiment ? `
+                            <span class="sentiment-badge sentiment-${sentimentClass}">
+                                <i class="ti ${getSentimentIcon(msg.sentiment)}"></i>
+                                ${capitalizeFirst(msg.sentiment)}
+                            </span>
+                        ` : ''}
+                        ${msg.is_replied ? '<span class="tag-badge">✓ Replied</span>' : ''}
+                    </div>
+                    <div class="message-actions" onclick="event.stopPropagation()">
+                        ${!msg.is_read ? `
+                            <button onclick="markAsRead(${msg.message_id})">
+                                <i class="ti ti-check"></i> Mark Read
+                            </button>
+                        ` : ''}
+                        <button class="primary" onclick="openReplyModal(${msg.message_id}, '${escapeHtml(msg.message_text)}', '${escapeHtml(msg.sender_name)}')">
+                            <i class="ti ti-send"></i> Reply
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        }).join('');
+    }
+
+    function openReplyModal(messageId, messageText, senderName) {
+        document.getElementById('replyMessageId').value = messageId;
+        document.getElementById('originalMessage').innerHTML = `
+        <p><strong>From:</strong> ${senderName}</p>
+        <p style="margin-top: 0.5rem;">${messageText}</p>
+    `;
+        document.getElementById('replyText').value = '';
+        document.getElementById('replyModal').classList.add('active');
+    }
+
+    function closeReplyModal() {
+        document.getElementById('replyModal').classList.remove('active');
+    }
+
+    async function sendReply(event) {
+        event.preventDefault();
+
+        const messageId = document.getElementById('replyMessageId').value;
+        const replyText = document.getElementById('replyText').value;
+
+        try {
+            const token = localStorage.getItem('access_token');
+            const response = await fetch(`${API_BASE}/inbox/reply`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    message_id: parseInt(messageId),
+                    reply_text: replyText
+                })
+            });
+
+            if (!response.ok) throw new Error('Failed to send reply');
+
+            const data = await response.json();
+            showNotification(data.message || 'Reply sent successfully!', 'success');
+            closeReplyModal();
+            loadInboxMessages();
+
+        } catch (error) {
+            console.error('Error sending reply:', error);
+            showNotification('Failed to send reply', 'error');
+        }
+    }
+
+    async function markAsRead(messageId) {
+        try {
+            const token = localStorage.getItem('access_token');
+            const response = await fetch(`${API_BASE}/inbox/${messageId}/mark-read`, {
+                method: 'PATCH',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!response.ok) throw new Error('Failed to mark as read');
+
+            showNotification('Message marked as read', 'success');
+            loadInboxMessages();
+
+        } catch (error) {
+            console.error('Error marking as read:', error);
+            showNotification('Failed to mark as read', 'error');
+        }
+    }
+
+    function viewMessage(messageId) {
+        // Mark as read when viewing
+        markAsRead(messageId);
+    }
+
+    // Helper Functions
+    function getUrgencyClass(score) {
+        if (score >= 5) return 'critical';
+        if (score >= 4) return 'high';
+        if (score >= 3) return 'medium';
+        return 'low';
+    }
+
+    function getUrgencyLabel(score) {
+        if (score >= 5) return 'Critical';
+        if (score >= 4) return 'High';
+        if (score >= 3) return 'Medium';
+        return 'Low';
+    }
+
+    function getSentimentClass(sentiment) {
+        return (sentiment || 'neutral').toLowerCase();
+    }
+
+    function getSentimentIcon(sentiment) {
+        const icons = {
+            'positive': 'ti-mood-happy',
+            'neutral': 'ti-mood-neutral',
+            'negative': 'ti-mood-sad'
+        };
+        return icons[sentiment] || 'ti-mood-neutral';
+    }
+
+    function getInitials(name) {
+        if (!name) return '?';
+        return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+    }
+
+    function formatTimeAgo(dateString) {
+        const date = new Date(dateString);
+        const now = new Date();
+        const seconds = Math.floor((now - date) / 1000);
+
+        if (seconds < 60) return 'Just now';
+        if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+        if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+        if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
+
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function capitalizeFirst(str) {
+        if (!str) return '';
+        return str.charAt(0).toUpperCase() + str.slice(1);
+    }
+
+
+
 
 </script>
+
+<script src="/static/js/social-media-c.js?v=4"></script>
 
 {% endblock %}

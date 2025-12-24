@@ -382,10 +382,25 @@
         }
     }
 
+
+    // Update this function in sidebar.html
+
     function getNavigationByRole(role) {
+        // Common modules for all roles
         const commonModules = `
         <div class="nav-section">
-            <div class="nav-section-title">Modules</div>
+            <div class="nav-section-title">Communication</div>
+            <a href="/messages" class="nav-item" data-path="/messages">
+                <i class="ti ti-message"></i>
+                <span>Messages</span>
+            </a>
+            <a href="/modules/communication" class="nav-item" data-path="/modules/communication">
+                <i class="ti ti-send"></i>
+                <span>Campaigns</span>
+            </a>
+        </div>
+        <div class="nav-section">
+            <div class="nav-section-title">Tools</div>
             <a href="/modules/content" class="nav-item" data-path="/modules/content">
                 <i class="ti ti-file-text"></i>
                 <span>Content Hub</span>
@@ -394,24 +409,20 @@
                 <i class="ti ti-brand-instagram"></i>
                 <span>Social Media</span>
             </a>
-            <a href="/modules/ads" class="nav-item" data-path="/modules/ads">
-                <i class="ti ti-ad"></i>
-                <span>Ad Strategy</span>
-            </a>
             <a href="/modules/seo" class="nav-item" data-path="/modules/seo">
-                <i class="ti ti-search"></i>
+                <i class="ti ti-seo"></i>
                 <span>SEO Toolkit</span>
             </a>
             <a href="/modules/media-studio" class="nav-item" data-path="/modules/media-studio">
                 <i class="ti ti-photo"></i>
                 <span>Media Studio</span>
             </a>
-            <a href="/modules/communication" class="nav-item" data-path="/modules/communication">
-                <i class="ti ti-send"></i>
-                <span>Communication</span>
+            <a href="/modules/ad-strategy" class="nav-item" data-path="/modules/ad-strategy">
+                <i class="ti ti-target"></i>
+                <span>Ad Strategy</span>
             </a>
             <a href="/modules/analytics" class="nav-item" data-path="/modules/analytics">
-                <i class="ti ti-chart-bar"></i>
+                <i class="ti ti-chart-line"></i>
                 <span>Analytics</span>
             </a>
         </div>
@@ -420,37 +431,9 @@
         if (role === 'admin') {
             return `
             <div class="nav-section">
-               
                 <a href="/dashboard/admin" class="nav-item" data-path="/dashboard/admin">
                     <i class="ti ti-dashboard"></i>
-                    <span>Overview</span>
-                </a>
-            </div>
-            <div class="nav-section">
-                <div class="nav-section-title">Client Management</div>
-                <a href="/modules/project-planner" class="nav-item" data-path="/modules/project-planner">
-                    <i class="ti ti-wand"></i>
-                    <span>AI Project Planner</span>
-                    <span class="nav-item-badge">NEW</span>
-                </a>
-
-                <a href="/admin/onboarding-verifications" class="nav-item" data-path="/admin/onboarding-verifications">
-                    <i class="ti ti-user-check"></i>
-                    <span>Verify New Users</span>
-                    <span class="nav-item-badge" id="pendingBadge" style="display: none;">0</span>
-                 </a>
-                <a href="/clients" class="nav-item" data-path="/clients">
-                    <i class="ti ti-briefcase"></i>
-                    <span>Clients</span>
-                </a>
-
-                <a href="/admin/chatbot" class="nav-item" data-path="/admin/chatbot">
-                    <i class="ti ti-help-circle"></i>
-                    <span>AI Assistant</span>
-                </a>
-                <a href="/admin/packages" class="nav-item" data-path="/admin/packages">
-                    <i class="ti ti-package"></i>
-                    <span>Packages</span>
+                    <span>Dashboard</span>
                 </a>
             </div>
             <div class="nav-section">
@@ -459,19 +442,42 @@
                     <i class="ti ti-users"></i>
                     <span>User Management</span>
                 </a>
+                <a href="/clients" class="nav-item" data-path="/clients">
+                    <i class="ti ti-briefcase"></i>
+                    <span>Clients</span>
+                </a>
                 <a href="/admin/tasks" class="nav-item" data-path="/admin/tasks">
-                    <i class="ti ti-checklist"></i>
-                    <span>Task Assignment</span>
+                    <i class="ti ti-list-check"></i>
+                    <span>Task Management</span>
                 </a>
                 <a href="/admin/finance" class="nav-item" data-path="/admin/finance">
-                    <i class="ti ti-coin"></i>
-                    <span>Finance & P&L</span>
+                    <i class="ti ti-report-money"></i>
+                    <span>Finance</span>
                 </a>
-               
+                <a href="/admin/packages" class="nav-item" data-path="/admin/packages">
+                    <i class="ti ti-package"></i>
+                    <span>Packages</span>
+                </a>
+            </div>
+            <div class="nav-section">
+                <div class="nav-section-title">AI Tools</div>
+                <a href="/modules/project-planner" class="nav-item" data-path="/modules/project-planner">
+                    <i class="ti ti-wand"></i>
+                    <span>AI Project Planner</span>
+                    <span class="nav-item-badge">AI</span>
+                </a>
+                <a href="/admin/chatbot" class="nav-item" data-path="/admin/chatbot">
+                    <i class="ti ti-robot"></i>
+                    <span>AI Assistant</span>
+                </a>
             </div>
             ${commonModules}
             <div class="nav-section">
                 <div class="nav-section-title">Settings</div>
+                <a href="/settings/profile" class="nav-item" data-path="/settings/profile">
+                    <i class="ti ti-user"></i>
+                    <span>Profile</span>
+                </a>
                 <a href="/settings" class="nav-item" data-path="/settings">
                     <i class="ti ti-settings"></i>
                     <span>Settings</span>
@@ -481,14 +487,13 @@
         } else if (role === 'employee') {
             return `
             <div class="nav-section">
-                
                 <a href="/dashboard/employee" class="nav-item" data-path="/dashboard/employee">
                     <i class="ti ti-dashboard"></i>
-                    <span>Overview</span>
+                    <span>Dashboard</span>
                 </a>
             </div>
             <div class="nav-section">
-                <div class="nav-section-title">Client Management</div>
+                <div class="nav-section-title">My Work</div>
                 <a href="/modules/project-planner" class="nav-item" data-path="/modules/project-planner">
                     <i class="ti ti-wand"></i>
                     <span>AI Project Planner</span>
@@ -498,16 +503,13 @@
                     <i class="ti ti-briefcase"></i>
                     <span>My Clients</span>
                 </a>
-                <a href="/admin/chatbot" class="nav-item" data-path="/admin/chatbot">
-                    <i class="ti ti-help-circle"></i>
-                    <span>AI Assistant</span>
-                </a>
-            </div>
-            <div class="nav-section">
-                <div class="nav-section-title">Work</div>
                 <a href="/tasks" class="nav-item" data-path="/tasks">
                     <i class="ti ti-checklist"></i>
                     <span>My Tasks</span>
+                </a>
+                <a href="/admin/chatbot" class="nav-item" data-path="/admin/chatbot">
+                    <i class="ti ti-help-circle"></i>
+                    <span>AI Assistant</span>
                 </a>
             </div>
             ${commonModules}
@@ -520,10 +522,9 @@
             </div>
         `;
         } else {
-            // Client navigation - NO AI Project Planner
+            // Client navigation
             return `
             <div class="nav-section">
-                
                 <a href="/dashboard/client" class="nav-item" data-path="/dashboard/client">
                     <i class="ti ti-dashboard"></i>
                     <span>Overview</span>
@@ -545,22 +546,23 @@
                 </a>
             </div>
             <div class="nav-section">
-                <div class="nav-section-title">Performance</div>
+                <div class="nav-section-title">Campaigns</div>
                 <a href="/campaigns" class="nav-item" data-path="/campaigns">
-                    <i class="ti ti-ad"></i>
-                    <span>Campaigns</span>
+                    <i class="ti ti-speakerphone"></i>
+                    <span>My Campaigns</span>
                 </a>
             </div>
             <div class="nav-section">
-                <div class="nav-section-title">Account</div>
-                <a href="/settings/profile" class="nav-item" data-path="/settings/profile">
-                    <i class="ti ti-user"></i>
-                    <span>Profile</span>
+                <div class="nav-section-title">Support</div>
+                <a href="/admin/chatbot" class="nav-item" data-path="/admin/chatbot">
+                    <i class="ti ti-help-circle"></i>
+                    <span>Help & Support</span>
                 </a>
             </div>
         `;
         }
     }
+
 
     function setActiveNavItem() {
         const currentPath = window.location.pathname;
@@ -613,6 +615,58 @@
         }
     });
 
+
+
+
+    // Add this function in the sidebar.html <script> section
+
+    // Function to load and display unread message count
+    async function loadUnreadMessageCount() {
+        try {
+            const token = localStorage.getItem('access_token');
+            if (!token) return;
+
+            const response = await fetch(`${APP_CONFIG.apiBaseUrl || '/api/v1'}/client-pages/messages/unread-count`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                updateMessageBadge(data.unread_count || 0);
+            }
+        } catch (error) {
+            console.error('Error loading unread count:', error);
+        }
+    }
+
+    // Function to update the message badge
+    function updateMessageBadge(count) {
+        const messagesLink = document.querySelector('.nav-item[data-path="/messages"]');
+        if (!messagesLink) return;
+
+        // Remove existing badge if present
+        const existingBadge = messagesLink.querySelector('.nav-item-badge');
+        if (existingBadge) {
+            existingBadge.remove();
+        }
+
+        // Add new badge if count > 0
+        if (count > 0) {
+            const badge = document.createElement('span');
+            badge.className = 'nav-item-badge';
+            badge.textContent = count > 99 ? '99+' : count;
+            messagesLink.appendChild(badge);
+        }
+    }
+
+    // Poll for unread messages every 30 seconds
+    document.addEventListener('DOMContentLoaded', function () {
+        // Load initial count
+        loadUnreadMessageCount();
+
+        // Set up polling
+        setInterval(loadUnreadMessageCount, 30000); // Poll every 30 seconds
+    });
 
 
 </script>
