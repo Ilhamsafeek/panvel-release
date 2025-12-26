@@ -110,6 +110,8 @@ async def create_package(
     cursor = None
     
     try:
+        print(f"📦 Creating package with data: {package.dict()}")
+        
         connection = get_db_connection()
         cursor = connection.cursor()
         
@@ -125,49 +127,57 @@ async def create_package(
                 detail="Package with this name already exists"
             )
         
-        # Insert package
-        query = """
-            INSERT INTO packages 
-            (package_name, package_tier, description, price, billing_cycle, features, is_active)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """
+        # Convert features to JSON string
+        features_json = json.dumps(package.features)
         
-        cursor.execute(query, (
+        # Insert package
+        cursor.execute("""
+            INSERT INTO packages (
+                package_name, package_tier, description, price,
+                billing_cycle, features, is_active
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (
             package.package_name,
             package.package_tier,
             package.description,
             package.price,
             package.billing_cycle,
-            json.dumps(package.features),
+            features_json,
             package.is_active
         ))
         
         connection.commit()
         package_id = cursor.lastrowid
         
+        print(f"✅ Package created successfully with ID: {package_id}")
+        
         return {
             "status": "success",
             "message": "Package created successfully",
             "package_id": package_id
         }
-    
+        
     except HTTPException:
+        if connection:
+            connection.rollback()
         raise
     except Exception as e:
         if connection:
             connection.rollback()
-        print(f"❌ Error: {str(e)}")
+        print(f"❌ Error creating package: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create package: {str(e)}"
         )
-    
     finally:
         if cursor:
             cursor.close()
         if connection:
             connection.close()
 
+            
 
 @router.put("/{package_id}", summary="Update package (admin)")
 async def update_package(

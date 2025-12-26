@@ -501,6 +501,34 @@
     .modal-actions {
         padding: 30px;
     }
+
+
+    .btn-action.btn-warning {
+        color: #d97706;
+        border-color: #d97706;
+    }
+
+    .btn-action.btn-warning:hover {
+        background: #fef3c7;
+    }
+
+    .btn-action.btn-success {
+        color: #059669;
+        border-color: #059669;
+    }
+
+    .btn-action.btn-success:hover {
+        background: #d1fae5;
+    }
+
+    .btn-action.btn-danger {
+        color: #dc2626;
+        border-color: #dc2626;
+    }
+
+    .btn-action.btn-danger:hover {
+        background: #fee2e2;
+    }
 </style>
 
 
@@ -519,7 +547,7 @@
         </div>
         <div class="header-actions">
             <!-- <button class="btn-secondary" onclick="loadAnalytics()"> -->
-                <!-- <i class="ti ti-chart-bar"></i>
+            <!-- <i class="ti ti-chart-bar"></i>
                 Analytics
             </button> -->
             <button class="btn-primary" onclick="openCreateCampaignModal()">
@@ -1976,18 +2004,16 @@ jane@example.com"></textarea>
                                 <i class="ti ti-calendar"></i> ${formatDate(campaign.created_at)}
                             </p>
                         </div>
-                        <div class="campaign-status">
-                            <span class="status-badge status-${campaign.status}">${campaign.status}</span>
-                        </div>
+                        <span class="status-badge status-${campaign.status}">${campaign.status}</span>
                     </div>
                     <div class="campaign-stats">
                         <div class="stat-item">
-                            <div class="stat-value">${campaign.total_recipients}</div>
+                            <div class="stat-value">${campaign.total_recipients || 0}</div>
                             <div class="stat-label">Recipients</div>
                         </div>
                         <div class="stat-item">
-                            <div class="stat-value">${campaign.delivered_count}</div>
-                            <div class="stat-label">Delivered</div>
+                            <div class="stat-value">${campaign.sent_count || 0}</div>
+                            <div class="stat-label">Sent</div>
                         </div>
                         <div class="stat-item">
                             <div class="stat-value">${campaign.total_recipients > 0 ? Math.round((campaign.delivered_count / campaign.total_recipients) * 100) : 0}%</div>
@@ -1995,14 +2021,27 @@ jane@example.com"></textarea>
                         </div>
                     </div>
                     <div class="campaign-actions">
-                        <button class="btn-action" onclick="viewCampaign('whatsapp', ${campaign.campaign_id})">
+                        <button class="btn-action" onclick="viewCampaign('whatsapp', ${campaign.campaign_id})" title="View Details">
                             <i class="ti ti-eye"></i> View
                         </button>
                         ${campaign.status === 'draft' ? `
-                            <button class="btn-action" onclick="editCampaign('whatsapp', ${campaign.campaign_id})">
+                            <button class="btn-action" onclick="editCampaign('whatsapp', ${campaign.campaign_id})" title="Edit Campaign">
                                 <i class="ti ti-edit"></i> Edit
                             </button>
                         ` : ''}
+                        ${campaign.status === 'active' || campaign.status === 'scheduled' ? `
+                            <button class="btn-action btn-warning" onclick="pauseCampaign('whatsapp', ${campaign.campaign_id})" title="Pause Campaign">
+                                <i class="ti ti-player-pause"></i> Pause
+                            </button>
+                        ` : ''}
+                        ${campaign.status === 'paused' ? `
+                            <button class="btn-action btn-success" onclick="resumeCampaign('whatsapp', ${campaign.campaign_id})" title="Resume Campaign">
+                                <i class="ti ti-player-play"></i> Resume
+                            </button>
+                        ` : ''}
+                        <button class="btn-action btn-danger" onclick="deleteCampaign('whatsapp', ${campaign.campaign_id})" title="Delete Campaign">
+                            <i class="ti ti-trash"></i> Delete
+                        </button>
                     </div>
                 </div>
             `).join('');
@@ -2012,7 +2051,6 @@ jane@example.com"></textarea>
                     <i class="ti ti-brand-whatsapp"></i>
                     <h3>No WhatsApp Campaigns Yet</h3>
                     <p>Create your first WhatsApp campaign to engage with your audience</p>
-                    
                 </div>
             `;
             }
@@ -2021,6 +2059,121 @@ jane@example.com"></textarea>
             container.innerHTML = '<div class="error-state">Failed to load campaigns</div>';
         }
     }
+
+
+    // =====================================================
+    // CAMPAIGN MANAGEMENT ACTIONS
+    // =====================================================
+
+    async function pauseCampaign(type, id) {
+        if (!confirm('Are you sure you want to pause this campaign?')) {
+            return;
+        }
+
+        try {
+            const token = localStorage.getItem('access_token');
+            const endpoint = type === 'whatsapp'
+                ? `${API_BASE}/whatsapp/campaigns/${id}/pause`
+                : `${API_BASE}/email/campaigns/${id}/pause`;
+
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showNotification('Campaign paused successfully', 'success');
+                if (type === 'whatsapp') {
+                    loadWhatsAppCampaigns();
+                } else {
+                    loadEmailCampaigns();
+                }
+            } else {
+                showNotification(result.detail || 'Failed to pause campaign', 'error');
+            }
+        } catch (error) {
+            console.error('Error pausing campaign:', error);
+            showNotification('An error occurred while pausing campaign', 'error');
+        }
+    }
+
+    async function resumeCampaign(type, id) {
+        if (!confirm('Are you sure you want to resume this campaign?')) {
+            return;
+        }
+
+        try {
+            const token = localStorage.getItem('access_token');
+            const endpoint = type === 'whatsapp'
+                ? `${API_BASE}/whatsapp/campaigns/${id}/resume`
+                : `${API_BASE}/email/campaigns/${id}/resume`;
+
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showNotification('Campaign resumed successfully', 'success');
+                if (type === 'whatsapp') {
+                    loadWhatsAppCampaigns();
+                } else {
+                    loadEmailCampaigns();
+                }
+            } else {
+                showNotification(result.detail || 'Failed to resume campaign', 'error');
+            }
+        } catch (error) {
+            console.error('Error resuming campaign:', error);
+            showNotification('An error occurred while resuming campaign', 'error');
+        }
+    }
+
+    async function deleteCampaign(type, id) {
+        if (!confirm('⚠️ WARNING: This will permanently delete this campaign.\n\nThis action CANNOT be undone!\n\nAre you absolutely sure?')) {
+            return;
+        }
+
+        try {
+            const token = localStorage.getItem('access_token');
+            const endpoint = type === 'whatsapp'
+                ? `${API_BASE}/whatsapp/campaigns/${id}`
+                : `${API_BASE}/email/campaigns/${id}`;
+
+            const response = await fetch(endpoint, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showNotification('Campaign deleted successfully', 'success');
+                if (type === 'whatsapp') {
+                    loadWhatsAppCampaigns();
+                } else {
+                    loadEmailCampaigns();
+                }
+                loadAnalytics();
+            } else {
+                showNotification(result.detail || 'Failed to delete campaign', 'error');
+            }
+        } catch (error) {
+            console.error('Error deleting campaign:', error);
+            showNotification('An error occurred while deleting campaign', 'error');
+        }
+    }
+
 
     // =====================================================
     // EMAIL CAMPAIGNS
@@ -3338,12 +3491,12 @@ jane@example.com"></textarea>
 
 
     // Create Action Node with Pre-populated Data
-function createActionNodeWithData(nodeId, type, config, data) {
-    const resourceValue = data.resource || data.template || '';
-    const templateValue = data.template || '';
-    const delayValue = data.delay || '0';
-    
-    return `
+    function createActionNodeWithData(nodeId, type, config, data) {
+        const resourceValue = data.resource || data.template || '';
+        const templateValue = data.template || '';
+        const delayValue = data.delay || '0';
+
+        return `
         <div class="flow-action-node ${config.class}" id="${nodeId}" data-type="${type}">
             <div class="node-icon"><i class="ti ${config.icon}"></i></div>
             <div class="node-content">
@@ -3376,14 +3529,14 @@ function createActionNodeWithData(nodeId, type, config, data) {
             </div>
         </div>
     `;
-}
+    }
 
-// Create Condition Node with Pre-populated Data
-function createConditionNodeWithData(nodeId, config, data) {
-    const condField = data.condition?.field || '';
-    const condValue = data.condition?.value || '';
-    
-    return `
+    // Create Condition Node with Pre-populated Data
+    function createConditionNodeWithData(nodeId, config, data) {
+        const condField = data.condition?.field || '';
+        const condValue = data.condition?.value || '';
+
+        return `
         <div class="flow-action-node ${config.class}" id="${nodeId}" data-type="condition">
             <div class="node-icon"><i class="ti ${config.icon}"></i></div>
             <div class="node-content">
@@ -3419,13 +3572,13 @@ function createConditionNodeWithData(nodeId, config, data) {
             </div>
         </div>
     `;
-}
+    }
 
-// Create Wait Node with Pre-populated Data
-function createWaitNodeWithData(nodeId, config, data) {
-    const duration = data.duration || '1_day';
-    
-    return `
+    // Create Wait Node with Pre-populated Data
+    function createWaitNodeWithData(nodeId, config, data) {
+        const duration = data.duration || '1_day';
+
+        return `
         <div class="flow-action-node ${config.class}" id="${nodeId}" data-type="wait">
             <div class="node-icon"><i class="ti ${config.icon}"></i></div>
             <div class="node-content">
@@ -3448,7 +3601,7 @@ function createWaitNodeWithData(nodeId, config, data) {
             </div>
         </div>
     `;
-}
+    }
 
     // Helper Functions
     function getActionIconClass(actionType) {

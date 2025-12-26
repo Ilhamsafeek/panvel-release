@@ -891,53 +891,19 @@
                     throw new Error(registerData.detail || 'Registration failed');
                 }
 
-                console.log(' Registration successful!');
+                console.log('✅ Registration successful!');
                 console.log('User ID:', registerData.user_id);
 
-                // Step 2: Automatically log in the user
-                console.log('🔐 Auto-login starting...');
+                // Step 2: OTP Verification Flow
+                console.log('📧 OTP sent! Redirecting to verification...');
 
-                const loginResponse = await fetch(`${APP_CONFIG.apiBaseUrl}/auth/login`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        email: email,
-                        password: password
-                    })
-                });
+                // Show success message
+                showAlert('Registration successful! Please verify your email.', 'success');
 
-                const loginData = await loginResponse.json();
-
-                if (!loginResponse.ok) {
-                    // Registration succeeded but login failed
-                    console.warn('⚠️ Auto-login failed, redirecting to login page');
-                    showAlert('Account created successfully! Please login.', 'success');
-                    setTimeout(() => {
-                        window.location.href = '/auth/login';
-                    }, 2000);
-                    return;
-                }
-
-                console.log(' Auto-login successful!');
-
-                // Step 3: Store the access token
-                if (loginData.access_token) {
-                    localStorage.setItem('access_token', loginData.access_token);
-                    console.log(' Token stored in localStorage');
-                    console.log('Token preview:', loginData.access_token.substring(0, 30) + '...');
-                } else {
-                    throw new Error('No access token received');
-                }
-
-                // Step 4: Show success message and redirect
-                showAlert('Account created successfully! Redirecting to package selection...', 'success');
-
-                console.log('🎉 Registration complete! Redirecting...');
-
+                // Step 3: Redirect to OTP verification page
                 setTimeout(() => {
-                    window.location.href = '/onboarding/select-package';
+                    // Redirect to OTP verification with email
+                    window.location.href = `/auth/verify-dual-otp?email=${encodeURIComponent(email)}&phone=${encodeURIComponent(fullPhone)}`;
                 }, 1500);
 
             } catch (error) {

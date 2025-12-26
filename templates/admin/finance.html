@@ -738,92 +738,116 @@
     }
 
     function setQuickPeriod(period) {
-        const today = new Date();
-        let startDate, endDate = today;
+    const today = new Date();
+    let startDate, endDate = new Date(today); // Clone today
 
-        // Remove active class from all buttons
-        document.querySelectorAll('.quick-period-btn').forEach(btn => btn.classList.remove('active'));
-        event.target.classList.add('active');
+    // Remove active class from all buttons
+    document.querySelectorAll('.quick-period-btn').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
 
-        switch (period) {
-            case 'today':
-                startDate = today;
-                break;
-            case 'this_month':
-                startDate = new Date(today.getFullYear(), today.getMonth(), 1);
-                break;
-            case 'last_month':
-                startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-                endDate = new Date(today.getFullYear(), today.getMonth(), 0);
-                break;
-            case 'this_quarter':
-                const quarter = Math.floor(today.getMonth() / 3);
-                startDate = new Date(today.getFullYear(), quarter * 3, 1);
-                break;
-            case 'this_year':
-                startDate = new Date(today.getFullYear(), 0, 1);
-                break;
-        }
-
-        document.getElementById('startDate').valueAsDate = startDate;
-        document.getElementById('endDate').valueAsDate = endDate;
-        loadProfitLoss();
+    switch (period) {
+        case 'today':
+            startDate = new Date(today);
+            endDate = new Date(today);
+            break;
+        case 'this_month':
+            startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+            endDate = new Date(today);
+            break;
+        case 'last_month':
+            startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+            endDate = new Date(today.getFullYear(), today.getMonth(), 0);
+            break;
+        case 'this_quarter':
+            const quarter = Math.floor(today.getMonth() / 3);
+            startDate = new Date(today.getFullYear(), quarter * 3, 1);
+            endDate = new Date(today);
+            break;
+        case 'this_year':
+            startDate = new Date(today.getFullYear(), 0, 1);
+            endDate = new Date(today);
+            break;
     }
 
-    async function loadProfitLoss() {
-        const token = localStorage.getItem('access_token');
-        if (!token) {
-            console.error('No access token found');
-            window.location.href = '/auth/login';
-            return;
-        }
+    // Format dates as YYYY-MM-DD for the input fields
+    const formatDate = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
 
-        try {
-            console.log('Loading P&L data...');
+    document.getElementById('startDate').value = formatDate(startDate);
+    document.getElementById('endDate').value = formatDate(endDate);
+    
+    // NOW reload the P&L data with the new dates
+    loadProfitLoss();
+}
 
-            const response = await fetch(`${APP_CONFIG.apiBaseUrl}/finance/profit-loss`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
 
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-            console.log('P&L data received:', data);
-
-            // Update summary cards
-            document.getElementById('totalRevenue').textContent = `₹${(data.revenue?.total_revenue || 0).toLocaleString()}`;
-            document.getElementById('totalExpenses').textContent = `₹${(data.expenses?.total_expenses || 0).toLocaleString()}`;
-            document.getElementById('netProfit').textContent = `₹${(data.profit?.net_profit || 0).toLocaleString()}`;
-            document.getElementById('profitMargin').textContent = `${(data.profit?.profit_margin || 0).toFixed(1)}%`;
-
-            // Update revenue breakdown
-            if (data.revenue?.revenue_by_tier) {
-                renderRevenueBreakdown(data.revenue.revenue_by_tier, data.revenue.total_revenue);
-            }
-
-            // Update expense breakdown
-            if (data.expenses?.by_category) {
-                renderExpenseBreakdown(data.expenses.by_category, data.expenses.total_expenses);
-            }
-
-            // Update trend chart - ALWAYS render even with empty data
-            renderTrendChart(data.monthly_trend || []);
-
-        } catch (error) {
-            console.error('Error loading P&L:', error);
-
-            // Show error but still render chart with sample data
-            alert('Note: Using sample data for demonstration. ' + error.message);
-
-            // Render chart with sample data anyway
-            renderTrendChart([]);
-        }
+   async function loadProfitLoss() {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+        console.error('No access token found');
+        window.location.href = '/auth/login';
+        return;
     }
 
+    try {
+        console.log('Loading P&L data...');
+
+        // READ the date inputs and format them properly
+        const startDateInput = document.getElementById('startDate').value;
+        const endDateInput = document.getElementById('endDate').value;
+
+        // Build query parameters with dates
+        const params = new URLSearchParams();
+        if (startDateInput) {
+            params.append('start_date', startDateInput);
+        }
+        if (endDateInput) {
+            params.append('end_date', endDateInput);
+        }
+
+        console.log('Date range:', startDateInput, 'to', endDateInput);
+
+        const response = await fetch(`${APP_CONFIG.apiBaseUrl}/finance/profit-loss?${params.toString()}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('P&L data received:', data);
+
+        // Update summary cards
+        document.getElementById('totalRevenue').textContent = `₹${(data.revenue?.total_revenue || 0).toLocaleString()}`;
+        document.getElementById('totalExpenses').textContent = `₹${(data.expenses?.total_expenses || 0).toLocaleString()}`;
+        document.getElementById('netProfit').textContent = `₹${(data.profit?.net_profit || 0).toLocaleString()}`;
+        document.getElementById('profitMargin').textContent = `${(data.profit?.profit_margin || 0).toFixed(1)}%`;
+
+        // Update revenue breakdown
+        if (data.revenue?.revenue_by_tier) {
+            renderRevenueBreakdown(data.revenue.revenue_by_tier, data.revenue.total_revenue);
+        }
+
+        // Update expense breakdown
+        if (data.expenses?.by_category) {
+            renderExpenseBreakdown(data.expenses.by_category, data.expenses.total_expenses);
+        }
+
+        // Update trend chart - ALWAYS render
+        renderTrendChart(data.monthly_trend || []);
+
+    } catch (error) {
+        console.error('Error loading P&L:', error);
+        alert('Error loading P&L data: ' + error.message);
+    }
+}
     function renderRevenueBreakdown(tiers, totalRevenue) {
         const container = document.getElementById('revenueBreakdown');
 

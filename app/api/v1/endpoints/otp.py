@@ -46,11 +46,20 @@ async def send_otp(request: OTPRequest, req: Request):
     """
     Send OTP to phone or email
     """
+    # Handle proxy IP addresses
+    ip_address = req.client.host if req.client else "unknown"
+    
+    # Check for real IP behind proxy
+    if 'x-forwarded-for' in req.headers:
+        ip_address = req.headers['x-forwarded-for'].split(',')[0].strip()
+    elif 'x-real-ip' in req.headers:
+        ip_address = req.headers['x-real-ip']
+    
     result = otp_service.create_otp(
         identifier=request.identifier,
         identifier_type=request.identifier_type,
         purpose=request.purpose,
-        ip_address=req.client.host
+        ip_address=ip_address
     )
     
     if result['success']:

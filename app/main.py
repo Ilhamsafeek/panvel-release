@@ -1140,6 +1140,18 @@ async def get_pending_tasks(
             connection.close()
 
 
+@app.get("/auth/verify-dual-otp", response_class=HTMLResponse)
+async def verify_dual_otp_page(request: Request):
+    """Dual OTP Verification page (Email + Phone)"""
+    return templates.TemplateResponse(
+        "auth/verify-dual-otp.html",
+        {
+            "request": request,
+            "hide_navbar": True,
+            "hide_footer": True
+        }
+    )
+
 # ========== HEALTH CHECK ==========
 
 @app.get("/health")

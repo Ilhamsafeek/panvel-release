@@ -52,6 +52,8 @@ class PermissionRevoke(BaseModel):
     user_id: int
     permission_ids: List[int]
 
+class SuspendRequest(BaseModel):
+    suspend: bool
 
 # ========== HELPER FUNCTIONS ==========
 
@@ -641,7 +643,7 @@ async def change_user_password(
 @router.post("/users/{user_id}/suspend", summary="Suspend/Unsuspend user")
 async def toggle_user_suspension(
     user_id: int,
-    suspend: bool,
+    suspend_request: SuspendRequest,
     request: Request,
     current_user: dict = Depends(require_admin)
 ):
@@ -660,6 +662,8 @@ async def toggle_user_suspension(
                 detail="Cannot suspend your own account"
             )
         
+        # Get the suspend value from the request body
+        suspend = suspend_request.suspend
         new_status = 'suspended' if suspend else 'active'
         
         cursor.execute("""
@@ -669,7 +673,10 @@ async def toggle_user_suspension(
         """, (new_status, user_id))
         
         if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="User not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
         
         connection.commit()
         
@@ -677,7 +684,7 @@ async def toggle_user_suspension(
         log_audit(
             cursor, connection, current_user['user_id'],
             'user_suspended' if suspend else 'user_unsuspended',
-            {},
+            {'user_id': user_id, 'new_status': new_status},
             target_user_id=user_id,
             ip_address=request.client.host
         )
@@ -694,6 +701,7 @@ async def toggle_user_suspension(
     except Exception as e:
         if connection:
             connection.rollback()
+        print(f"Error updating user status: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update user status: {str(e)}"
@@ -703,7 +711,7 @@ async def toggle_user_suspension(
             cursor.close()
         if connection:
             connection.close()
-
+            
 
 # ========== ACCESS CONTROL ENDPOINTS ==========
 

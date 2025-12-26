@@ -131,17 +131,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
 
 # ========== API ENDPOINTS ==========
-
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register(user: UserCreate):
-    """
-    Register a new user
-    
-    - **email**: Valid email address
-    - **password**: Minimum 8 characters
-    - **full_name**: User's full name
-    - **phone**: Optional phone number
-    """
+    """Register a new user and send OTP verification"""
     
     connection = None
     cursor = None
@@ -152,9 +144,7 @@ async def register(user: UserCreate):
         
         # Check if user already exists
         cursor.execute("SELECT * FROM users WHERE email = %s", (user.email,))
-        existing_user = cursor.fetchone()
-        
-        if existing_user:
+        if cursor.fetchone():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email already registered"
@@ -163,40 +153,46 @@ async def register(user: UserCreate):
         # Hash password
         hashed_password = get_password_hash(user.password)
         
-        # Insert new user (let MySQL handle timestamps)
-        insert_query = """
-            INSERT INTO users (email, password_hash, full_name, phone, role, status)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        """
-        cursor.execute(insert_query, (
-            user.email,
-            hashed_password,
-            user.full_name,
-            user.phone,
-            'client',
-            'active'
-        ))
+        # Insert new user with pending status
+        cursor.execute("""
+            INSERT INTO users (email, password_hash, full_name, phone, role, status, email_verified, phone_verified)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """, (user.email, hashed_password, user.full_name, user.phone, 'client', 'pending', False, False))
         
         connection.commit()
         user_id = cursor.lastrowid
-
-        cursor.execute("""
-            UPDATE users SET status = 'pending', email_verified = FALSE 
-            WHERE user_id = %s
-        """, (user_id,))
-
-        otp_service = OTPService()
-        otp_service.generate_and_send_otp(email=user.email, purpose='email_verification')
-                
+        
+        # Import OTP service
+        from app.services.otp_service import otp_service
+        
+        # Send Email OTP
+        email_otp_result = otp_service.create_otp(
+            identifier=user.email,
+            identifier_type='email',
+            purpose='email_verification',
+            user_id=user_id
+        )
+        
+        # Send Phone OTP if phone provided
+        phone_otp_result = None
+        if user.phone:
+            phone_otp_result = otp_service.create_otp(
+                identifier=user.phone,
+                identifier_type='phone',
+                purpose='phone_verification',
+                user_id=user_id
+            )
+        
         return {
             "user_id": user_id,
             "email": user.email,
             "full_name": user.full_name,
             "phone": user.phone,
-            "role": "client",
-            "status": "pending"
+            "role": 'client',
+            "status": 'pending',
+            "message": f"Registration successful! OTP sent to email{' and phone' if user.phone else ''}."
         }
-    
+        
     except HTTPException:
         raise
     except Exception as e:
@@ -204,21 +200,21 @@ async def register(user: UserCreate):
             connection.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create user: {str(e)}"
+            detail=f"Registration failed: {str(e)}"
         )
     finally:
         if cursor:
             cursor.close()
         if connection:
             connection.close()
-
+            
 @router.post("/login", response_model=Token)
 async def login(user_credentials: UserLogin):
     """
     Login with email and password
     
     Returns JWT access token and user information
-    ⚠️ Users with status='pending' cannot login
+    ⚠️ Suspends account after 4 invalid login attempts
     """
     
     connection = None
@@ -242,13 +238,92 @@ async def login(user_credentials: UserLogin):
         
         # Verify password
         if not verify_password(user_credentials.password, user['password_hash']):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid email or password",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+            # ========== FAILED LOGIN ATTEMPT ==========
+            current_attempts = user.get('failed_login_attempts', 0) + 1
+            
+            # Update failed attempts FIRST
+            cursor.execute("""
+                UPDATE users 
+                SET failed_login_attempts = %s,
+                    last_failed_attempt = NOW()
+                WHERE user_id = %s
+            """, (current_attempts, user['user_id']))
+            
+            # Check if threshold reached (4 attempts)
+            if current_attempts >= 4:
+                # Suspend user account
+                cursor.execute("""
+                    UPDATE users 
+                    SET status = 'suspended'
+                    WHERE user_id = %s
+                """, (user['user_id'],))
+                
+                # ⚠️ COMMIT BEFORE SENDING EMAIL/RAISING EXCEPTION
+                connection.commit()
+                
+                # Send email notification (async, don't block on failure)
+                try:
+                    from app.services.email_service import EmailService
+                    email_service = EmailService(provider="mailchimp")
+                    
+                    email_html = f"""
+                    <html>
+                    <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                        <div style="background: linear-gradient(135deg, #9926F3, #1DD8FC); padding: 20px; text-align: center;">
+                            <h1 style="color: white; margin: 0;">Account Suspended</h1>
+                        </div>
+                        <div style="padding: 30px; background: #f9f9f9;">
+                            <h2 style="color: #333;">Hello {user['full_name']},</h2>
+                            <p style="color: #666; line-height: 1.6;">
+                                Your PanvelIQ account has been temporarily suspended due to 
+                                <strong>4 invalid login attempts</strong>.
+                            </p>
+                            <p style="color: #666; line-height: 1.6;">
+                                This is a security measure to protect your account from unauthorized access.
+                            </p>
+                            <p style="color: #666; line-height: 1.6;">
+                                Please contact your administrator to unsuspend your account.
+                            </p>
+                            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
+                                <p style="color: #999; font-size: 12px;">
+                                    If you did not attempt to login, please contact support immediately.
+                                </p>
+                            </div>
+                        </div>
+                    </body>
+                    </html>
+                    """
+                    
+                    await email_service.send_email(
+                        to_email=user['email'],
+                        subject="Account Suspended - Suspicious Login Activity",
+                        html_content=email_html
+                    )
+                    print(f"✅ Suspension email sent to {user['email']}")
+                except Exception as email_error:
+                    print(f"⚠️ Failed to send suspension email: {email_error}")
+                
+                # NOW raise the exception (DB already committed)
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Account suspended due to multiple failed login attempts. Please contact administrator."
+                )
+            else:
+                # ⚠️ COMMIT BEFORE RAISING EXCEPTION
+                connection.commit()
+                
+                remaining_attempts = 4 - current_attempts
+                
+                # NOW raise the exception (DB already committed)
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail=f"Invalid email or password. {remaining_attempts} attempt(s) remaining before account suspension.",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
         
-        # ⭐ NEW: Check user status BEFORE allowing login
+        # ========== PASSWORD CORRECT - CHECK STATUS ==========
+        
+        # Check user status BEFORE allowing login
         if user['status'] == 'pending':
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -258,7 +333,7 @@ async def login(user_credentials: UserLogin):
         if user['status'] == 'suspended':
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Your account has been suspended. Please contact support."
+                detail="Your account has been suspended. Please contact administrator."
             )
         
         if user['status'] == 'inactive':
@@ -274,7 +349,19 @@ async def login(user_credentials: UserLogin):
                 detail="Your account cannot login at this time. Please contact support."
             )
         
-        # User is active, create access token
+        # ========== SUCCESSFUL LOGIN ==========
+        
+        # Reset failed login attempts
+        cursor.execute("""
+            UPDATE users 
+            SET failed_login_attempts = 0,
+                last_failed_attempt = NULL,
+                last_login = NOW()
+            WHERE user_id = %s
+        """, (user['user_id'],))
+        connection.commit()
+        
+        # Create access token
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = create_access_token(
             data={
@@ -285,10 +372,7 @@ async def login(user_credentials: UserLogin):
             expires_delta=access_token_expires
         )
         
-        # Update last login
-        update_query = "UPDATE users SET last_login = NOW() WHERE user_id = %s"
-        cursor.execute(update_query, (user['user_id'],))
-        connection.commit()
+        print(f"✅ Successful login: {user['email']}")
         
         return {
             "access_token": access_token,
@@ -304,9 +388,14 @@ async def login(user_credentials: UserLogin):
         }
     
     except HTTPException:
+        # Re-raise HTTP exceptions without rollback
+        # (DB changes already committed before exception)
         raise
     except Exception as e:
-        print(f"Login error details: {e}")
+        # Only rollback on unexpected errors
+        if connection:
+            connection.rollback()
+        print(f"❌ Login error: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(
@@ -319,6 +408,7 @@ async def login(user_credentials: UserLogin):
         if connection:
             connection.close()
             
+                     
 @router.post("/logout")
 async def logout():
     """Logout user (client-side token removal)"""

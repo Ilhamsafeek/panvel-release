@@ -127,31 +127,43 @@
     }
 
     /* Info Grid */
-    .info-grid {
+    info-grid {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
-        gap: 0.75rem;
-        margin-bottom: 1rem;
+        gap: 1rem;
+        margin: 1.5rem 0;
     }
 
     .info-item {
-        display: flex;
-        flex-direction: column;
-        gap: 0.25rem;
+        background: var(--color-gray-50);
+        padding: 1rem;
+        border-radius: 8px;
+        border-left: 3px solid var(--primary-purple);
     }
 
     .info-label {
-        font-size: 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.8125rem;
         font-weight: 600;
         color: var(--color-gray-600);
         text-transform: uppercase;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.025em;
+        margin-bottom: 0.5rem;
+    }
+
+    .info-label i {
+        font-size: 1rem;
+        color: var(--primary-purple);
     }
 
     .info-value {
-        font-size: 0.9375rem;
+        display: block;
+        font-size: 1rem;
         font-weight: 600;
         color: var(--color-gray-900);
+        word-wrap: break-word;
     }
 
     /* Details Section */
@@ -426,7 +438,7 @@
 {% block content %}
 <div class="admin-container">
     <div class="header-hero">
-        
+
         <h1>
             <i class="ti ti-user-check"></i>
             Onboarding Verifications
@@ -543,7 +555,19 @@
             const card = document.createElement('div');
             card.className = 'verification-card';
 
+            // Handle both camelCase and snake_case field names
             const vData = verification.verification_data || {};
+
+            // Extract fields with fallbacks for both naming conventions
+            const businessName = vData.businessName || vData.business_name || 'Not provided';
+            const businessType = vData.businessType || vData.business_type || 'Not provided';
+            const companySize = vData.companySize || vData.company_size || 'Not provided';
+            const websiteUrl = vData.websiteUrl || vData.website_url || null;
+            const currentBudget = vData.currentBudget || vData.current_budget || vData.monthlyBudget || vData.monthly_budget || 0;
+            const marketingGoals = vData.marketingGoals || vData.marketing_goals || null;
+            const currentChallenges = vData.currentChallenges || vData.current_challenges || null;
+            const previousMarketing = vData.previousMarketing || vData.previous_marketing || null;
+            const targetAudience = vData.targetAudience || vData.target_audience || null;
 
             card.innerHTML = `
             <div class="card-header">
@@ -553,64 +577,113 @@
                         <i class="ti ti-mail"></i>
                         ${verification.email}
                     </div>
+                    ${verification.phone ? `
+                    <div class="client-phone" style="color: var(--color-gray-600); font-size: 0.875rem; margin-top: 0.25rem;">
+                        <i class="ti ti-phone"></i>
+                        ${verification.phone}
+                    </div>
+                    ` : ''}
                 </div>
                 <div class="package-badge ${verification.package_tier || 'basic'}">
+                    <i class="ti ti-package"></i>
                     ${verification.package_tier || 'Basic'}
                 </div>
             </div>
 
             <div class="info-grid">
                 <div class="info-item">
-                    <span class="info-label">Business Name</span>
-                    <span class="info-value">${vData.business_name || 'N/A'}</span>
+                    <span class="info-label">
+                        <i class="ti ti-building"></i>
+                        Business Name
+                    </span>
+                    <span class="info-value">${businessName}</span>
                 </div>
                 <div class="info-item">
-                    <span class="info-label">Business Type</span>
-                    <span class="info-value">${vData.business_type || 'N/A'}</span>
+                    <span class="info-label">
+                        <i class="ti ti-briefcase"></i>
+                        Business Type
+                    </span>
+                    <span class="info-value">${businessType}</span>
                 </div>
                 <div class="info-item">
-                    <span class="info-label">Company Size</span>
-                    <span class="info-value">${vData.company_size || 'N/A'}</span>
+                    <span class="info-label">
+                        <i class="ti ti-users"></i>
+                        Company Size
+                    </span>
+                    <span class="info-value">${companySize}</span>
                 </div>
                 <div class="info-item">
-                    <span class="info-label">Monthly Budget</span>
-                    <span class="info-value">₹${vData.monthly_budget || 0}</span>
+                    <span class="info-label">
+                        <i class="ti ti-currency-rupee"></i>
+                        Monthly Budget
+                    </span>
+                    <span class="info-value">₹${parseFloat(currentBudget).toLocaleString('en-IN')}</span>
                 </div>
             </div>
 
-            ${vData.website_url ? `
+            ${websiteUrl ? `
             <div class="details-section">
-                <h4><i class="ti ti-world"></i>Website</h4>
+                <h4><i class="ti ti-world"></i> Website</h4>
                 <div class="details-content">
-                    <a href="${vData.website_url}" target="_blank" style="color: var(--primary-purple);">
-                        ${vData.website_url}
+                    <a href="${websiteUrl.startsWith('http') ? websiteUrl : 'https://' + websiteUrl}" 
+                       target="_blank" 
+                       style="color: var(--primary-purple); text-decoration: none;">
+                        ${websiteUrl}
+                        <i class="ti ti-external-link" style="font-size: 0.875rem; margin-left: 0.25rem;"></i>
                     </a>
                 </div>
             </div>
             ` : ''}
 
-            ${vData.marketing_goals ? `
+            ${targetAudience ? `
             <div class="details-section">
-                <h4><i class="ti ti-target"></i>Marketing Goals</h4>
-                <div class="details-content">${vData.marketing_goals}</div>
+                <h4><i class="ti ti-target"></i> Target Audience</h4>
+                <div class="details-content">${targetAudience}</div>
             </div>
             ` : ''}
 
-            ${vData.current_challenges ? `
+            ${marketingGoals ? `
             <div class="details-section">
-                <h4><i class="ti ti-alert-circle"></i>Current Challenges</h4>
-                <div class="details-content">${vData.current_challenges}</div>
+                <h4><i class="ti ti-bullseye"></i> Marketing Goals</h4>
+                <div class="details-content">${marketingGoals}</div>
             </div>
             ` : ''}
 
-            <div class="action-buttons">
-                <button class="btn btn-reject" onclick="openModal('reject', ${verification.onboarding_id})">
-                    <i class="ti ti-x"></i>
-                    Reject
-                </button>
-                <button class="btn btn-approve" onclick="openModal('approve', ${verification.onboarding_id})">
+            ${currentChallenges ? `
+            <div class="details-section">
+                <h4><i class="ti ti-alert-circle"></i> Current Challenges</h4>
+                <div class="details-content">${currentChallenges}</div>
+            </div>
+            ` : ''}
+
+            ${previousMarketing ? `
+            <div class="details-section">
+                <h4><i class="ti ti-history"></i> Previous Marketing Experience</h4>
+                <div class="details-content">${previousMarketing}</div>
+            </div>
+            ` : ''}
+
+            <div class="submission-info">
+                <small style="color: var(--color-gray-600);">
+                    <i class="ti ti-calendar"></i>
+                    Submitted: ${new Date(verification.created_at).toLocaleDateString('en-IN', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            })}
+                </small>
+            </div>
+
+            <div class="card-actions">
+                <button class="btn-approve" onclick="openVerificationModal(${verification.onboarding_id}, 'verified', '${verification.full_name}')">
                     <i class="ti ti-check"></i>
                     Approve
+                </button>
+                <button class="btn-reject" onclick="openVerificationModal(${verification.onboarding_id}, 'rejected', '${verification.full_name}')">
+                    <i class="ti ti-x"></i>
+                    Reject
                 </button>
             </div>
         `;

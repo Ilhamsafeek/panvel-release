@@ -39,7 +39,8 @@ class EmailCampaignCreate(BaseModel):
     campaign_name: str
     subject_line: str
     email_body: str
-    recipient_list: List[EmailStr]
+    segment_id: Optional[int] = None  # NEW: Accept segment_id instead of recipient_list
+    recipient_list: Optional[List[EmailStr]] = []  # Make optional
     segment_criteria: Optional[Dict[str, Any]] = {}
     schedule_type: str = "scheduled"
     scheduled_at: Optional[datetime] = None
@@ -399,6 +400,53 @@ async def create_email_campaign(
         connection = get_db_connection()
         cursor = connection.cursor()
         
+        # ===== FETCH RECIPIENTS FROM SEGMENT IF segment_id PROVIDED =====
+        recipient_list = campaign.recipient_list or []
+        
+        if campaign.segment_id:
+            # Fetch segment data including contacts
+            cursor.execute("""
+                SELECT contacts_data, estimated_size 
+                FROM audience_segments 
+                WHERE segment_id = %s
+            """, (campaign.segment_id,))
+            
+            segment = cursor.fetchone()
+            
+            if not segment:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Audience segment not found"
+                )
+            
+            # Parse contacts_data
+            contacts_data = segment['contacts_data']
+            if isinstance(contacts_data, str):
+                contacts_data = json.loads(contacts_data)
+            
+            # Extract email addresses
+            if contacts_data and isinstance(contacts_data, list):
+                recipient_list = []
+                for contact in contacts_data:
+                    # Try common email field names
+                    email = contact.get('email') or contact.get('Email') or contact.get('EMAIL')
+                    if email:
+                        recipient_list.append(email)
+                
+                print(f"✅ Extracted {len(recipient_list)} emails from segment {campaign.segment_id}")
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Segment has no contact data"
+                )
+        
+        # Validate we have recipients
+        if not recipient_list or len(recipient_list) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="No recipients found. Please select a segment or provide recipient list."
+            )
+        
         # Insert campaign
         query = """
             INSERT INTO email_campaigns 
@@ -417,8 +465,8 @@ async def create_email_campaign(
             json.dumps(campaign.segment_criteria),
             campaign.schedule_type,
             campaign.scheduled_at,
-            'draft' if campaign.schedule_type == 'scheduled' else 'sent',
-            len(campaign.recipient_list),
+            'draft' if campaign.schedule_type == 'scheduled' else 'active',
+            len(recipient_list),
             campaign.is_ab_test,
             json.dumps(campaign.ab_test_config) if campaign.ab_test_config else None
         ))
@@ -433,24 +481,17 @@ async def create_email_campaign(
                 
                 # Send bulk emails
                 result = await email_service.send_bulk_emails(
-                    recipients=campaign.recipient_list,
+                    recipients=recipient_list,
                     subject=campaign.subject_line,
-                    html_content=campaign.email_body,
-                    from_email="noreply@panveliq.com",
-                    from_name="PanvelIQ"
+                    html_content=campaign.email_body
                 )
                 
-                # Update campaign with results
+                # Update campaign status
                 cursor.execute("""
                     UPDATE email_campaigns 
-                    SET total_recipients = %s,
-                        status = %s
+                    SET sent_count = %s, status = 'sent'
                     WHERE email_campaign_id = %s
-                """, (
-                    result['successful'],
-                    'sent',
-                    campaign_id
-                ))
+                """, (result['successful'], campaign_id))
                 connection.commit()
                 
                 return {
@@ -459,23 +500,27 @@ async def create_email_campaign(
                     "campaign_id": campaign_id,
                     "status": "sent",
                     "total_sent": result['successful'],
-                    "failed": result['failed'],
-                    "details": result['details']
+                    "failed": result['failed']
                 }
                 
             except Exception as api_error:
-                # Update status to failed
+                # Update status to draft on failure
                 cursor.execute("""
                     UPDATE email_campaigns 
-                    SET status = 'failed'
+                    SET status = 'draft'
                     WHERE email_campaign_id = %s
                 """, (campaign_id,))
                 connection.commit()
                 
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Mailchimp API Error: {str(api_error)}"
-                )
+                print(f"Email API Error: {str(api_error)}")
+                # Don't fail completely, just mark as draft
+                return {
+                    "success": True,
+                    "message": "Email campaign created but sending failed. Saved as draft.",
+                    "campaign_id": campaign_id,
+                    "status": "draft",
+                    "error": str(api_error)
+                }
         
         # Scheduled campaign
         return {
@@ -483,21 +528,31 @@ async def create_email_campaign(
             "message": "Email campaign scheduled successfully",
             "campaign_id": campaign_id,
             "status": "scheduled",
+            "total_recipients": len(recipient_list),
             "scheduled_at": campaign.scheduled_at.isoformat() if campaign.scheduled_at else None
         }
     
     except HTTPException:
+        if connection:
+            connection.rollback()
         raise
     except Exception as e:
         if connection:
             connection.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Error creating email campaign: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create email campaign: {str(e)}"
+        )
     finally:
         if cursor:
             cursor.close()
         if connection:
             connection.close()
 
+            
 
 @router.post("/email/generate-copy")
 async def generate_email_copy(
@@ -1427,3 +1482,296 @@ async def test_whatsapp_send(
             "success": False,
             "error": str(e)
         }
+
+
+
+# ========== WHATSAPP CAMPAIGN CONTROL ENDPOINTS ==========
+
+@router.post("/whatsapp/campaigns/{campaign_id}/pause")
+async def pause_whatsapp_campaign(
+    campaign_id: int,
+    current_user: dict = Depends(require_admin_or_employee)
+):
+    """Pause a WhatsApp campaign"""
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # Check if campaign exists
+        cursor.execute("SELECT status FROM whatsapp_campaigns WHERE campaign_id = %s", (campaign_id,))
+        campaign = cursor.fetchone()
+        
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        
+        if campaign['status'] in ['sent', 'cancelled']:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot pause a {campaign['status']} campaign"
+            )
+        
+        # Update status to paused
+        cursor.execute("""
+            UPDATE whatsapp_campaigns 
+            SET status = 'paused' 
+            WHERE campaign_id = %s
+        """, (campaign_id,))
+        
+        connection.commit()
+        
+        return {
+            "success": True,
+            "message": "Campaign paused successfully"
+        }
+        
+    except HTTPException:
+        if connection:
+            connection.rollback()
+        raise
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        print(f"Error pausing campaign: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+@router.post("/whatsapp/campaigns/{campaign_id}/resume")
+async def resume_whatsapp_campaign(
+    campaign_id: int,
+    current_user: dict = Depends(require_admin_or_employee)
+):
+    """Resume a paused WhatsApp campaign"""
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # Check if campaign exists and is paused
+        cursor.execute("SELECT status, schedule_type FROM whatsapp_campaigns WHERE campaign_id = %s", (campaign_id,))
+        campaign = cursor.fetchone()
+        
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        
+        if campaign['status'] != 'paused':
+            raise HTTPException(
+                status_code=400,
+                detail="Only paused campaigns can be resumed"
+            )
+        
+        # Resume to appropriate status
+        new_status = 'scheduled' if campaign['schedule_type'] == 'scheduled' else 'active'
+        
+        cursor.execute("""
+            UPDATE whatsapp_campaigns 
+            SET status = %s 
+            WHERE campaign_id = %s
+        """, (new_status, campaign_id))
+        
+        connection.commit()
+        
+        return {
+            "success": True,
+            "message": "Campaign resumed successfully"
+        }
+        
+    except HTTPException:
+        if connection:
+            connection.rollback()
+        raise
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        print(f"Error resuming campaign: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+@router.delete("/whatsapp/campaigns/{campaign_id}")
+async def delete_whatsapp_campaign(
+    campaign_id: int,
+    current_user: dict = Depends(require_admin_or_employee)
+):
+    """Delete a WhatsApp campaign"""
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # Check if campaign exists
+        cursor.execute("SELECT campaign_id, status FROM whatsapp_campaigns WHERE campaign_id = %s", (campaign_id,))
+        campaign = cursor.fetchone()
+        
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        
+        # Optionally prevent deletion of sent campaigns
+        # if campaign['status'] == 'sent':
+        #     raise HTTPException(
+        #         status_code=400,
+        #         detail="Cannot delete a campaign that has already been sent"
+        #     )
+        
+        # Delete campaign
+        cursor.execute("DELETE FROM whatsapp_campaigns WHERE campaign_id = %s", (campaign_id,))
+        connection.commit()
+        
+        return {
+            "success": True,
+            "message": "Campaign deleted successfully"
+        }
+        
+    except HTTPException:
+        if connection:
+            connection.rollback()
+        raise
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        print(f"Error deleting campaign: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+# ========== EMAIL CAMPAIGN CONTROL ENDPOINTS ==========
+
+@router.post("/email/campaigns/{campaign_id}/pause")
+async def pause_email_campaign(
+    campaign_id: int,
+    current_user: dict = Depends(require_admin_or_employee)
+):
+    """Pause an email campaign"""
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        cursor.execute("SELECT status FROM email_campaigns WHERE email_campaign_id = %s", (campaign_id,))
+        campaign = cursor.fetchone()
+        
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        
+        if campaign['status'] in ['sent', 'cancelled']:
+            raise HTTPException(status_code=400, detail=f"Cannot pause a {campaign['status']} campaign")
+        
+        cursor.execute("UPDATE email_campaigns SET status = 'paused' WHERE email_campaign_id = %s", (campaign_id,))
+        connection.commit()
+        
+        return {"success": True, "message": "Campaign paused successfully"}
+        
+    except HTTPException:
+        if connection:
+            connection.rollback()
+        raise
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+@router.post("/email/campaigns/{campaign_id}/resume")
+async def resume_email_campaign(
+    campaign_id: int,
+    current_user: dict = Depends(require_admin_or_employee)
+):
+    """Resume a paused email campaign"""
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        cursor.execute("SELECT status, schedule_type FROM email_campaigns WHERE email_campaign_id = %s", (campaign_id,))
+        campaign = cursor.fetchone()
+        
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        
+        if campaign['status'] != 'paused':
+            raise HTTPException(status_code=400, detail="Only paused campaigns can be resumed")
+        
+        new_status = 'scheduled' if campaign['schedule_type'] == 'scheduled' else 'active'
+        cursor.execute("UPDATE email_campaigns SET status = %s WHERE email_campaign_id = %s", (new_status, campaign_id))
+        connection.commit()
+        
+        return {"success": True, "message": "Campaign resumed successfully"}
+        
+    except HTTPException:
+        if connection:
+            connection.rollback()
+        raise
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+@router.delete("/email/campaigns/{campaign_id}")
+async def delete_email_campaign(
+    campaign_id: int,
+    current_user: dict = Depends(require_admin_or_employee)
+):
+    """Delete an email campaign"""
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        cursor.execute("SELECT email_campaign_id FROM email_campaigns WHERE email_campaign_id = %s", (campaign_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        
+        cursor.execute("DELETE FROM email_campaigns WHERE email_campaign_id = %s", (campaign_id,))
+        connection.commit()
+        
+        return {"success": True, "message": "Campaign deleted successfully"}
+        
+    except HTTPException:
+        if connection:
+            connection.rollback()
+        raise
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()

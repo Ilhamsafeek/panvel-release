@@ -711,6 +711,7 @@
     }
 
     // Submit package
+    // Submit package
     async function submitPackage() {
         const packageId = document.getElementById('packageId').value;
         const isEdit = !!packageId;
@@ -724,15 +725,56 @@
             }
         });
 
+        // Validate required fields
+        const packageName = document.getElementById('packageName').value.trim();
+        const packageTier = document.getElementById('packageTier').value;
+        const description = document.getElementById('packageDescription').value.trim();
+        const price = parseFloat(document.getElementById('packagePrice').value);
+        const billingCycle = document.getElementById('billingCycle').value;
+
+        // Validation checks
+        if (!packageName || packageName.length < 3) {
+            alert('❌ Package name must be at least 3 characters long');
+            return;
+        }
+
+        if (!description || description.length < 10) {
+            alert('❌ Description must be at least 10 characters long');
+            return;
+        }
+
+        if (!price || price <= 0) {
+            alert('❌ Price must be greater than 0');
+            return;
+        }
+
+        if (!packageTier) {
+            alert('❌ Please select a package tier');
+            return;
+        }
+
+        if (!billingCycle) {
+            alert('❌ Please select a billing cycle');
+            return;
+        }
+
+        // If no features added, add a default one
+        if (Object.keys(features).length === 0) {
+            alert('❌ Please add at least one feature');
+            return;
+        }
+
         const packageData = {
-            package_name: document.getElementById('packageName').value,
-            package_tier: document.getElementById('packageTier').value,
-            description: document.getElementById('packageDescription').value,
-            price: parseFloat(document.getElementById('packagePrice').value),
-            billing_cycle: document.getElementById('billingCycle').value,
+            package_name: packageName,
+            package_tier: packageTier,
+            description: description,
+            price: price,
+            billing_cycle: billingCycle,
             features: features,
             is_active: document.getElementById('packageStatus').value === 'true'
         };
+
+        console.log('📤 Sending package data:', packageData);
 
         try {
             document.getElementById('btnSubmit').disabled = true;
@@ -753,22 +795,38 @@
             });
 
             const data = await response.json();
+            console.log('📥 Response:', data);
 
             if (response.ok) {
-                alert(data.message || `Package ${isEdit ? 'updated' : 'created'} successfully`);
+                alert('' + (data.message || `Package ${isEdit ? 'updated' : 'created'} successfully`));
                 closeModal();
                 loadPackages();
             } else {
-                alert(data.detail || 'Failed to save package');
+                // Show detailed error
+                if (data.detail) {
+                    if (typeof data.detail === 'string') {
+                        alert('Error: ' + data.detail);
+                    } else if (Array.isArray(data.detail)) {
+                        // Pydantic validation errors
+                        const errors = data.detail.map(err =>
+                            `${err.loc.join(' -> ')}: ${err.msg}`
+                        ).join('\n');
+                        alert('Validation Errors:\n\n' + errors);
+                        console.error('Validation errors:', data.detail);
+                    } else {
+                        alert('Error: ' + JSON.stringify(data.detail));
+                    }
+                } else {
+                    alert('Failed to save package');
+                }
             }
         } catch (error) {
             console.error('Error saving package:', error);
-            alert('Failed to save package');
+            alert('Failed to save package: ' + error.message);
         } finally {
             document.getElementById('btnSubmit').disabled = false;
         }
     }
-
     // Delete package
     // Delete package
     async function deletePackage(packageId) {

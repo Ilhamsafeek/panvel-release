@@ -88,30 +88,51 @@ class OTPService:
         finally:
             cursor.close()
             connection.close()
-    
+
     def send_sms_otp(self, phone: str, otp: str, purpose: str = 'verification') -> Dict:
         """Send OTP via SMS using Twilio"""
         try:
+            print(f"📱 [SMS OTP] Attempting to send OTP to: {phone}")
+            print(f"📱 [SMS OTP] OTP Code: {otp}")
+            print(f"📱 [SMS OTP] Twilio Config:")
+            print(f"   - Account SID: {settings.TWILIO_ACCOUNT_SID[:10]}..." if settings.TWILIO_ACCOUNT_SID else "   - Account SID: NOT SET")
+            print(f"   - Auth Token: {'SET' if settings.TWILIO_AUTH_TOKEN else 'NOT SET'}")
+            print(f"   - From Number: {settings.TWILIO_PHONE_NUMBER}")
+            
             message = self.twilio_client.messages.create(
                 body=f"Your PanvelIQ verification code is: {otp}. Valid for {self.OTP_EXPIRY_MINUTES} minutes. Do not share this code.",
                 from_=self.twilio_phone,
                 to=phone
             )
             
+            print(f"✅ [SMS OTP] SMS sent successfully. Message SID: {message.sid}")
             return {
                 'success': True,
                 'message_sid': message.sid,
                 'status': message.status
             }
+            
         except Exception as e:
+            print(f"❌ [SMS OTP] Failed to send: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return {
                 'success': False,
                 'error': str(e)
             }
-    
+            
+
     def send_email_otp(self, email: str, otp: str, purpose: str = 'verification') -> Dict:
         """Send OTP via Email"""
         try:
+            print(f"📧 [EMAIL OTP] Attempting to send OTP to: {email}")
+            print(f"📧 [EMAIL OTP] OTP Code: {otp}")
+            print(f"📧 [EMAIL OTP] SMTP Config:")
+            print(f"   - Host: {settings.SMTP_HOST}")
+            print(f"   - Port: {settings.SMTP_PORT}")
+            print(f"   - Username: {settings.SMTP_USERNAME}")
+            print(f"   - Password: {'SET' if settings.SMTP_PASSWORD else 'NOT SET'}")
+            
             msg = MIMEMultipart('alternative')
             msg['Subject'] = f'PanvelIQ Verification Code - {otp}'
             msg['From'] = settings.SMTP_FROM_EMAIL
@@ -135,15 +156,24 @@ class OTPService:
             
             msg.attach(MIMEText(html, 'html'))
             
+            print(f"📧 [EMAIL OTP] Connecting to SMTP server...")
             with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
+                print(f"📧 [EMAIL OTP] Starting TLS...")
                 server.starttls()
+                print(f"📧 [EMAIL OTP] Logging in...")
                 server.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
+                print(f"📧 [EMAIL OTP] Sending email...")
                 server.send_message(msg)
             
+            print(f"✅ [EMAIL OTP] Email sent successfully to {email}")
             return {'success': True}
+            
         except Exception as e:
+            print(f"❌ [EMAIL OTP] Failed to send: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return {'success': False, 'error': str(e)}
-    
+
     def create_otp(
         self,
         identifier: str,

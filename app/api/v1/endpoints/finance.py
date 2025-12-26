@@ -115,7 +115,6 @@ class TransactionCreate(BaseModel):
 # ============================================
 # PROFIT & LOSS ENDPOINTS
 # ============================================
-
 @router.get("/profit-loss", summary="Get Profit & Loss statement")
 async def get_profit_loss(
     start_date: Optional[str] = None,
@@ -217,24 +216,71 @@ async def get_profit_loss(
         net_profit = total_revenue - total_expenses
         profit_margin = (net_profit / total_revenue * 100) if total_revenue > 0 else 0
         
-        # ========== MONTHLY TREND ==========
+        # ========== MONTHLY TREND - FIXED TO USE DATE RANGE ==========
         
-        # Get last 6 months trend
+        # Get monthly trend for financial transactions within date range
         cursor.execute("""
             SELECT 
-                DATE_FORMAT(transaction_date, '%Y-%m') as month,
+                DATE_FORMAT(transaction_date, '%%Y-%%m') as month,
                 SUM(CASE WHEN transaction_type = 'revenue' THEN amount ELSE 0 END) as revenue,
                 SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END) as expenses
             FROM financial_transactions
-            WHERE transaction_date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
-            GROUP BY DATE_FORMAT(transaction_date, '%Y-%m')
-            ORDER BY month
-        """)
+            WHERE transaction_date BETWEEN %s AND %s
+            GROUP BY DATE_FORMAT(transaction_date, '%%Y-%%m')
+            ORDER BY month ASC
+        """, (start_date, end_date))
         monthly_trend = cursor.fetchall()
+        
+        # Get subscription revenue by month within date range
+        cursor.execute("""
+            SELECT 
+                DATE_FORMAT(cs.start_date, '%%Y-%%m') as month,
+                SUM(p.price) as subscription_revenue
+            FROM client_subscriptions cs
+            JOIN packages p ON cs.package_id = p.package_id
+            WHERE cs.status = 'active'
+            AND cs.start_date BETWEEN %s AND %s
+            GROUP BY DATE_FORMAT(cs.start_date, '%%Y-%%m')
+            ORDER BY month ASC
+        """, (start_date, end_date))
+        subscription_trend = cursor.fetchall()
+        
+        # Merge both revenue sources by month
+        trend_map = {}
+        
+        # Add transaction data
+        for row in monthly_trend:
+            month = row['month']
+            trend_map[month] = {
+                'revenue': float(row['revenue'] or 0),
+                'expenses': float(row['expenses'] or 0)
+            }
+        
+        # Add subscription revenue
+        for row in subscription_trend:
+            month = row['month']
+            if month in trend_map:
+                trend_map[month]['revenue'] += float(row['subscription_revenue'] or 0)
+            else:
+                trend_map[month] = {
+                    'revenue': float(row['subscription_revenue'] or 0),
+                    'expenses': 0
+                }
+        
+        # Convert to sorted list
+        monthly_trend_data = [
+            {
+                'month': month,
+                'revenue': round(data['revenue'], 2),
+                'expenses': round(data['expenses'], 2),
+                'profit': round(data['revenue'] - data['expenses'], 2)
+            }
+            for month, data in sorted(trend_map.items())
+        ]
         
         # ========== CLIENT METRICS ==========
         
-        # Active clients
+        # New clients in period
         cursor.execute("""
             SELECT COUNT(*) as count
             FROM client_subscriptions
@@ -243,7 +289,7 @@ async def get_profit_loss(
         """, (start_date, end_date))
         new_clients = cursor.fetchone()['count']
         
-        # Average revenue per client
+        # Total active clients
         cursor.execute("""
             SELECT COUNT(*) as count
             FROM client_subscriptions
@@ -292,15 +338,7 @@ async def get_profit_loss(
                 "total_active_clients": total_active_clients,
                 "avg_revenue_per_client": round(avg_revenue_per_client, 2)
             },
-            "monthly_trend": [
-                {
-                    "month": row['month'],
-                    "revenue": round(float(row['revenue'] or 0), 2),
-                    "expenses": round(float(row['expenses'] or 0), 2),
-                    "profit": round(float(row['revenue'] or 0) - float(row['expenses'] or 0), 2)
-                }
-                for row in monthly_trend
-            ]
+            "monthly_trend": monthly_trend_data
         }
         
     except HTTPException:
@@ -316,7 +354,6 @@ async def get_profit_loss(
             cursor.close()
         if connection:
             connection.close()
-
 
 # ============================================
 # TRANSACTION MANAGEMENT

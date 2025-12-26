@@ -1,0 +1,630 @@
+{% extends "base.html" %}
+
+{% block title %}Verify Your Account - PanvelIQ{% endblock %}
+
+{% block extra_css %}
+<style>
+    .verify-container {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #9926F3, #1DD8FC);
+        padding: 20px;
+    }
+    
+    .verify-card {
+        background: white;
+        border-radius: 16px;
+        padding: 40px;
+        max-width: 600px;
+        width: 100%;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+    
+    .verify-header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+    
+    .verify-icon {
+        width: 80px;
+        height: 80px;
+        background: linear-gradient(135deg, #9926F3, #1DD8FC);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 20px;
+    }
+    
+    .verify-icon i {
+        font-size: 40px;
+        color: white;
+    }
+    
+    .verification-tabs {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 30px;
+        border-bottom: 2px solid #e0e0e0;
+    }
+    
+    .tab-btn {
+        flex: 1;
+        padding: 15px;
+        background: transparent;
+        border: none;
+        border-bottom: 3px solid transparent;
+        font-size: 16px;
+        font-weight: 600;
+        color: #666;
+        cursor: pointer;
+        transition: all 0.3s;
+        font-family: 'Gilroy', sans-serif;
+    }
+    
+    .tab-btn.active {
+        color: #9926F3;
+        border-bottom-color: #9926F3;
+    }
+    
+    .tab-btn i {
+        margin-right: 8px;
+    }
+    
+    .verification-section {
+        display: none;
+    }
+    
+    .verification-section.active {
+        display: block;
+    }
+    
+    .otp-input-group {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+        margin: 30px 0;
+    }
+    
+    .otp-input {
+        width: 50px;
+        height: 60px;
+        text-align: center;
+        font-size: 24px;
+        font-weight: 600;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        transition: all 0.3s;
+        font-family: 'Gilroy', sans-serif;
+    }
+    
+    .otp-input:focus {
+        border-color: #9926F3;
+        outline: none;
+        transform: scale(1.05);
+    }
+    
+    .otp-input.filled {
+        border-color: #1DD8FC;
+        background: #f0f9ff;
+    }
+    
+    .btn-verify {
+        width: 100%;
+        background: linear-gradient(135deg, #9926F3, #1DD8FC);
+        color: white;
+        padding: 15px;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+        font-family: 'Gilroy', sans-serif;
+    }
+    
+    .btn-verify:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 20px rgba(153, 38, 243, 0.3);
+    }
+    
+    .btn-verify:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+    
+    .btn-resend {
+        width: 100%;
+        background: transparent;
+        color: #9926F3;
+        padding: 12px;
+        border: 2px solid #9926F3;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+        margin-top: 15px;
+        font-family: 'Gilroy', sans-serif;
+    }
+    
+    .btn-resend:hover:not(:disabled) {
+        background: #9926F3;
+        color: white;
+    }
+    
+    .btn-resend:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    
+    .error-message, .success-message {
+        padding: 12px;
+        border-radius: 8px;
+        margin-bottom: 15px;
+        display: none;
+        text-align: center;
+        font-family: 'Gilroy', sans-serif;
+    }
+    
+    .error-message {
+        background: #fee;
+        border: 1px solid #fcc;
+        color: #c33;
+    }
+    
+    .success-message {
+        background: #d1fae5;
+        border: 1px solid #6ee7b7;
+        color: #065f46;
+    }
+    
+    .info-text {
+        text-align: center;
+        color: #666;
+        font-size: 14px;
+        margin-top: 20px;
+        font-family: 'Gilroy', sans-serif;
+    }
+    
+    .masked-info {
+        font-weight: 600;
+        color: #333;
+    }
+    
+    .verification-status {
+        display: flex;
+        justify-content: space-around;
+        margin-top: 30px;
+        padding: 20px;
+        background: #f9fafb;
+        border-radius: 8px;
+    }
+    
+    .status-item {
+        text-align: center;
+    }
+    
+    .status-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 10px;
+        background: #e0e0e0;
+        color: #666;
+    }
+    
+    .status-icon.verified {
+        background: #10b981;
+        color: white;
+    }
+    
+    .status-label {
+        font-size: 12px;
+        color: #666;
+        font-weight: 600;
+    }
+    
+    @keyframes rotate {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+    
+    .rotating {
+        animation: rotate 1s linear infinite;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="verify-container">
+    <div class="verify-card">
+        <div class="verify-header">
+            <div class="verify-icon">
+                <i class="ti ti-shield-check"></i>
+            </div>
+            <h2>Verify Your Account</h2>
+            <p class="info-text">Please verify both your email and phone number</p>
+        </div>
+        
+        <!-- Verification Tabs -->
+        <div class="verification-tabs">
+            <button class="tab-btn active" data-tab="email">
+                <i class="ti ti-mail"></i>
+                Email Verification
+            </button>
+            <button class="tab-btn" data-tab="phone">
+                <i class="ti ti-phone"></i>
+                Phone Verification
+            </button>
+        </div>
+        
+        <!-- Email Verification Section -->
+        <div id="email-section" class="verification-section active">
+            <p class="info-text">
+                Code sent to<br>
+                <span class="masked-info" id="maskedEmail"></span>
+            </p>
+            
+            <div id="emailError" class="error-message"></div>
+            <div id="emailSuccess" class="success-message"></div>
+            
+            <div class="otp-input-group" id="emailOtpInputs">
+                <input type="text" class="otp-input" maxlength="1" pattern="[0-9]" inputmode="numeric" autocomplete="off">
+                <input type="text" class="otp-input" maxlength="1" pattern="[0-9]" inputmode="numeric" autocomplete="off">
+                <input type="text" class="otp-input" maxlength="1" pattern="[0-9]" inputmode="numeric" autocomplete="off">
+                <input type="text" class="otp-input" maxlength="1" pattern="[0-9]" inputmode="numeric" autocomplete="off">
+                <input type="text" class="otp-input" maxlength="1" pattern="[0-9]" inputmode="numeric" autocomplete="off">
+                <input type="text" class="otp-input" maxlength="1" pattern="[0-9]" inputmode="numeric" autocomplete="off">
+            </div>
+            
+            <button id="verifyEmailBtn" class="btn-verify" disabled>
+                <i class="ti ti-check"></i> Verify Email
+            </button>
+            
+            <button id="resendEmailBtn" class="btn-resend">
+                <i class="ti ti-refresh"></i>
+                <span id="resendEmailText">Resend Code</span>
+            </button>
+        </div>
+        
+        <!-- Phone Verification Section -->
+        <div id="phone-section" class="verification-section">
+            <p class="info-text">
+                Code sent to<br>
+                <span class="masked-info" id="maskedPhone"></span>
+            </p>
+            
+            <div id="phoneError" class="error-message"></div>
+            <div id="phoneSuccess" class="success-message"></div>
+            
+            <div class="otp-input-group" id="phoneOtpInputs">
+                <input type="text" class="otp-input" maxlength="1" pattern="[0-9]" inputmode="numeric" autocomplete="off">
+                <input type="text" class="otp-input" maxlength="1" pattern="[0-9]" inputmode="numeric" autocomplete="off">
+                <input type="text" class="otp-input" maxlength="1" pattern="[0-9]" inputmode="numeric" autocomplete="off">
+                <input type="text" class="otp-input" maxlength="1" pattern="[0-9]" inputmode="numeric" autocomplete="off">
+                <input type="text" class="otp-input" maxlength="1" pattern="[0-9]" inputmode="numeric" autocomplete="off">
+                <input type="text" class="otp-input" maxlength="1" pattern="[0-9]" inputmode="numeric" autocomplete="off">
+            </div>
+            
+            <button id="verifyPhoneBtn" class="btn-verify" disabled>
+                <i class="ti ti-check"></i> Verify Phone
+            </button>
+            
+            <button id="resendPhoneBtn" class="btn-resend">
+                <i class="ti ti-refresh"></i>
+                <span id="resendPhoneText">Resend Code</span>
+            </button>
+        </div>
+        
+        <!-- Verification Status -->
+        <div class="verification-status">
+            <div class="status-item">
+                <div class="status-icon" id="emailStatusIcon">
+                    <i class="ti ti-mail"></i>
+                </div>
+                <div class="status-label">Email</div>
+            </div>
+            <div class="status-item">
+                <div class="status-icon" id="phoneStatusIcon">
+                    <i class="ti ti-phone"></i>
+                </div>
+                <div class="status-label">Phone</div>
+            </div>
+        </div>
+        
+        <p class="info-text" id="completionMessage" style="display: none; color: #10b981; font-weight: 600;">
+            ✓ Verification complete! Redirecting to login...
+        </p>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const APP_CONFIG = window.APP_CONFIG || {
+    apiBaseUrl: '/api/v1'
+};
+
+// Get data from URL
+const urlParams = new URLSearchParams(window.location.search);
+const email = urlParams.get('email') || '';
+const phone = urlParams.get('phone') || '';
+
+// Verification state
+let emailVerified = false;
+let phoneVerified = false;
+
+// Mask functions
+function maskEmail(value) {
+    return value.replace(/(.{2})(.*)(@.*)/, '$1****$3');
+}
+
+function maskPhone(value) {
+    return value.replace(/(\+\d{1,3})\d+(\d{4})/, '$1****$2');
+}
+
+document.getElementById('maskedEmail').textContent = maskEmail(email);
+document.getElementById('maskedPhone').textContent = maskPhone(phone);
+
+// Tab switching
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const tab = btn.dataset.tab;
+        
+        // Update tabs
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        
+        // Update sections
+        document.querySelectorAll('.verification-section').forEach(s => s.classList.remove('active'));
+        document.getElementById(`${tab}-section`).classList.add('active');
+    });
+});
+
+// OTP Input Handler
+function setupOtpInputs(container, verifyBtn) {
+    const inputs = container.querySelectorAll('.otp-input');
+    
+    inputs.forEach((input, index) => {
+        input.addEventListener('input', (e) => {
+            const value = e.target.value;
+            if (!/^\d$/.test(value)) {
+                e.target.value = '';
+                return;
+            }
+            e.target.classList.add('filled');
+            if (value && index < inputs.length - 1) {
+                inputs[index + 1].focus();
+            }
+            checkAllFilled(inputs, verifyBtn);
+        });
+        
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Backspace' && !e.target.value && index > 0) {
+                inputs[index - 1].focus();
+                inputs[index - 1].value = '';
+                inputs[index - 1].classList.remove('filled');
+                checkAllFilled(inputs, verifyBtn);
+            }
+        });
+        
+        input.addEventListener('paste', (e) => {
+            e.preventDefault();
+            const pastedData = e.clipboardData.getData('text').trim();
+            if (/^\d{6}$/.test(pastedData)) {
+                pastedData.split('').forEach((char, i) => {
+                    if (i < inputs.length) {
+                        inputs[i].value = char;
+                        inputs[i].classList.add('filled');
+                    }
+                });
+                checkAllFilled(inputs, verifyBtn);
+            }
+        });
+    });
+}
+
+function checkAllFilled(inputs, btn) {
+    const allFilled = Array.from(inputs).every(input => input.value !== '');
+    btn.disabled = !allFilled;
+}
+
+function getOtpCode(container) {
+    return Array.from(container.querySelectorAll('.otp-input')).map(i => i.value).join('');
+}
+
+function clearOtpInputs(container) {
+    container.querySelectorAll('.otp-input').forEach(input => {
+        input.value = '';
+        input.classList.remove('filled');
+    });
+    container.querySelector('.otp-input').focus();
+}
+
+// Setup both OTP inputs
+setupOtpInputs(document.getElementById('emailOtpInputs'), document.getElementById('verifyEmailBtn'));
+setupOtpInputs(document.getElementById('phoneOtpInputs'), document.getElementById('verifyPhoneBtn'));
+
+// Verify Email OTP
+document.getElementById('verifyEmailBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('verifyEmailBtn');
+    const otpCode = getOtpCode(document.getElementById('emailOtpInputs'));
+    
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader-2 rotating"></i> Verifying...';
+    
+    try {
+        const response = await fetch(`${APP_CONFIG.apiBaseUrl}/otp/verify`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                identifier: email,
+                otp_code: otpCode,
+                purpose: 'email_verification'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+            document.getElementById('emailSuccess').textContent = '✓ Email verified successfully! Now Verify phone number';
+            document.getElementById('emailSuccess').style.display = 'block';
+            document.getElementById('emailError').style.display = 'none';
+            document.getElementById('emailStatusIcon').classList.add('verified');
+            emailVerified = true;
+            
+            // Reset button
+            btn.innerHTML = '<i class="ti ti-check"></i> Email Verified ✓';
+            btn.style.opacity = '0.7';
+            
+            // Auto-switch to phone tab after 2 seconds
+            setTimeout(() => {
+                const phoneTab = document.querySelector('.tab-btn[data-tab="phone"]');
+                phoneTab.click();
+                
+                // Show success message
+                // alert('Email verified! Now verify your phone number.');
+            }, 2000);
+            
+            checkCompletion();
+        } else {
+            throw new Error(data.detail || 'Verification failed');
+        }
+    } catch (error) {
+        document.getElementById('emailError').textContent = error.message;
+        document.getElementById('emailError').style.display = 'block';
+        document.getElementById('emailSuccess').style.display = 'none';
+        clearOtpInputs(document.getElementById('emailOtpInputs'));
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ti ti-check"></i> Verify Email';
+    }
+});
+
+
+// Verify Phone OTP
+document.getElementById('verifyPhoneBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('verifyPhoneBtn');
+    const otpCode = getOtpCode(document.getElementById('phoneOtpInputs'));
+    
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader-2 rotating"></i> Verifying...';
+    
+    try {
+        const response = await fetch(`${APP_CONFIG.apiBaseUrl}/otp/verify`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                identifier: phone,
+                otp_code: otpCode,
+                purpose: 'phone_verification'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+            document.getElementById('phoneSuccess').textContent = '✓ Phone verified successfully!';
+            document.getElementById('phoneSuccess').style.display = 'block';
+            document.getElementById('phoneError').style.display = 'none';
+            document.getElementById('phoneStatusIcon').classList.add('verified');
+            phoneVerified = true;
+            
+            // Reset button
+            btn.innerHTML = '<i class="ti ti-check"></i> Phone Verified ✓';
+            btn.style.opacity = '0.7';
+            
+            checkCompletion();
+        } else {
+            throw new Error(data.detail || 'Verification failed');
+        }
+    } catch (error) {
+        document.getElementById('phoneError').textContent = error.message;
+        document.getElementById('phoneError').style.display = 'block';
+        document.getElementById('phoneSuccess').style.display = 'none';
+        clearOtpInputs(document.getElementById('phoneOtpInputs'));
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ti ti-check"></i> Verify Phone';
+    }
+});
+
+// Check if both verified
+function checkCompletion() {
+    if (emailVerified && phoneVerified) {
+        document.getElementById('completionMessage').style.display = 'block';
+        setTimeout(() => {
+            window.location.href = '/auth/login';
+        }, 2000);
+    }
+}
+
+// Resend Email OTP
+document.getElementById('resendEmailBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('resendEmailBtn');
+    btn.disabled = true;
+    
+    try {
+        const response = await fetch(`${APP_CONFIG.apiBaseUrl}/otp/send`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                identifier: email,
+                identifier_type: 'email',
+                purpose: 'email_verification'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+            document.getElementById('emailSuccess').textContent = '✓ New code sent!';
+            document.getElementById('emailSuccess').style.display = 'block';
+            setTimeout(() => btn.disabled = false, 90000);
+        } else {
+            throw new Error(data.detail || 'Failed to resend');
+        }
+    } catch (error) {
+        document.getElementById('emailError').textContent = error.message;
+        document.getElementById('emailError').style.display = 'block';
+        btn.disabled = false;
+    }
+});
+
+// Resend Phone OTP
+document.getElementById('resendPhoneBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('resendPhoneBtn');
+    btn.disabled = true;
+    
+    try {
+        const response = await fetch(`${APP_CONFIG.apiBaseUrl}/otp/send`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                identifier: phone,
+                identifier_type: 'phone',
+                purpose: 'phone_verification'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+            document.getElementById('phoneSuccess').textContent = '✓ New code sent!';
+            document.getElementById('phoneSuccess').style.display = 'block';
+            setTimeout(() => btn.disabled = false, 90000);
+        } else {
+            throw new Error(data.detail || 'Failed to resend');
+        }
+    } catch (error) {
+        document.getElementById('phoneError').textContent = error.message;
+        document.getElementById('phoneError').style.display = 'block';
+        btn.disabled = false;
+    }
+});
+</script>
+{% endblock %}
