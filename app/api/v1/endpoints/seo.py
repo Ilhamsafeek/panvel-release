@@ -29,6 +29,9 @@ import random
 from app.core.config import settings
 from app.core.security import get_current_user, get_db_connection
 
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+
 # OpenAI client
 try:
     from openai import OpenAI
@@ -359,66 +362,104 @@ def get_pagespeed_insights(url: str, strategy: str = "mobile") -> Dict[str, Any]
 
 
 # ========== SERP TRACKING - FIXED ==========
+def get_search_console_service():
+    """Initialize Google Search Console API service - REAL IMPLEMENTATION"""
+    try:
+        credentials_json_str = getattr(settings, 'SEARCH_CONSOLE_CREDENTIALS_JSON', None) or settings.GA4_CREDENTIALS_JSON
+        
+        if not credentials_json_str:
+            return None  # Silent fail - not configured
+        
+        credentials_json = json.loads(credentials_json_str)
+        
+        # Fix private key newlines
+        if 'private_key' in credentials_json:
+            credentials_json['private_key'] = credentials_json['private_key'].replace('\\n', '\n')
+        
+        credentials = service_account.Credentials.from_service_account_info(
+            credentials_json,
+            scopes=['https://www.googleapis.com/auth/webmasters.readonly']
+        )
+        service = build('searchconsole', 'v1', credentials=credentials)
+        return service
+        
+    except Exception:
+        # Silent fail - GSC not available, continue without it
+        return None
+
+
+
+def get_keyword_position_from_gsc(site_url: str, keyword: str) -> Optional[float]:
+    """Get actual keyword position from Google Search Console - REAL DATA ONLY"""
+    try:
+        service = get_search_console_service()
+        if not service:
+            return None  # GSC not configured
+        
+        if not site_url.startswith(('sc-domain:', 'http://', 'https://')):
+            site_url = f"https://{site_url}"
+        
+        end_date = date.today()
+        start_date = end_date - timedelta(days=7)
+        
+        request_body = {
+            'startDate': start_date.isoformat(),
+            'endDate': end_date.isoformat(),
+            'dimensions': ['query'],
+            'dimensionFilterGroups': [{
+                'filters': [{
+                    'dimension': 'query',
+                    'operator': 'equals',
+                    'expression': keyword.lower()
+                }]
+            }],
+            'rowLimit': 1
+        }
+        
+        response = service.searchanalytics().query(
+            siteUrl=site_url,
+            body=request_body
+        ).execute()
+        
+        if 'rows' in response and len(response['rows']) > 0:
+            position = response['rows'][0].get('position', None)
+            return round(position, 1) if position is not None else None
+        
+        return None
+        
+    except Exception:
+        # Silent fail - any GSC error
+        return None
+
+        
 
 async def get_keyword_position_serp(website_url: str, keyword: str) -> Dict[str, Any]:
     """
-    Get UNIQUE keyword position using AI analysis based on domain metrics.
-    Each keyword gets a UNIQUE position based on:
-    - Domain Authority
-    - Keyword competitiveness
-    - Keyword length and specificity
+    Get REAL keyword position using Google Search Console + Moz APIs
+    NO FAKE DATA - uses actual API integrations
     """
     try:
-        # Get domain authority from Moz
         clean_url = website_url.replace('http://', '').replace('https://', '').replace('www.', '')
+        
+        # 1. Get REAL position from Google Search Console
+        gsc_position = get_keyword_position_from_gsc(website_url, keyword)
+        
+        # 2. Get domain authority from Moz
         moz_data = get_moz_url_metrics(clean_url)
-        da = moz_data.get('domain_authority', 0) if moz_data.get('success') else 0
+        domain_authority = moz_data.get('domain_authority', 0) if moz_data.get('success') else 0
         
-        # Generate unique position based on keyword characteristics
-        keyword_hash = hash(keyword.lower().strip())
-        keyword_words = len(keyword.split())
+        # 3. Estimate search volume and difficulty using AI (estimation only, not position)
+        search_volume = 0
+        difficulty = 50
+        cpc = 0.0
         
-        # Base position calculation
-        if da >= 60:
-            base_range = (1, 20)
-        elif da >= 40:
-            base_range = (15, 45)
-        elif da >= 20:
-            base_range = (40, 70)
-        else:
-            base_range = (60, 100)
-        
-        # Adjust based on keyword specificity (longer keywords = easier to rank)
-        if keyword_words >= 4:
-            position_modifier = -10
-        elif keyword_words >= 3:
-            position_modifier = -5
-        elif keyword_words == 1:
-            position_modifier = 15
-        else:
-            position_modifier = 0
-        
-        # Generate unique position using keyword hash
-        random.seed(keyword_hash)
-        base_position = random.randint(base_range[0], base_range[1])
-        final_position = max(1, min(100, base_position + position_modifier))
-        
-        # Reset random seed
-        random.seed()
-        
-        # Generate search volume and difficulty using AI
         if client:
             try:
                 prompt = f"""Analyze the keyword "{keyword}" and provide realistic SEO metrics.
 Return ONLY a JSON object with:
-- search_volume: monthly search volume (integer, realistic based on keyword type)
-- difficulty: 1-100 score based on competition
+- search_volume: monthly search volume (integer)
+- difficulty: 1-100 score
 - cpc: estimated cost per click in USD
-
-Consider:
-- Generic keywords have higher volume but higher difficulty
-- Long-tail keywords have lower volume but lower difficulty
-- Commercial intent keywords have higher CPC
 
 Return ONLY valid JSON, no markdown."""
 
@@ -429,7 +470,7 @@ Return ONLY valid JSON, no markdown."""
                         {"role": "user", "content": prompt}
                     ],
                     temperature=0.7,
-                    max_tokens=200
+                    max_tokens=300
                 )
                 
                 response_text = response.choices[0].message.content.strip()
@@ -439,38 +480,39 @@ Return ONLY valid JSON, no markdown."""
                         response_text = response_text[4:]
                     response_text = response_text.strip()
                 
-                keyword_data = json.loads(response_text)
-                search_volume = keyword_data.get('search_volume', 1000)
-                difficulty = keyword_data.get('difficulty', 50)
-                cpc = keyword_data.get('cpc', 1.50)
-            except:
-                # Fallback values based on keyword characteristics
-                search_volume = max(100, 10000 - (keyword_words * 2000))
-                difficulty = max(20, min(90, 50 + (10 - keyword_words * 5)))
-                cpc = round(1.0 + (difficulty / 50), 2)
-        else:
-            search_volume = max(100, 10000 - (keyword_words * 2000))
-            difficulty = max(20, min(90, 50 + (10 - keyword_words * 5)))
-            cpc = round(1.0 + (difficulty / 50), 2)
+                metrics = json.loads(response_text)
+                search_volume = metrics.get('search_volume', 0)
+                difficulty = metrics.get('difficulty', 50)
+                cpc = metrics.get('cpc', 0.0)
+                
+            except Exception as ai_error:
+                print(f"AI estimation error: {ai_error}")
         
+        # 4. Return with transparent data sources
         return {
-            'success': True,
-            'position': final_position,
+            'position': gsc_position if gsc_position is not None else 0,
+            'position_source': 'Google Search Console' if gsc_position is not None else 'Not Found',
             'search_volume': search_volume,
+            'search_volume_source': 'AI Estimate' if search_volume > 0 else 'Unknown',
             'difficulty': difficulty,
+            'difficulty_source': 'AI Estimate',
             'cpc': cpc,
-            'domain_authority': da,
-            'source': 'moz_ai_analysis'
+            'cpc_source': 'AI Estimate' if cpc > 0 else 'Unknown',
+            'domain_authority': domain_authority,
+            'domain_authority_source': 'Moz API' if moz_data.get('success') else 'Not Available',
+            'note': 'Position from Google Search Console (actual data)' if gsc_position else 'Keyword not currently ranking in Google Search Console'
         }
         
     except Exception as e:
         return {
-            'success': False,
-            'position': 50,
-            'search_volume': 1000,
+            'position': 0,
+            'position_source': 'Error',
+            'search_volume': 0,
             'difficulty': 50,
-            'cpc': 1.50,
-            'error': str(e)
+            'cpc': 0.0,
+            'domain_authority': 0,
+            'error': str(e),
+            'note': 'Failed to fetch keyword data from APIs'
         }
 
 
