@@ -3,30 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Marketing Proposal | PanvelIQ</title>
-    
-    <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    
-    <!-- Tabler Icons -->
+    <title>Marketing Proposal - PanvelIQ</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.34.0/dist/tabler-icons.min.css">
-    
     <style>
         :root {
             --primary-gradient: linear-gradient(135deg, #9926F3 0%, #1DD8FC 100%);
-            --primary-start: #9926F3;
-            --primary-end: #1DD8FC;
-            --bg-dark: #0f0f1a;
-            --bg-card: #1a1a2e;
-            --text-primary: #ffffff;
-            --text-secondary: #a0aec0;
-            --text-muted: #6b7280;
-            --border-color: rgba(255, 255, 255, 0.1);
-            --success: #10B981;
-            --warning: #F59E0B;
-            --error: #EF4444;
+            --text-primary: #1a1a1a;
+            --text-secondary: #555;
+            --text-muted: #666;
+            --border-color: #e0e0e0;
+            --bg-light: #f8f9fa;
+            --bg-gradient-light: linear-gradient(135deg, rgba(153,38,243,0.05) 0%, rgba(29,216,252,0.05) 100%);
         }
         
         * {
@@ -36,156 +23,105 @@
         }
         
         body {
-            font-family: 'Gilroy', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background-color: var(--bg-dark);
+            font-family: 'Gilroy', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
             color: var(--text-primary);
-            min-height: 100vh;
             line-height: 1.6;
         }
         
         /* Header */
         .public-header {
-            background: var(--bg-card);
-            border-bottom: 1px solid var(--border-color);
-            padding: 20px 0;
-            position: sticky;
-            top: 0;
-            z-index: 100;
+            background: var(--primary-gradient);
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
         
         .header-content {
             max-width: 1200px;
             margin: 0 auto;
-            padding: 0 24px;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
         
         .logo {
-            font-size: 24px;
+            font-size: 28px;
             font-weight: 700;
-            background: var(--primary-gradient);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        
-        .header-info {
-            display: flex;
-            align-items: center;
-            gap: 16px;
+            color: #fff;
         }
         
         .expiry-badge {
+            background: rgba(255,255,255,0.2);
+            padding: 8px 16px;
+            border-radius: 20px;
+            color: #fff;
+            font-size: 14px;
             display: flex;
             align-items: center;
             gap: 8px;
-            background: rgba(255, 255, 255, 0.05);
-            padding: 8px 16px;
-            border-radius: 8px;
-            font-size: 13px;
-            color: var(--text-secondary);
-        }
-        
-        .expiry-badge i {
-            color: var(--primary-end);
         }
         
         /* Main Content */
         .main-content {
             max-width: 1200px;
-            margin: 0 auto;
-            padding: 40px 24px;
+            margin: 40px auto;
+            padding: 0 20px;
         }
         
-        /* Loading State */
-        .loading-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 400px;
-            gap: 20px;
+        /* Loading & Error States */
+        .loading-container, .error-container {
+            text-align: center;
+            padding: 80px 20px;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
         }
         
         .spinner {
-            width: 50px;
-            height: 50px;
-            border: 3px solid rgba(255, 255, 255, 0.1);
-            border-top-color: var(--primary-start);
+            width: 48px;
+            height: 48px;
+            border: 4px solid var(--border-color);
+            border-top-color: #9926F3;
             border-radius: 50%;
             animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
         }
         
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
         
-        /* Error State */
-        .error-container {
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 400px;
-            gap: 20px;
-            text-align: center;
-        }
-        
-        .error-icon {
-            width: 80px;
-            height: 80px;
-            background: rgba(239, 68, 68, 0.1);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
         .error-icon i {
-            font-size: 36px;
-            color: var(--error);
+            font-size: 64px;
+            color: #EF4444;
         }
         
-        .error-title {
-            font-size: 24px;
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-        
-        .error-message {
-            color: var(--text-secondary);
-            max-width: 400px;
-        }
-        
-        /* Proposal Content */
+        /* Proposal Container */
         .proposal-container {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            overflow: hidden;
             display: none;
         }
         
         /* Proposal Header */
         .proposal-header {
-            background: var(--bg-card);
-            border-radius: 16px;
-            padding: 40px;
-            margin-bottom: 30px;
-            border: 1px solid var(--border-color);
+            background: var(--primary-gradient);
+            padding: 40px 30px;
+            color: #fff;
+            text-align: center;
         }
         
         .proposal-title {
             font-size: 32px;
             font-weight: 700;
             margin-bottom: 8px;
-            background: var(--primary-gradient);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
         }
         
         .proposal-subtitle {
-            font-size: 18px;
-            color: var(--text-secondary);
+            font-size: 16px;
+            opacity: 0.95;
             margin-bottom: 30px;
         }
         
@@ -193,36 +129,37 @@
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 20px;
+            margin-top: 20px;
         }
         
         .meta-item {
-            background: rgba(255, 255, 255, 0.03);
-            padding: 16px 20px;
-            border-radius: 12px;
-            border: 1px solid var(--border-color);
+            background: rgba(255,255,255,0.15);
+            padding: 16px;
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
         }
         
         .meta-label {
             font-size: 12px;
+            opacity: 0.9;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            color: var(--text-muted);
             margin-bottom: 4px;
         }
         
         .meta-value {
-            font-size: 16px;
+            font-size: 18px;
             font-weight: 600;
-            color: var(--text-primary);
         }
         
         /* Sections */
         .proposal-section {
-            background: var(--bg-card);
-            border-radius: 16px;
-            padding: 30px;
-            margin-bottom: 24px;
-            border: 1px solid var(--border-color);
+            padding: 40px 30px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .proposal-section:last-child {
+            border-bottom: none;
         }
         
         .section-header {
@@ -230,143 +167,353 @@
             align-items: center;
             gap: 12px;
             margin-bottom: 24px;
-            padding-bottom: 16px;
-            border-bottom: 1px solid var(--border-color);
         }
         
         .section-icon {
-            width: 44px;
-            height: 44px;
+            width: 48px;
+            height: 48px;
             background: var(--primary-gradient);
             border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-        }
-        
-        .section-icon i {
-            font-size: 22px;
             color: #fff;
+            font-size: 24px;
         }
         
         .section-title {
-            font-size: 20px;
-            font-weight: 600;
+            font-size: 24px;
+            font-weight: 700;
             color: var(--text-primary);
         }
         
         .section-content {
             color: var(--text-secondary);
-            font-size: 15px;
             line-height: 1.8;
         }
         
         .section-content h3 {
             color: var(--text-primary);
-            font-size: 16px;
-            font-weight: 600;
-            margin: 20px 0 10px 0;
+            font-size: 18px;
+            margin: 24px 0 12px 0;
         }
         
         .section-content h3:first-child {
             margin-top: 0;
         }
         
+        .section-content p {
+            margin-bottom: 16px;
+            color: var(--text-secondary);
+        }
+        
         .section-content ul {
-            padding-left: 20px;
-            margin: 10px 0;
+            margin: 16px 0;
+            padding-left: 24px;
         }
         
         .section-content li {
             margin-bottom: 8px;
+            color: var(--text-secondary);
         }
         
-        /* Timeline */
+        /* Campaign Cards */
+        .campaign-card {
+            background: var(--bg-gradient-light);
+            border-left: 4px solid #9926F3;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+        }
+        
+        .campaign-card h4 {
+            color: var(--text-primary);
+            font-size: 16px;
+            margin-bottom: 8px;
+        }
+        
+        .campaign-card p {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin: 6px 0;
+        }
+        
+        .campaign-card strong {
+            color: var(--text-primary);
+        }
+        
+        /* Tool Grid */
+        .tool-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 12px;
+            margin: 20px 0;
+        }
+        
+        .tool-item {
+            background: #fff;
+            border: 1px solid var(--border-color);
+            padding: 16px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .tool-icon {
+            color: #9926F3;
+            font-size: 24px;
+        }
+        
+        .tool-name {
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+        
+        .tool-use {
+            color: var(--text-secondary);
+            font-size: 13px;
+            margin-top: 4px;
+        }
+        
+        /* Differentiator Grid */
+        .differentiator-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .differentiator-item {
+            background: var(--bg-light);
+            padding: 24px;
+            border-radius: 10px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .differentiator-item:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+        }
+        
+        .differentiator-icon {
+            width: 56px;
+            height: 56px;
+            background: var(--primary-gradient);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 28px;
+            margin-bottom: 16px;
+        }
+        
+        .differentiator-text h4 {
+            color: var(--text-primary);
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+        
+        .differentiator-text p {
+            color: var(--text-secondary);
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        
+        /* Value Proposition Cards */
+        .value-prop-grid {
+            display: grid;
+            gap: 24px;
+        }
+        
+        .value-prop-card {
+            background: var(--bg-gradient-light);
+            border-radius: 12px;
+            padding: 24px;
+            border-left: 4px solid #9926F3;
+        }
+        
+        .value-prop-card h4 {
+            color: var(--text-primary);
+            font-size: 18px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .value-prop-card p {
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }
+        
+        .value-prop-card .impact {
+            background: #fff;
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 12px;
+            border-left: 3px solid #10B981;
+        }
+        
+        .value-prop-card .impact strong {
+            color: #10B981;
+        }
+        
+        /* ROI Section */
+        .roi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 24px 0;
+        }
+        
+        .roi-metric {
+            background: var(--bg-gradient-light);
+            padding: 24px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .roi-value {
+            font-size: 32px;
+            font-weight: 700;
+            background: var(--primary-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 8px;
+        }
+        
+        .roi-label {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+        
+        /* Timeline Grid */
         .timeline-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
             gap: 16px;
         }
         
         .timeline-item {
-            background: rgba(255, 255, 255, 0.03);
+            background: var(--bg-light);
             padding: 20px;
-            border-radius: 12px;
-            border: 1px solid var(--border-color);
-            position: relative;
+            border-radius: 8px;
+            border-left: 4px solid #9926F3;
         }
         
         .timeline-phase {
+            color: #9926F3;
+            font-weight: 600;
             font-size: 12px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            color: var(--primary-end);
             margin-bottom: 8px;
         }
         
         .timeline-title {
-            font-size: 16px;
-            font-weight: 600;
             color: var(--text-primary);
+            font-size: 18px;
+            font-weight: 600;
             margin-bottom: 8px;
         }
         
         .timeline-description {
-            font-size: 14px;
             color: var(--text-secondary);
+            font-size: 14px;
         }
         
-        /* Differentiators */
-        .differentiator-grid {
+        /* Analysis Lists */
+        .analysis-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 16px;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+            margin: 24px 0;
         }
         
-        .differentiator-item {
-            background: rgba(255, 255, 255, 0.03);
-            padding: 20px;
-            border-radius: 12px;
-            border: 1px solid var(--border-color);
-            display: flex;
-            gap: 16px;
-        }
-        
-        .differentiator-icon {
-            width: 40px;
-            height: 40px;
-            min-width: 40px;
-            background: rgba(153, 38, 243, 0.2);
+        .analysis-section {
+            background: var(--bg-light);
+            padding: 24px;
             border-radius: 10px;
+        }
+        
+        .analysis-section h4 {
+            color: var(--text-primary);
+            font-size: 18px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .analysis-section ul {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .analysis-section li {
+            padding: 12px;
+            background: #fff;
+            margin-bottom: 8px;
+            border-radius: 6px;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+        
+        .analysis-section li i {
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+        
+        .opportunities li i {
+            color: #10B981;
+        }
+        
+        .threats li i {
+            color: #F59E0B;
+        }
+        
+        /* Next Steps */
+        .next-steps-list {
+            counter-reset: step-counter;
+            list-style: none;
+            padding: 0;
+        }
+        
+        .next-steps-list li {
+            counter-increment: step-counter;
+            padding: 16px;
+            background: var(--bg-gradient-light);
+            margin-bottom: 12px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        
+        .next-steps-list li::before {
+            content: counter(step-counter);
+            background: var(--primary-gradient);
+            color: #fff;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-        }
-        
-        .differentiator-icon i {
-            font-size: 20px;
-            color: var(--primary-start);
-        }
-        
-        .differentiator-text h4 {
-            font-size: 15px;
-            font-weight: 600;
-            color: var(--text-primary);
-            margin-bottom: 6px;
-        }
-        
-        .differentiator-text p {
-            font-size: 13px;
-            color: var(--text-secondary);
-            margin: 0;
+            font-weight: 700;
+            flex-shrink: 0;
         }
         
         /* Footer */
         .proposal-footer {
             text-align: center;
             padding: 40px 20px;
+            background: var(--bg-light);
             color: var(--text-muted);
-            font-size: 14px;
         }
         
         .footer-cta {
@@ -395,7 +542,7 @@
         /* Responsive */
         @media (max-width: 768px) {
             .proposal-header {
-                padding: 24px;
+                padding: 24px 20px;
             }
             
             .proposal-title {
@@ -403,12 +550,17 @@
             }
             
             .proposal-section {
-                padding: 20px;
+                padding: 24px 20px;
             }
             
-            .header-content {
-                flex-direction: column;
-                gap: 16px;
+            .section-title {
+                font-size: 20px;
+            }
+            
+            .differentiator-grid,
+            .tool-grid,
+            .analysis-grid {
+                grid-template-columns: 1fr;
             }
         }
     </style>
@@ -418,11 +570,9 @@
     <header class="public-header">
         <div class="header-content">
             <div class="logo">PanvelIQ</div>
-            <div class="header-info">
-                <div class="expiry-badge" id="expiryBadge">
-                    <i class="ti ti-clock"></i>
-                    <span id="expiryText">Loading...</span>
-                </div>
+            <div class="expiry-badge" id="expiryBadge">
+                <i class="ti ti-clock"></i>
+                <span id="expiryText">Loading...</span>
             </div>
         </div>
     </header>
@@ -436,20 +586,21 @@
         </div>
         
         <!-- Error State -->
-        <div class="error-container" id="errorState">
+        <div class="error-container" id="errorState" style="display: none;">
             <div class="error-icon">
                 <i class="ti ti-alert-circle"></i>
             </div>
-            <h2 class="error-title" id="errorTitle">Link Expired</h2>
-            <p class="error-message" id="errorMessage">This proposal link has expired or is no longer valid.</p>
+            <h2 style="color: var(--text-primary); margin: 16px 0;">Link Expired</h2>
+            <p style="color: var(--text-secondary);">This proposal link has expired or is no longer valid.</p>
         </div>
         
         <!-- Proposal Content -->
         <div class="proposal-container" id="proposalContainer">
             <!-- Proposal Header -->
             <div class="proposal-header">
-                <h1 class="proposal-title">Marketing Proposal</h1>
-                <p class="proposal-subtitle" id="proposalSubtitle">Prepared for <span id="clientName">Client</span></p>
+                <h1 class="proposal-title">Digital Marketing Proposal</h1>
+                <p class="proposal-subtitle">for <span id="clientCompany">Your Business</span></p>
+                <p style="font-size: 14px; opacity: 0.9;">Prepared by PanvelIQ</p>
                 
                 <div class="proposal-meta">
                     <div class="meta-item">
@@ -471,6 +622,19 @@
                 </div>
             </div>
             
+            <!-- Executive Summary -->
+            <div class="proposal-section" id="executiveSummarySection">
+                <div class="section-header">
+                    <div class="section-icon">
+                        <i class="ti ti-file-text"></i>
+                    </div>
+                    <h2 class="section-title">Executive Summary</h2>
+                </div>
+                <div class="section-content" id="executiveSummary">
+                    <!-- Will be populated -->
+                </div>
+            </div>
+            
             <!-- Challenges & Audience -->
             <div class="proposal-section">
                 <div class="section-header">
@@ -483,7 +647,7 @@
                     <h3>Current Challenges</h3>
                     <p id="challenges">-</p>
                     
-                    <h3>Target Audience</h3>
+                    <h3>Target Audience Analysis</h3>
                     <p id="targetAudience">-</p>
                 </div>
             </div>
@@ -494,7 +658,7 @@
                     <div class="section-icon">
                         <i class="ti ti-brain"></i>
                     </div>
-                    <h2 class="section-title">AI-Generated Strategy</h2>
+                    <h2 class="section-title">Recommended Marketing Strategy</h2>
                 </div>
                 <div class="section-content" id="strategyContent">
                     <!-- Strategy content will be populated here -->
@@ -507,10 +671,59 @@
                     <div class="section-icon">
                         <i class="ti ti-trophy"></i>
                     </div>
-                    <h2 class="section-title">Why Choose Us</h2>
+                    <h2 class="section-title">Competitive Differentiators</h2>
                 </div>
-                <div class="differentiator-grid" id="differentiatorGrid">
-                    <!-- Differentiators will be populated here -->
+                <div class="section-content">
+                    <p style="margin-bottom: 24px; color: var(--text-primary); font-weight: 500;">What sets our approach apart:</p>
+                    <div id="competitiveDifferentiators">
+                        <!-- Will be populated -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Unique Value Propositions -->
+            <div class="proposal-section" id="valuePropsSection" style="display: none;">
+                <div class="section-header">
+                    <div class="section-icon">
+                        <i class="ti ti-star"></i>
+                    </div>
+                    <h2 class="section-title">Unique Value Propositions</h2>
+                </div>
+                <div class="section-content">
+                    <div class="value-prop-grid" id="valuePropositions">
+                        <!-- Will be populated -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Competitive Analysis -->
+            <div class="proposal-section" id="competitiveAnalysisSection" style="display: none;">
+                <div class="section-header">
+                    <div class="section-icon">
+                        <i class="ti ti-chart-bar"></i>
+                    </div>
+                    <h2 class="section-title">Competitive Analysis</h2>
+                </div>
+                <div class="section-content">
+                    <div class="analysis-grid" id="competitiveAnalysis">
+                        <!-- Will be populated -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- ROI Simulation -->
+            <div class="proposal-section" id="roiSection" style="display: none;">
+                <div class="section-header">
+                    <div class="section-icon">
+                        <i class="ti ti-trending-up"></i>
+                    </div>
+                    <h2 class="section-title">ROI Simulation</h2>
+                </div>
+                <div class="section-content">
+                    <p id="roiIntro" style="margin-bottom: 24px; color: var(--text-primary); font-weight: 500;"></p>
+                    <div class="roi-grid" id="roiMetrics">
+                        <!-- Will be populated -->
+                    </div>
                 </div>
             </div>
             
@@ -520,23 +733,42 @@
                     <div class="section-icon">
                         <i class="ti ti-calendar"></i>
                     </div>
-                    <h2 class="section-title">Suggested Timeline</h2>
+                    <h2 class="section-title">Project Timeline</h2>
                 </div>
-                <div class="timeline-grid" id="timelineGrid">
-                    <!-- Timeline will be populated here -->
+                <div class="section-content">
+                    <div class="timeline-grid" id="timelineGrid">
+                        <!-- Timeline will be populated here -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Next Steps -->
+            <div class="proposal-section" id="nextStepsSection" style="display: none;">
+                <div class="section-header">
+                    <div class="section-icon">
+                        <i class="ti ti-checklist"></i>
+                    </div>
+                    <h2 class="section-title">Next Steps</h2>
+                </div>
+                <div class="section-content">
+                    <ul class="next-steps-list" id="nextSteps">
+                        <!-- Will be populated -->
+                    </ul>
                 </div>
             </div>
             
             <!-- Footer -->
             <div class="proposal-footer">
+                <p style="font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">We look forward to partnering with you to achieve exceptional marketing results!</p>
                 <p>Prepared by <strong>PanvelIQ Team</strong></p>
-                <p style="margin-top: 8px;">AI-Powered Digital Marketing Intelligence</p>
+                <p style="margin-top: 4px;">AI-Powered Digital Marketing Intelligence</p>
                 <div class="footer-cta">
-                    <a href="mailto:contact@panveliq.com" class="btn-contact">
+                    <a href="mailto:info@panveliq.com" class="btn-contact">
                         <i class="ti ti-mail"></i>
                         Get in Touch
                     </a>
                 </div>
+                <p style="margin-top: 20px; font-size: 13px;">Contact: info@panveliq.com | www.panveliq.com</p>
             </div>
         </div>
     </main>
@@ -580,8 +812,6 @@
             document.getElementById('loadingState').style.display = 'none';
             document.getElementById('proposalContainer').style.display = 'none';
             document.getElementById('errorState').style.display = 'flex';
-            document.getElementById('errorTitle').textContent = title;
-            document.getElementById('errorMessage').textContent = message;
         }
         
         function displayProposal(proposal, linkInfo) {
@@ -598,8 +828,9 @@
             }
             
             // Populate header info
-            document.getElementById('clientName').textContent = proposal.client_name || 'Valued Client';
-            document.getElementById('companyName').textContent = proposal.company_name || '-';
+            const companyName = proposal.company_name || 'Your Business';
+            document.getElementById('clientCompany').textContent = companyName;
+            document.getElementById('companyName').textContent = companyName;
             document.getElementById('businessType').textContent = proposal.business_type || '-';
             document.getElementById('budget').textContent = proposal.budget 
                 ? `₹${Number(proposal.budget).toLocaleString()}` 
@@ -610,6 +841,9 @@
                 }) 
                 : '-';
             
+            // Executive Summary
+            populateExecutiveSummary(proposal);
+            
             // Populate challenges and audience
             document.getElementById('challenges').textContent = proposal.challenges || 'No specific challenges mentioned.';
             document.getElementById('targetAudience').textContent = proposal.target_audience || 'Target audience not specified.';
@@ -617,130 +851,293 @@
             // Populate strategy
             populateStrategy(proposal.ai_generated_strategy);
             
-            // Populate differentiators
-            populateDifferentiators(proposal.competitive_differentiators);
+            // Populate competitive differentiators
+            populateCompetitiveDifferentiators(proposal.competitive_differentiators);
+            
+            // Populate value propositions (if present)
+            populateValuePropositions(proposal.value_propositions);
+            
+            // Populate competitive analysis (if present)
+            populateCompetitiveAnalysis(proposal.competitive_analysis);
+            
+            // Populate ROI simulation (if present)
+            populateROISimulation(proposal.roi_simulation, proposal.budget);
             
             // Populate timeline
             populateTimeline(proposal.suggested_timeline);
+            
+            // Populate next steps (if present)
+            populateNextSteps(proposal.next_steps);
+        }
+        
+        function populateExecutiveSummary(proposal) {
+            const container = document.getElementById('executiveSummary');
+            const companyName = proposal.company_name || 'your business';
+            const businessType = proposal.business_type || 'business';
+            const budget = proposal.budget ? `₹${Number(proposal.budget).toLocaleString()}` : 'your investment budget';
+            
+            container.innerHTML = `
+                <p>This comprehensive digital marketing proposal has been specifically designed for <strong>${companyName}</strong>, a <strong>${businessType}</strong> looking to enhance their digital presence and drive measurable growth.</p>
+                <p>Our AI-powered approach combines cutting-edge marketing technology with proven strategies to deliver exceptional results within your investment budget of <strong>${budget}</strong>.</p>
+            `;
         }
         
         function populateStrategy(strategy) {
             const container = document.getElementById('strategyContent');
             
-            if (!strategy || Object.keys(strategy).length === 0) {
+            if (!strategy || (typeof strategy === 'object' && Object.keys(strategy).length === 0)) {
                 container.innerHTML = '<p>Strategy details will be provided upon further consultation.</p>';
                 return;
             }
             
-            let html = '';
+            let html = '<p style="margin-bottom: 24px;">Based on our AI analysis, we recommend a comprehensive marketing approach across multiple channels.</p>';
             
-            // Handle different strategy formats
-            if (strategy.campaigns) {
-                html += '<h3>Recommended Campaigns</h3><ul>';
-                const campaigns = Array.isArray(strategy.campaigns) ? strategy.campaigns : [strategy.campaigns];
-                campaigns.forEach(c => {
-                    html += `<li>${typeof c === 'object' ? c.name || c.type || JSON.stringify(c) : c}</li>`;
+            // Recommended Campaigns Section
+            if (strategy.Recommended_Campaigns && Array.isArray(strategy.Recommended_Campaigns)) {
+                html += '<h3>Recommended Campaigns</h3>';
+                
+                strategy.Recommended_Campaigns.forEach(campaign => {
+                    html += `
+                        <div class="campaign-card">
+                            <h4>Campaign (${campaign.Platform || 'Platform'}):</h4>
+                            ${campaign.Content_Topics ? `<p><strong>Content Topics:</strong> ${campaign.Content_Topics}</p>` : ''}
+                            ${campaign.Creative_Format ? `<p><strong>Creative Format:</strong> ${campaign.Creative_Format}</p>` : ''}
+                        </div>
+                    `;
                 });
-                html += '</ul>';
             }
             
-            if (strategy.platforms) {
-                html += '<h3>Platform Recommendations</h3><ul>';
-                const platforms = Array.isArray(strategy.platforms) ? strategy.platforms : [strategy.platforms];
-                platforms.forEach(p => {
-                    html += `<li>${typeof p === 'object' ? p.name || JSON.stringify(p) : p}</li>`;
+            // Automation Tools Section
+            if (strategy.Automation_Tools && Array.isArray(strategy.Automation_Tools)) {
+                html += '<h3 style="margin-top: 32px;">Automation Tools & Technologies</h3>';
+                html += '<div class="tool-grid">';
+                
+                strategy.Automation_Tools.forEach(tool => {
+                    html += `
+                        <div class="tool-item">
+                            <i class="ti ti-tool tool-icon"></i>
+                            <div>
+                                <div class="tool-name">${tool.Tool || 'Tool'}</div>
+                                <div class="tool-use">${tool.Use || 'Campaign enhancement'}</div>
+                            </div>
+                        </div>
+                    `;
                 });
-                html += '</ul>';
+                
+                html += '</div>';
             }
             
-            if (strategy.content_topics) {
-                html += '<h3>Content Topics</h3><ul>';
-                const topics = Array.isArray(strategy.content_topics) ? strategy.content_topics : [strategy.content_topics];
-                topics.forEach(t => {
-                    html += `<li>${typeof t === 'object' ? t.topic || JSON.stringify(t) : t}</li>`;
-                });
-                html += '</ul>';
-            }
-            
-            if (strategy.creative_formats) {
-                html += '<h3>Creative Formats</h3><ul>';
-                const formats = Array.isArray(strategy.creative_formats) ? strategy.creative_formats : [strategy.creative_formats];
-                formats.forEach(f => {
-                    html += `<li>${typeof f === 'object' ? f.format || JSON.stringify(f) : f}</li>`;
-                });
-                html += '</ul>';
-            }
-            
-            // If no specific sections, display raw
-            if (!html && typeof strategy === 'object') {
-                html = '<div>' + JSON.stringify(strategy, null, 2).replace(/\n/g, '<br>').replace(/ /g, '&nbsp;') + '</div>';
-            }
-            
-            container.innerHTML = html || '<p>Strategy details will be provided upon further consultation.</p>';
+            container.innerHTML = html;
         }
         
-        function populateDifferentiators(differentiators) {
-            const container = document.getElementById('differentiatorGrid');
+        function populateCompetitiveDifferentiators(differentiators) {
+            const container = document.getElementById('competitiveDifferentiators');
             
-            const defaultDifferentiators = [
-                { icon: 'ti-bolt', title: 'Faster Deployment', desc: 'Automation-powered rapid implementation' },
-                { icon: 'ti-brain', title: 'AI-Personalized Targeting', desc: 'Smart audience segmentation and targeting' },
-                { icon: 'ti-world', title: 'Hybrid Approach', desc: 'Integrated online-offline strategy' },
-                { icon: 'ti-currency-dollar', title: 'Cost Efficiency', desc: 'Optimized media spend for maximum ROI' },
-                { icon: 'ti-chart-line', title: 'Predictive Analytics', desc: 'Advanced tracking with predictive insights' }
+            const defaultDiffs = [
+                {
+                    title: 'Faster Deployment with Automation',
+                    description: 'Our agency leverages cutting-edge automation tools to expedite the deployment of your marketing campaigns. This allows us to launch your campaigns faster and more efficiently.',
+                    impact: 'This will save your business time and resources, allowing you to focus on what matters most - growing your business.'
+                },
+                {
+                    title: 'AI-Personalized Targeting',
+                    description: 'We use advanced AI technologies to personalize your marketing messages and target your ideal customers with precision.',
+                    impact: 'This will increase your engagement rates, conversion rates, and overall ROI on your marketing investment.'
+                },
+                {
+                    title: 'Cost-Efficiency',
+                    description: 'Our digital marketing strategy is designed to maximize your budget. We focus on the most effective channels and tactics to ensure you get the most out of every dollar spent.',
+                    impact: 'This will reduce your marketing spend while still achieving your desired results.'
+                },
+                {
+                    title: 'Advanced Performance Tracking',
+                    description: 'We provide comprehensive and real-time tracking of your marketing performance. Our advanced analytics will give you deep insights into your campaign\'s success.',
+                    impact: 'This will allow you to make data-driven decisions and continuously optimize your marketing strategy.'
+                }
             ];
             
-            let items = defaultDifferentiators;
+            let items = defaultDiffs;
             
             if (differentiators && Array.isArray(differentiators) && differentiators.length > 0) {
-                items = differentiators.map((d, i) => ({
-                    icon: d.icon || defaultDifferentiators[i % defaultDifferentiators.length].icon,
-                    title: d.title || d.name || `Advantage ${i + 1}`,
-                    desc: d.description || d.desc || d.text || ''
-                }));
+                items = differentiators;
             }
             
-            container.innerHTML = items.map(item => `
-                <div class="differentiator-item">
-                    <div class="differentiator-icon">
-                        <i class="ti ${item.icon}"></i>
+            let html = '';
+            items.forEach(diff => {
+                html += `
+                    <div class="value-prop-card">
+                        <h4><strong>${diff.title}</strong></h4>
+                        <p>${diff.description}</p>
+                        ${diff.impact ? `
+                            <div class="impact">
+                                <strong>Impact:</strong> ${diff.impact}
+                            </div>
+                        ` : ''}
                     </div>
-                    <div class="differentiator-text">
-                        <h4>${item.title}</h4>
-                        <p>${item.desc}</p>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        function populateValuePropositions(valueProps) {
+            if (!valueProps || !Array.isArray(valueProps) || valueProps.length === 0) return;
+            
+            document.getElementById('valuePropsSection').style.display = 'block';
+            const container = document.getElementById('valuePropositions');
+            
+            let html = '';
+            valueProps.forEach(prop => {
+                html += `
+                    <div class="value-prop-card">
+                        <h4>${prop.icon || '🚀'} ${prop.title}</h4>
+                        <p>${prop.description}</p>
+                        ${prop.competitive_advantage ? `
+                            <p><strong>Competitive Advantage:</strong> ${prop.competitive_advantage}</p>
+                        ` : ''}
+                        ${prop.impact ? `
+                            <div class="impact">
+                                <strong>Impact:</strong> ${prop.impact}
+                            </div>
+                        ` : ''}
                     </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        function populateCompetitiveAnalysis(analysis) {
+            if (!analysis || !analysis.opportunities || !analysis.threats) return;
+            
+            document.getElementById('competitiveAnalysisSection').style.display = 'block';
+            const container = document.getElementById('competitiveAnalysis');
+            
+            let html = `
+                <div class="analysis-section opportunities">
+                    <h4><i class="ti ti-circle-check" style="color: #10B981;"></i> Opportunities</h4>
+                    <ul>
+            `;
+            
+            analysis.opportunities.forEach(opp => {
+                html += `<li><i class="ti ti-check"></i> ${opp}</li>`;
+            });
+            
+            html += `
+                    </ul>
                 </div>
-            `).join('');
+                <div class="analysis-section threats">
+                    <h4><i class="ti ti-alert-triangle" style="color: #F59E0B;"></i> Threats</h4>
+                    <ul>
+            `;
+            
+            analysis.threats.forEach(threat => {
+                html += `<li><i class="ti ti-alert-circle"></i> ${threat}</li>`;
+            });
+            
+            html += `
+                    </ul>
+                </div>
+            `;
+            
+            container.innerHTML = html;
+        }
+        
+        function populateROISimulation(roi, budget) {
+            if (!roi || !roi.expected_leads) return;
+            
+            document.getElementById('roiSection').style.display = 'block';
+            
+            const budgetFormatted = budget ? `₹${Number(budget).toLocaleString()}` : '₹4,500';
+            document.getElementById('roiIntro').textContent = `If you spend ${budgetFormatted}, expect...`;
+            
+            const container = document.getElementById('roiMetrics');
+            
+            let html = `
+                <div class="roi-metric">
+                    <div class="roi-value">${roi.expected_leads || 0}</div>
+                    <div class="roi-label">Expected Leads</div>
+                </div>
+                <div class="roi-metric">
+                    <div class="roi-value">₹${roi.avg_cost_per_lead || '3.13'}</div>
+                    <div class="roi-label">Avg Cost Per Lead</div>
+                </div>
+                <div class="roi-metric">
+                    <div class="roi-value">${roi.conversion_rate || '5'}%</div>
+                    <div class="roi-label">Conversion Rate</div>
+                </div>
+                <div class="roi-metric">
+                    <div class="roi-value">₹${roi.estimated_revenue ? Number(roi.estimated_revenue).toLocaleString() : '14,400'}</div>
+                    <div class="roi-label">Estimated Revenue</div>
+                </div>
+            `;
+            
+            if (roi.expected_customers) {
+                html += `
+                    <div class="roi-metric">
+                        <div class="roi-value">${roi.expected_customers}</div>
+                        <div class="roi-label">Expected Customers</div>
+                    </div>
+                `;
+            }
+            
+            if (roi.roi_year_1) {
+                html += `
+                    <div class="roi-metric">
+                        <div class="roi-value">${roi.roi_year_1}%</div>
+                        <div class="roi-label">ROI by Year 1</div>
+                    </div>
+                `;
+            }
+            
+            container.innerHTML = html;
         }
         
         function populateTimeline(timeline) {
             const container = document.getElementById('timelineGrid');
             
             const defaultTimeline = [
-                { phase: 'Phase 1', title: 'Discovery & Planning', desc: 'Initial assessment and strategy development', duration: 'Week 1-2' },
-                { phase: 'Phase 2', title: 'Setup & Configuration', desc: 'Platform setup and campaign creation', duration: 'Week 3-4' },
-                { phase: 'Phase 3', title: 'Launch & Optimization', desc: 'Campaign launch with continuous optimization', duration: 'Week 5-8' },
-                { phase: 'Phase 4', title: 'Scale & Report', desc: 'Performance analysis and scaling strategies', duration: 'Week 9-12' }
+                { phase: 'Phase 1', title: 'Planning & Setup', desc: 'Initial strategy development', duration: '2-4 weeks' },
+                { phase: 'Phase 2', title: 'Implementation', desc: 'Campaign setup and launch', duration: '2-3 weeks' },
+                { phase: 'Phase 3', title: 'Optimization', desc: 'Performance monitoring and optimization', duration: 'Ongoing' },
+                { phase: 'Phase 4', title: 'Reporting', desc: 'Results analysis and reporting', duration: 'Monthly' }
             ];
             
             let items = defaultTimeline;
             
             if (timeline && Array.isArray(timeline) && timeline.length > 0) {
-                items = timeline.map((t, i) => ({
-                    phase: t.phase || `Phase ${i + 1}`,
-                    title: t.title || t.name || `Stage ${i + 1}`,
-                    desc: t.description || t.desc || '',
-                    duration: t.duration || t.time || ''
-                }));
+                items = timeline;
+            } else if (timeline && timeline.phases && Array.isArray(timeline.phases)) {
+                items = timeline.phases;
             }
             
             container.innerHTML = items.map(item => `
                 <div class="timeline-item">
-                    <div class="timeline-phase">${item.phase} ${item.duration ? `• ${item.duration}` : ''}</div>
+                    <div class="timeline-phase">${item.phase}${item.duration ? ' • ' + item.duration : ''}</div>
                     <div class="timeline-title">${item.title}</div>
-                    <div class="timeline-description">${item.desc}</div>
+                    <div class="timeline-description">${item.desc || item.description || ''}</div>
                 </div>
             `).join('');
+        }
+        
+        function populateNextSteps(steps) {
+            if (!steps || !Array.isArray(steps) || steps.length === 0) {
+                // Use default next steps
+                steps = [
+                    'Review this proposal and provide feedback',
+                    'Schedule a strategy session to discuss implementation',
+                    'Finalize project scope and timeline',
+                    'Begin Phase 1 execution'
+                ];
+            }
+            
+            document.getElementById('nextStepsSection').style.display = 'block';
+            const container = document.getElementById('nextSteps');
+            
+            container.innerHTML = steps.map(step => {
+                const text = typeof step === 'string' ? step : (step.text || step.description || '');
+                return `<li>${text}</li>`;
+            }).join('');
         }
     </script>
 </body>

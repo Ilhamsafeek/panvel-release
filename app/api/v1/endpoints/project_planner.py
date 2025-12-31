@@ -1595,6 +1595,7 @@ async def send_proposal_email(
             connection.close()
 
 
+
 async def send_proposal_email_task(
     proposal_id: int,
     recipient_email: str,
@@ -1607,20 +1608,10 @@ async def send_proposal_email_task(
 ):
     """
     Background task for sending proposal email with SMTP
-    
-    Args:
-        proposal_id: ID of the proposal
-        recipient_email: Email address to send to
-        recipient_name: Name of recipient
-        subject: Custom subject line (optional)
-        custom_message: Custom message (optional)
-        include_pdf: Whether to attach PDF
-        sender_id: ID of user sending email
-        proposal: Proposal data dictionary
+    Automatically generates share link if needed
     """
     connection = None
     cursor = None
-    email_log_id = None
     
     try:
         print(f"\n{'='*60}")
@@ -1629,6 +1620,65 @@ async def send_proposal_email_task(
         print(f"Proposal ID: {proposal_id}")
         print(f"To: {recipient_email}")
         print(f"Include PDF: {include_pdf}")
+        
+        # First, generate or get existing share link
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # Check for existing valid share link
+        cursor.execute("""
+            SELECT share_token, expires_at 
+            FROM proposal_share_links 
+            WHERE proposal_id = %s 
+            AND expires_at > NOW()
+            ORDER BY created_at DESC 
+            LIMIT 1
+        """, (proposal_id,))
+        
+        share_link_data = cursor.fetchone()
+        
+        if share_link_data:
+            share_token = share_link_data['share_token']
+            print(f"✓ Using existing share token")
+        else:
+            # Generate new share token
+            share_token = secrets.token_urlsafe(32)
+            expires_at = datetime.now() + timedelta(days=30)
+            
+            # Check table structure
+            cursor.execute("""
+                SELECT COLUMN_NAME 
+                FROM INFORMATION_SCHEMA.COLUMNS 
+                WHERE TABLE_SCHEMA = DATABASE() 
+                AND TABLE_NAME = 'proposal_share_links'
+            """)
+            columns = [row['COLUMN_NAME'] for row in cursor.fetchall()]
+            
+            has_is_active = 'is_active' in columns
+            has_view_count = 'view_count' in columns
+            
+            # Insert new share link
+            if has_is_active and has_view_count:
+                cursor.execute("""
+                    INSERT INTO proposal_share_links 
+                    (proposal_id, share_token, created_by, expires_at, is_active, view_count)
+                    VALUES (%s, %s, %s, %s, TRUE, 0)
+                """, (proposal_id, share_token, sender_id, expires_at))
+            elif has_is_active:
+                cursor.execute("""
+                    INSERT INTO proposal_share_links 
+                    (proposal_id, share_token, created_by, expires_at, is_active)
+                    VALUES (%s, %s, %s, %s, TRUE)
+                """, (proposal_id, share_token, sender_id, expires_at))
+            else:
+                cursor.execute("""
+                    INSERT INTO proposal_share_links 
+                    (proposal_id, share_token, created_by, expires_at)
+                    VALUES (%s, %s, %s, %s)
+                """, (proposal_id, share_token, sender_id, expires_at))
+            
+            connection.commit()
+            print(f"✓ Generated new share token")
         
         # Get SMTP configuration
         smtp_host = settings.SMTP_HOST
@@ -1649,23 +1699,25 @@ async def send_proposal_email_task(
             company_name = proposal.get('company_name', 'Your Company')
             subject = f"Marketing Proposal for {company_name} - PanvelIQ"
         
-        # Generate HTML email content
+        # Generate HTML email content with share token
         html_content = generate_proposal_email_html(
             recipient_name=recipient_name,
             company_name=proposal.get('company_name', 'Your Company'),
             proposal_id=proposal_id,
+            share_token=share_token,
             custom_message=custom_message,
             budget=proposal.get('budget', 0)
         )
         
-        # Generate plain text version
+        # Generate plain text version with share token
         text_content = generate_proposal_email_text(
             recipient_name=recipient_name,
             company_name=proposal.get('company_name', 'Your Company'),
-            proposal_id=proposal_id
+            proposal_id=proposal_id,
+            share_token=share_token
         )
         
-        print(f"✓ Email content generated")
+        print(f"✓ Email content generated with share link")
         
         # Create email message
         msg = MIMEMultipart('alternative')
@@ -1689,47 +1741,34 @@ async def send_proposal_email_task(
                 pdf_data = generate_proposal_pdf_bytes(proposal_id)
                 
                 if pdf_data:
-                    # Attach PDF
-                    pdf_attachment = MIMEApplication(pdf_data, _subtype='pdf')
-                    pdf_attachment.add_header(
+                    part_pdf = MIMEBase('application', 'pdf')
+                    part_pdf.set_payload(pdf_data)
+                    encoders.encode_base64(part_pdf)
+                    part_pdf.add_header(
                         'Content-Disposition',
-                        'attachment',
-                        filename=f'Proposal_{proposal_id}.pdf'
+                        f'attachment; filename="proposal_{proposal_id}.pdf"'
                     )
-                    msg.attach(pdf_attachment)
+                    msg.attach(part_pdf)
                     print(f"✓ PDF attached ({len(pdf_data)} bytes)")
                 else:
-                    print(f"⚠ PDF generation failed, sending email without attachment")
+                    print(f"⚠ PDF generation failed - sending email without PDF")
                     
             except Exception as pdf_error:
-                print(f"⚠ PDF generation error: {str(pdf_error)}")
-                print(f"  Continuing without PDF attachment...")
+                print(f"⚠ PDF attachment error: {str(pdf_error)}")
+                # Continue sending email without PDF
         
         # Send email via SMTP
         print(f"📤 Connecting to SMTP server...")
         
-        # Use appropriate SMTP connection based on port
-        if smtp_port == 465:
-            # SSL connection
-            with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=30) as server:
-                server.login(smtp_user, smtp_password)
-                server.send_message(msg)
-        else:
-            # TLS connection (port 587)
-            with smtplib.SMTP(smtp_host, smtp_port, timeout=30) as server:
-                server.ehlo()
-                server.starttls()
-                server.ehlo()
-                server.login(smtp_user, smtp_password)
-                server.send_message(msg)
+        with smtplib.SMTP(smtp_host, smtp_port) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_password)
+            server.send_message(msg)
         
         print(f"✅ Email sent successfully to {recipient_email}")
         print(f"{'='*60}\n")
         
-        # Update email log status to 'sent'
-        connection = get_db_connection()
-        cursor = connection.cursor()
-        
+        # Update status to 'sent'
         cursor.execute("""
             UPDATE email_logs 
             SET status = 'sent', sent_at = NOW()
@@ -1768,21 +1807,23 @@ def generate_proposal_email_html(
     recipient_name: str,
     company_name: str,
     proposal_id: int,
+    share_token: str,
     custom_message: Optional[str],
     budget: float
 ) -> str:
     """
     Generate professional HTML email template for proposal
+    Uses share token for secure access
     """
     
     # Custom message or default
     message_html = f"<p>{custom_message}</p>" if custom_message else f"""
-    <p>We've prepared a comprehensive digital marketing proposal tailored specifically for {company_name}. 
-    Our AI-powered analysis has identified key opportunities to help you achieve your marketing goals.</p>
+    <p>We've prepared a comprehensive digital marketing proposal tailored specifically for {company_name}.</p>
+    <p>Our AI-powered platform has analyzed your business needs and created a customized strategy to help you achieve your marketing goals.</p>
     """
     
-    # View proposal link
-    view_link = f"{settings.FRONTEND_URL}/proposal-view/{proposal_id}"
+    # Build the proposal URL with share token
+    proposal_url = f"{settings.FRONTEND_URL}/proposals/view/{share_token}"
     
     html = f"""
     <!DOCTYPE html>
@@ -1790,97 +1831,87 @@ def generate_proposal_email_html(
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Marketing Proposal - PanvelIQ</title>
+        <title>PanvelIQ - Marketing Proposal</title>
     </head>
     <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f5f5f5;">
-        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f5f5f5; padding: 40px 20px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #f5f5f5; padding: 40px 0;">
             <tr>
                 <td align="center">
-                    <table width="600" cellpadding="0" cellspacing="0" border="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="background-color: #ffffff; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
                         
                         <!-- Header with Gradient -->
                         <tr>
                             <td style="background: linear-gradient(135deg, #9926F3 0%, #1DD8FC 100%); padding: 40px 30px; text-align: center;">
-                                <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 600;">
-                                    PanvelIQ
-                                </h1>
-                                <p style="margin: 10px 0 0 0; color: #ffffff; font-size: 14px; opacity: 0.9;">
-                                    AI-Powered Digital Marketing Intelligence
-                                </p>
+                                <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700;">PanvelIQ</h1>
+                                <p style="margin: 10px 0 0 0; color: #ffffff; font-size: 14px; opacity: 0.9;">AI-Powered Digital Marketing Intelligence</p>
                             </td>
                         </tr>
                         
-                        <!-- Greeting -->
+                        <!-- Main Content -->
                         <tr>
-                            <td style="padding: 30px 30px 20px 30px;">
-                                <h2 style="margin: 0 0 15px 0; color: #333333; font-size: 22px; font-weight: 600;">
+                            <td style="padding: 40px 30px;">
+                                <h2 style="margin: 0 0 20px 0; color: #1a1a1a; font-size: 24px; font-weight: 600;">
                                     Dear {recipient_name},
                                 </h2>
+                                
                                 {message_html}
-                            </td>
-                        </tr>
-                        
-                        <!-- Proposal Highlights -->
-                        <tr>
-                            <td style="padding: 0 30px 30px 30px;">
-                                <div style="background: linear-gradient(135deg, #f8f9ff 0%, #f0f4ff 100%); border-left: 4px solid #9926F3; padding: 20px; border-radius: 6px; margin: 20px 0;">
-                                    <h3 style="margin: 0 0 15px 0; color: #9926F3; font-size: 18px; font-weight: 600;">
-                                        📊 Proposal Highlights
-                                    </h3>
-                                    <table width="100%" cellpadding="8" cellspacing="0" border="0">
-                                        <tr>
-                                            <td style="color: #666666; font-size: 14px; padding: 8px 0;">
-                                                <strong style="color: #333333;">Company:</strong>
-                                            </td>
-                                            <td style="color: #333333; font-size: 14px; font-weight: 500; padding: 8px 0;">
-                                                {company_name}
-                                            </td>
-                                        </tr>
-                                        <tr>
-                                            <td style="color: #666666; font-size: 14px; padding: 8px 0;">
-                                                <strong style="color: #333333;">Estimated Budget:</strong>
-                                            </td>
-                                            <td style="color: #333333; font-size: 14px; font-weight: 500; padding: 8px 0;">
-                                                ₹{budget:,.0f}
-                                            </td>
-                                        </tr>
-                                        <tr>
-                                            <td style="color: #666666; font-size: 14px; padding: 8px 0;">
-                                                <strong style="color: #333333;">Proposal ID:</strong>
-                                            </td>
-                                            <td style="color: #333333; font-size: 14px; font-weight: 500; padding: 8px 0;">
-                                                #{proposal_id}
-                                            </td>
-                                        </tr>
-                                    </table>
-                                </div>
+                                
+                                <!-- Proposal Highlights Box -->
+                                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 30px 0; background: linear-gradient(135deg, rgba(153,38,243,0.05) 0%, rgba(29,216,252,0.05) 100%); border-radius: 8px; border-left: 4px solid #9926F3;">
+                                    <tr>
+                                        <td style="padding: 20px;">
+                                            <h3 style="margin: 0 0 15px 0; color: #9926F3; font-size: 16px; font-weight: 600;">Proposal Highlights</h3>
+                                            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                                                <tr>
+                                                    <td style="padding: 8px 0; color: #555; font-size: 14px;">
+                                                        <strong>Company:</strong> {company_name}
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td style="padding: 8px 0; color: #555; font-size: 14px;">
+                                                        <strong>Estimated Budget:</strong> ₹{budget:,.0f}
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td style="padding: 8px 0; color: #555; font-size: 14px;">
+                                                        <strong>Proposal ID:</strong> #{proposal_id}
+                                                    </td>
+                                                </tr>
+                                            </table>
+                                        </td>
+                                    </tr>
+                                </table>
                                 
                                 <!-- CTA Button -->
-                                <div style="text-align: center; margin: 30px 0;">
-                                    <a href="{view_link}" 
-                                       style="display: inline-block; background: linear-gradient(135deg, #9926F3 0%, #1DD8FC 100%); 
-                                              color: #ffffff; text-decoration: none; padding: 15px 40px; border-radius: 6px; 
-                                              font-size: 16px; font-weight: 600; box-shadow: 0 4px 12px rgba(153,38,243,0.3);">
-                                        View Full Proposal
-                                    </a>
-                                </div>
+                                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 30px 0;">
+                                    <tr>
+                                        <td align="center">
+                                            <a href="{proposal_url}" style="display: inline-block; background: linear-gradient(135deg, #9926F3 0%, #1DD8FC 100%); color: #ffffff; text-decoration: none; padding: 16px 40px; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 15px rgba(153,38,243,0.3);">
+                                                View Full Proposal
+                                            </a>
+                                        </td>
+                                    </tr>
+                                </table>
                                 
-                                <p style="margin: 20px 0 0 0; color: #666666; font-size: 14px; line-height: 1.6;">
-                                    This proposal includes AI-generated strategies, competitive analysis, and detailed campaign recommendations 
-                                    tailored to your specific business needs.
+                                <p style="margin: 30px 0 0 0; color: #666; font-size: 14px; line-height: 1.6;">
+                                    This proposal includes AI-generated strategies, competitive analysis, and detailed campaign recommendations tailored to your specific business needs.
+                                </p>
+                                
+                                <p style="margin: 20px 0 0 0; color: #666; font-size: 14px;">
+                                    Best regards,<br>
+                                    <strong>The PanvelIQ Team</strong>
                                 </p>
                             </td>
                         </tr>
                         
                         <!-- Footer -->
                         <tr>
-                            <td style="background-color: #f8f9fa; padding: 30px; border-top: 1px solid #e0e0e0;">
-                                <p style="margin: 0 0 10px 0; color: #666666; font-size: 13px; line-height: 1.6;">
-                                    Best regards,<br>
-                                    <strong style="color: #333333;">The PanvelIQ Team</strong>
+                            <td style="background-color: #f8f9fa; padding: 30px; text-align: center; border-top: 1px solid #e0e0e0;">
+                                <p style="margin: 0 0 10px 0; color: #999; font-size: 12px;">
+                                    This email was sent by PanvelIQ
                                 </p>
-                                <p style="margin: 15px 0 0 0; color: #999999; font-size: 12px; line-height: 1.5;">
-                                    This email was sent by PanvelIQ. If you have any questions, please contact us at 
+                                <p style="margin: 0; color: #999; font-size: 12px;">
+                                    If you have any questions, please contact us at 
                                     <a href="mailto:hello@panvel-iq.calim.ai" style="color: #9926F3; text-decoration: none;">hello@panvel-iq.calim.ai</a>
                                 </p>
                             </td>
@@ -1900,11 +1931,15 @@ def generate_proposal_email_html(
 def generate_proposal_email_text(
     recipient_name: str,
     company_name: str,
-    proposal_id: int
+    proposal_id: int,
+    share_token: str
 ) -> str:
     """
     Generate plain text version of email
+    Uses share token for secure access
     """
+    
+    proposal_url = f"{settings.FRONTEND_URL}/proposals/view/{share_token}"
     
     text = f"""
 PanvelIQ - Marketing Proposal
@@ -1916,7 +1951,7 @@ We've prepared a comprehensive digital marketing proposal tailored specifically 
 Proposal ID: #{proposal_id}
 Company: {company_name}
 
-View your full proposal at: {settings.FRONTEND_URL}/proposal-view/{proposal_id}
+View your full proposal at: {proposal_url}
 
 This proposal includes AI-generated strategies, competitive analysis, and detailed campaign recommendations.
 
@@ -1928,6 +1963,8 @@ If you have any questions, contact us at hello@panvel-iq.calim.ai
     """
     
     return text.strip()
+
+    
 
 
 def generate_proposal_pdf_bytes(proposal_id: int) -> Optional[bytes]:

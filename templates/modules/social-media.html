@@ -346,7 +346,7 @@
     }
 
 
-     /* List View */
+    /* List View */
     .inbox-view {
         display: none;
     }
@@ -2384,39 +2384,187 @@
 
 
     /* Conflict Warning Badge */
-.conflict-warning {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.375rem;
-    padding: 0.375rem 0.75rem;
-    background: #fef3c7;
-    border: 1px solid #f59e0b;
-    border-radius: 6px;
-    font-size: 12px;
-    font-weight: 600;
-    color: #92400e;
-    margin-top: 0.5rem;
-    animation: pulse 2s infinite;
-}
-
-.conflict-warning i {
-    color: #f59e0b;
-}
-
-@keyframes pulse {
-    0%, 100% {
-        opacity: 1;
+    .conflict-warning {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.375rem 0.75rem;
+        background: #fef3c7;
+        border: 1px solid #f59e0b;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        color: #92400e;
+        margin-top: 0.5rem;
+        animation: pulse 2s infinite;
     }
-    50% {
-        opacity: 0.8;
-    }
-}
 
-.conflict-details {
-    font-size: 11px;
-    color: #78350f;
-    margin-top: 0.25rem;
-}
+    .conflict-warning i {
+        color: #f59e0b;
+    }
+
+    @keyframes pulse {
+
+        0%,
+        100% {
+            opacity: 1;
+        }
+
+        50% {
+            opacity: 0.8;
+        }
+    }
+
+    .conflict-details {
+        font-size: 11px;
+        color: #78350f;
+        margin-top: 0.25rem;
+    }
+
+
+    /* Calendar Suggestions Styles */
+    @keyframes spin {
+        from {
+            transform: rotate(0deg);
+        }
+
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    .btn-outline {
+        background: white;
+        border: 2px solid #e2e8f0;
+        color: #475569;
+        padding: 0.75rem 1.5rem;
+        border-radius: 10px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+    }
+
+    .btn-outline:hover {
+        border-color: #9926F3;
+        background: linear-gradient(135deg, rgba(153, 38, 243, 0.05), rgba(29, 216, 252, 0.05));
+        color: #9926F3;
+    }
+
+    .btn-small {
+        transition: all 0.2s;
+    }
+
+    .btn-small:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(153, 38, 243, 0.3);
+    }
+
+    .suggestion-card:hover {
+        box-shadow: 0 4px 12px rgba(153, 38, 243, 0.1);
+    }
+
+
+    /* A/B Testing Styles */
+    .toggle-switch {
+        position: relative;
+        width: 50px;
+        height: 26px;
+        display: inline-block;
+    }
+
+    .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    .toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #e2e8f0;
+        transition: .3s;
+        border-radius: 26px;
+    }
+
+    .toggle-slider:before {
+        position: absolute;
+        content: "";
+        height: 18px;
+        width: 18px;
+        left: 4px;
+        bottom: 4px;
+        background-color: white;
+        transition: .3s;
+        border-radius: 50%;
+    }
+
+    .toggle-switch input:checked+.toggle-slider {
+        background: linear-gradient(135deg, #9926F3, #1DD8FC);
+    }
+
+    .toggle-switch input:checked+.toggle-slider:before {
+        transform: translateX(24px);
+    }
+
+    /* Variant Tabs */
+    .variant-tabs {
+        display: flex;
+        gap: 0.5rem;
+        border-bottom: 2px solid #e2e8f0;
+        padding-bottom: 0;
+    }
+
+    .variant-tab {
+        flex: 1;
+        padding: 0.75rem 1rem;
+        background: none;
+        border: none;
+        border-bottom: 3px solid transparent;
+        font-size: 14px;
+        font-weight: 600;
+        color: #64748b;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+    }
+
+    .variant-tab:hover {
+        color: #9926F3;
+        background: rgba(153, 38, 243, 0.05);
+    }
+
+    .variant-tab.active {
+        color: #9926F3;
+        border-bottom-color: #9926F3;
+        background: linear-gradient(135deg, rgba(153, 38, 243, 0.05), rgba(29, 216, 252, 0.05));
+    }
+
+    .variant-fields {
+        padding: 1rem;
+        background: #f8fafc;
+        border-radius: 8px;
+        border: 2px dashed #e2e8f0;
+    }
+
+    .variant-fields .form-group {
+        margin-bottom: 1rem;
+    }
+
+    .variant-fields .form-group:last-child {
+        margin-bottom: 0;
+    }
 </style>
 
 
@@ -2549,20 +2697,35 @@
 
     <!-- View Tabs -->
     <div class="view-tabs">
-      
+
+
+        <button class="view-tab" onclick="switchView('list')">
+            <i class="ti ti-list"></i> List View
+        </button>
+
         <button class="view-tab active" onclick="switchView('calendar')">
             <i class="ti ti-calendar"></i> Calendar View
         </button>
-          <button class="view-tab" onclick="switchView('list')">
-            <i class="ti ti-list"></i> List View
-        </button>
+        
         <button class="view-tab" onclick="switchView('inbox')">
             <i class="ti ti-inbox"></i> Unified Inbox
         </button>
     </div>
 
+
+    <!-- List View -->
+    <div class="list-view active" id="listView">
+        <div class="posts-list" id="postsList">
+            <div class="loading-state">
+                <div class="loader-spinner"></div>
+                <p>Loading posts...</p>
+            </div>
+        </div>
+    </div>
+
+
     <!-- Calendar View -->
-    <div class="calendar-view active" id="calendarView">
+    <div class="calendar-view" id="calendarView">
         <div class="calendar-header">
             <h2 id="calendarMonth">Loading...</h2>
             <div class="calendar-nav">
@@ -2580,106 +2743,98 @@
         <div id="calendarGrid"></div>
     </div>
 
-    <!-- List View -->
-    <div class="list-view" id="listView">
-        <div class="posts-list" id="postsList">
-            <div class="loading-state">
-                <div class="loader-spinner"></div>
-                <p>Loading posts...</p>
-            </div>
-        </div>
-    </div>
-
 
     <!-- ============================================
      UNIFIED INBOX VIEW
      ============================================ -->
-<div id="inboxView" class="inbox-view">
-    <div class="inbox-container">
-        <!-- Inbox Header -->
-        <div class="inbox-header">
-            <h2>
-                <i class="ti ti-inbox"></i>
-                Unified Inbox
-            </h2>
-            <div class="inbox-filters">
-                <select id="inboxPlatformFilter" onchange="loadInboxMessages()">
-                    <option value="">All Platforms</option>
-                    <option value="whatsapp">WhatsApp</option>
-                    <option value="instagram">Instagram</option>
-                    <option value="facebook">Facebook</option>
-                    <option value="linkedin">LinkedIn</option>
-                </select>
-                <select id="inboxStatusFilter" onchange="loadInboxMessages()">
-                    <option value="">All Messages</option>
-                    <option value="unread">Unread Only</option>
-                    <option value="read">Read Only</option>
-                </select>
-                <button class="btn btn-secondary" onclick="loadInboxMessages()">
-                    <i class="ti ti-refresh"></i> Refresh
-                </button>
+    <div id="inboxView" class="inbox-view">
+        <div class="inbox-container">
+            <!-- Inbox Header -->
+            <div class="inbox-header">
+                <h2>
+                    <i class="ti ti-inbox"></i>
+                    Unified Inbox
+                </h2>
+                <div class="inbox-filters">
+                    <select id="inboxPlatformFilter" onchange="loadInboxMessages()">
+                        <option value="">All Platforms</option>
+                        <option value="whatsapp">WhatsApp</option>
+                        <option value="instagram">Instagram</option>
+                        <option value="facebook">Facebook</option>
+                        <option value="linkedin">LinkedIn</option>
+                    </select>
+                    <select id="inboxStatusFilter" onchange="loadInboxMessages()">
+                        <option value="">All Messages</option>
+                        <option value="unread">Unread Only</option>
+                        <option value="read">Read Only</option>
+                    </select>
+                    <button class="btn btn-secondary" onclick="loadInboxMessages()">
+                        <i class="ti ti-refresh"></i> Refresh
+                    </button>
+                </div>
             </div>
-        </div>
 
-        <!-- Pending Verification Notice -->
-        <div class="pending-notice">
-            <h4>
-                <i class="ti ti-alert-circle"></i>
-                Meta Business Verification Pending
-            </h4>
-            <p>
-                Instagram and Facebook Messenger integration requires Meta Business verification (4-6 week approval process). 
-                WhatsApp Business API is functional and ready to use. Messages from verified platforms will appear here automatically.
-            </p>
-        </div>
+            <!-- Pending Verification Notice -->
+            <div class="pending-notice">
+                <h4>
+                    <i class="ti ti-alert-circle"></i>
+                    Meta Business Verification Pending
+                </h4>
+                <p>
+                    Instagram and Facebook Messenger integration requires Meta Business verification (4-6 week approval
+                    process).
+                    WhatsApp Business API is functional and ready to use. Messages from verified platforms will appear
+                    here automatically.
+                </p>
+            </div>
 
-        <!-- Inbox Stats -->
-        <div id="inboxStats" class="inbox-stats">
-            <!-- Stats will be loaded dynamically -->
-        </div>
+            <!-- Inbox Stats -->
+            <div id="inboxStats" class="inbox-stats">
+                <!-- Stats will be loaded dynamically -->
+            </div>
 
-        <!-- Messages List -->
-        <div id="messagesList" class="messages-list">
-            <div class="loading-state">
-                <div class="loader-spinner"></div>
-                <p>Loading messages...</p>
+            <!-- Messages List -->
+            <div id="messagesList" class="messages-list">
+                <div class="loading-state">
+                    <div class="loader-spinner"></div>
+                    <p>Loading messages...</p>
+                </div>
             </div>
         </div>
     </div>
-</div>
 
-<!-- ============================================
+    <!-- ============================================
      REPLY MODAL
      ============================================ -->
-<div id="replyModal" class="reply-modal">
-    <div class="reply-modal-content">
-        <div class="reply-modal-header">
-            <h3>Reply to Message</h3>
-        </div>
-
-        <div class="original-message" id="originalMessage">
-            <!-- Original message will be displayed here -->
-        </div>
-
-        <form class="reply-form" onsubmit="sendReply(event)">
-            <input type="hidden" id="replyMessageId">
-            
-            <div class="form-group">
-                <label for="replyText">Your Reply</label>
-                <textarea id="replyText" placeholder="Type your reply here..." required></textarea>
+    <div id="replyModal" class="reply-modal">
+        <div class="reply-modal-content">
+            <div class="reply-modal-header">
+                <h3>Reply to Message</h3>
             </div>
 
-            <div class="reply-actions">
-                <button type="button" class="btn btn-secondary" onclick="closeReplyModal()">
-                    Cancel
-                </button>
-                <button type="submit" class="btn btn-primary">
-                    <i class="ti ti-send"></i> Send Reply
-                </button>
+            <div class="original-message" id="originalMessage">
+                <!-- Original message will be displayed here -->
             </div>
-        </form>
+
+            <form class="reply-form" onsubmit="sendReply(event)">
+                <input type="hidden" id="replyMessageId">
+
+                <div class="form-group">
+                    <label for="replyText">Your Reply</label>
+                    <textarea id="replyText" placeholder="Type your reply here..." required></textarea>
+                </div>
+
+                <div class="reply-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeReplyModal()">
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="ti ti-send"></i> Send Reply
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
-</div>
 
 
 </div>
@@ -2751,6 +2906,8 @@
 
 
             </div>
+
+
         </div>
     </div>
 </div>
@@ -2813,6 +2970,7 @@
                     </div>
                 </div>
 
+
                 <!-- Content from Module 5 -->
                 <div class="modal-section">
                     <h3><i class="ti ti-file-text"></i> Content <small
@@ -2864,6 +3022,121 @@
                         <small style="color: #64748b; margin-top: 0.25rem; display: block;">
                             Separate hashtags with commas (without # symbol)
                         </small>
+                    </div>
+                </div>
+
+
+                <!-- AI Calendar Suggestions Section - NEW -->
+                <div class="modal-section">
+                    <h3><i class="ti ti-calendar-event"></i> AI Calendar Suggestions</h3>
+                    <p style="font-size: 12px; color: #64748b; margin-bottom: 1rem;">
+                        Get AI-powered content suggestions for Kerala holidays and special events
+                    </p>
+                    <button type="button" class="btn btn-outline" onclick="showCalendarSuggestions()"
+                        style="width: 100%;">
+                        <i class="ti ti-sparkles"></i> View Calendar Suggestions
+                    </button>
+                    <div id="calendarSuggestionsPanel" style="display: none; margin-top: 1rem;">
+                        <div class="suggestions-loading" style="display: none; text-align: center; padding: 2rem;">
+                            <i class="ti ti-loader"
+                                style="font-size: 2rem; color: #9926F3; animation: spin 1s linear infinite;"></i>
+                            <p style="margin-top: 0.5rem; color: #64748b;">Loading suggestions...</p>
+                        </div>
+                        <div id="suggestionsContent"></div>
+                    </div>
+                </div>
+
+
+                <!-- A/B Testing Toggle Section - NEW -->
+                <div class="modal-section">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h3><i class="ti ti-ab"></i> A/B Testing</h3>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="abTestToggle" onchange="toggleABTest()">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <p style="font-size: 12px; color: #64748b; margin-bottom: 1rem;">
+                        Create two variants and test which performs better at different times
+                    </p>
+
+                    <!-- A/B Test Configuration -->
+                    <div id="abTestConfig" style="display: none;">
+                        <!-- Test Name -->
+                        <div class="form-group" style="margin-bottom: 1rem;">
+                            <label>Test Name <span style="color: #ef4444;">*</span></label>
+                            <input type="text" class="form-control" id="abTestName"
+                                placeholder="e.g., Morning vs Evening Post">
+                        </div>
+
+                        <!-- Test Type -->
+                        <div class="form-group" style="margin-bottom: 1rem;">
+                            <label>Test Type</label>
+                            <select class="form-control" id="abTestType">
+                                <option value="time">Time-based (Same content, different times)</option>
+                                <option value="content">Content-based (Different captions)</option>
+                                <option value="hashtags">Hashtag-based (Different hashtags)</option>
+                                <option value="combined">Combined (Different content & times)</option>
+                            </select>
+                        </div>
+
+                        <!-- Variant Tabs -->
+                        <div class="variant-tabs" style="margin-bottom: 1rem;">
+                            <button type="button" class="variant-tab active" onclick="switchVariant('A')">
+                                <i class="ti ti-letter-a"></i> Variant A
+                            </button>
+                            <button type="button" class="variant-tab" onclick="switchVariant('B')">
+                                <i class="ti ti-letter-b"></i> Variant B
+                            </button>
+                        </div>
+
+                        <!-- Variant A Fields -->
+                        <div id="variantAFields" class="variant-fields">
+                            <div class="form-group">
+                                <label>Caption for Variant A</label>
+                                <textarea class="form-control" id="variantACaption" rows="4"
+                                    placeholder="Write your caption for Variant A..."></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label>Hashtags for Variant A</label>
+                                <input type="text" class="form-control" id="variantAHashtags"
+                                    placeholder="hashtag1, hashtag2, hashtag3">
+                            </div>
+                            <div class="form-group">
+                                <label>Schedule Time for Variant A</label>
+                                <input type="datetime-local" class="form-control" id="variantASchedule">
+                            </div>
+                        </div>
+
+                        <!-- Variant B Fields -->
+                        <div id="variantBFields" class="variant-fields" style="display: none;">
+                            <div class="form-group">
+                                <label>Caption for Variant B</label>
+                                <textarea class="form-control" id="variantBCaption" rows="4"
+                                    placeholder="Write your caption for Variant B..."></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label>Hashtags for Variant B</label>
+                                <input type="text" class="form-control" id="variantBHashtags"
+                                    placeholder="hashtag1, hashtag2, hashtag3">
+                            </div>
+                            <div class="form-group">
+                                <label>Schedule Time for Variant B</label>
+                                <input type="datetime-local" class="form-control" id="variantBSchedule">
+                            </div>
+                        </div>
+
+                        <!-- AI Best Time Suggestions for A/B Testing -->
+                        <div class="ai-time-suggestions" style="margin-top: 1rem;">
+                            <button type="button" class="btn btn-outline" onclick="getABTestTimeSuggestions()"
+                                style="width: 100%;">
+                                <i class="ti ti-clock"></i> Get AI Time Suggestions for A/B Test
+                            </button>
+                            <div id="abTimeSuggestions" style="display: none; margin-top: 1rem;">
+                                <!-- Populated by JavaScript -->
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -3208,6 +3481,229 @@
 
 
 
+
+    // =====================================================
+    // AI CALENDAR SUGGESTIONS FOR KERALA
+    // =====================================================
+
+    async function showCalendarSuggestions() {
+        const panel = document.getElementById('calendarSuggestionsPanel');
+        const content = document.getElementById('suggestionsContent');
+        const loading = document.querySelector('.suggestions-loading');
+
+        if (panel.style.display === 'block') {
+            panel.style.display = 'none';
+            return;
+        }
+
+        panel.style.display = 'block';
+        loading.style.display = 'block';
+        content.innerHTML = '';
+
+        try {
+            const token = localStorage.getItem('access_token');
+            const now = new Date();
+            const month = now.getMonth() + 1;
+            const year = now.getFullYear();
+
+            const response = await fetch(`${API_BASE}/calendar-suggestions?month=${month}&year=${year}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!response.ok) throw new Error('Failed to load suggestions');
+
+            const data = await response.json();
+
+            loading.style.display = 'none';
+
+            if (!data.suggestions || data.suggestions.length === 0) {
+                content.innerHTML = `
+                <div class="empty-state" style="padding: 2rem; text-align: center;">
+                    <i class="ti ti-calendar-off" style="font-size: 2rem; color: #94a3b8;"></i>
+                    <p style="color: #64748b; margin-top: 1rem;">No special events this month</p>
+                </div>
+            `;
+                return;
+            }
+
+            // Sort by date
+            data.suggestions.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+            let html = `
+            <div style="margin-bottom: 1rem;">
+                <h4 style="color: #1e293b; margin-bottom: 0.5rem;">
+                    ${data.month_name} ${data.year} - Special Days in Kerala
+                </h4>
+                <p style="font-size: 12px; color: #64748b;">
+                    ${data.total_suggestions} special events and holidays
+                </p>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 1rem; max-height: 500px; overflow-y: auto;">
+        `;
+
+            data.suggestions.forEach(suggestion => {
+                const dateObj = new Date(suggestion.date);
+                const dateFormatted = dateObj.toLocaleDateString('en-US', {
+                    weekday: 'short',
+                    month: 'short',
+                    day: 'numeric'
+                });
+
+                const typeColors = {
+                    'national': '#10b981',
+                    'festival': '#f59e0b',
+                    'state': '#3b82f6',
+                    'special': '#8b5cf6'
+                };
+
+                const typeColor = typeColors[suggestion.holiday_type] || '#64748b';
+
+                html += `
+                <div class="suggestion-card" style="
+                    border: 2px solid #e2e8f0;
+                    border-radius: 12px;
+                    padding: 1rem;
+                    background: white;
+                    transition: all 0.2s;
+                    cursor: pointer;
+                " onmouseover="this.style.borderColor='#9926F3'; this.style.background='#f8f4ff';"
+                   onmouseout="this.style.borderColor='#e2e8f0'; this.style.background='white';"
+                   onclick="applyCalendarSuggestion('${suggestion.date}', '${escapeHtml(suggestion.holiday_name)}', '${escapeHtml(suggestion.ai_suggestion)}')">
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.75rem;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                                <i class="ti ti-calendar" style="color: ${typeColor};"></i>
+                                <span style="font-weight: 600; color: #1e293b; font-size: 15px;">
+                                    ${suggestion.holiday_name}
+                                </span>
+                            </div>
+                            <div style="font-size: 12px; color: #64748b;">
+                                ${dateFormatted} • ${suggestion.category}
+                            </div>
+                        </div>
+                        <span style="
+                            padding: 0.25rem 0.75rem;
+                            border-radius: 6px;
+                            font-size: 11px;
+                            font-weight: 600;
+                            background: ${typeColor}15;
+                            color: ${typeColor};
+                            text-transform: uppercase;
+                        ">${suggestion.holiday_type}</span>
+                    </div>
+                    
+                    <div style="
+                        background: linear-gradient(135deg, rgba(153, 38, 243, 0.05), rgba(29, 216, 252, 0.05));
+                        padding: 0.75rem;
+                        border-radius: 8px;
+                        border-left: 3px solid #9926F3;
+                        margin-bottom: 0.75rem;
+                    ">
+                        <div style="font-size: 13px; color: #475569; line-height: 1.6;">
+                            ${suggestion.ai_suggestion}
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <i class="ti ti-sparkles" style="color: #9926F3; font-size: 16px;"></i>
+                            <span style="font-size: 12px; color: #64748b;">
+                                AI-Powered Suggestion
+                            </span>
+                        </div>
+                       
+                    </div>
+                </div>
+            `;
+            });
+
+            html += '</div>';
+            content.innerHTML = html;
+
+        } catch (error) {
+            console.error('Error loading calendar suggestions:', error);
+            loading.style.display = 'none';
+            content.innerHTML = `
+            <div class="error-state" style="padding: 2rem; text-align: center;">
+                <i class="ti ti-alert-circle" style="font-size: 2rem; color: #ef4444;"></i>
+                <p style="color: #ef4444; margin-top: 1rem;">Failed to load suggestions</p>
+            </div>
+        `;
+        }
+    }
+
+    function applyCalendarSuggestion(date, holidayName, aiSuggestion) {
+        // Parse the date and set it in the datetime input
+        const dateInput = document.getElementById('postScheduledAt');
+        const statusSelect = document.getElementById('postStatus');
+        const captionInput = document.getElementById('postCaption');
+
+        if (dateInput) {
+            // Format date for datetime-local input
+            const dateObj = new Date(date);
+            const year = dateObj.getFullYear();
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const day = String(dateObj.getDate()).padStart(2, '0');
+
+            // Set to 10 AM by default
+            const formattedDateTime = `${year}-${month}-${day}T10:00`;
+            dateInput.value = formattedDateTime;
+        }
+
+        if (statusSelect) {
+            statusSelect.value = 'scheduled';
+        }
+
+        if (captionInput) {
+            // Parse AI suggestion to extract caption (first paragraph)
+            const captionMatch = aiSuggestion.match(/Caption:(.*?)(?:Hashtags:|$)/is);
+            let caption = captionMatch ? captionMatch[1].trim() : aiSuggestion.substring(0, 200);
+
+            // If no clear caption, use the AI suggestion intelligently
+            if (!captionMatch) {
+                // Take first 2-3 sentences
+                const sentences = aiSuggestion.match(/[^.!?]+[.!?]+/g) || [aiSuggestion];
+                caption = sentences.slice(0, 2).join(' ').trim();
+            }
+
+            captionInput.value = `🎉 ${holidayName} 🎉\n\n${caption}`;
+        }
+
+        // Extract hashtags if present
+        const hashtagMatch = aiSuggestion.match(/Hashtags?:(.*?)(?:\n|$)/i);
+        if (hashtagMatch) {
+            const hashtagInput = document.getElementById('postHashtags');
+            if (hashtagInput) {
+                const hashtags = hashtagMatch[1].trim().replace(/#/g, '');
+                hashtagInput.value = hashtags;
+            }
+        }
+
+        // Show notification
+        showNotification(`Applied suggestion for ${holidayName}! Review and customize as needed.`, 'success');
+
+        // Scroll to top of modal
+        document.querySelector('.modal-body').scrollTop = 0;
+    }
+
+    function escapeHtml(text) {
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;',
+            '\n': ' '
+        };
+        return text.replace(/[&<>"'\n]/g, m => map[m]);
+    }
+
+
+
+
+
+    
 
 </script>
 

@@ -83,6 +83,30 @@ class MessageReplyRequest(BaseModel):
     message_id: int
     reply_text: str
 
+
+
+
+# ========== A/B TESTING MODELS ==========
+class ABTestCreate(BaseModel):
+    """Create A/B test campaign"""
+    client_id: int
+    platform: str
+    test_name: str
+    test_type: str = "time"  # time, content, hashtags, combined
+    
+    # Variant A
+    variant_a_caption: str
+    variant_a_hashtags: List[str] = Field(default_factory=list)
+    variant_a_media_urls: List[str] = Field(default_factory=list)
+    variant_a_scheduled_at: Optional[str] = None
+    
+    # Variant B  
+    variant_b_caption: str
+    variant_b_hashtags: List[str] = Field(default_factory=list)
+    variant_b_media_urls: List[str] = Field(default_factory=list)
+    variant_b_scheduled_at: Optional[str] = None
+
+
 # ========== CREATE POST ==========
 
 @router.post("/posts", summary="Create social media post")
@@ -2942,6 +2966,504 @@ async def mark_message_as_read(
     except Exception as e:
         if connection:
             connection.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+
+
+# ========== AI CALENDAR SUGGESTIONS FOR KERALA ==========
+@router.get("/calendar-suggestions", summary="Get AI-powered calendar suggestions for Kerala")
+async def get_calendar_suggestions(
+    month: Optional[int] = None,
+    year: Optional[int] = None,
+    current_user: dict = Depends(require_admin_or_employee)
+):
+    """
+    Get AI-powered calendar suggestions for special days, holidays, and events in Kerala
+    Includes: National holidays, Kerala festivals, cultural events, and special days
+    """
+    from datetime import datetime
+    import calendar as cal
+    
+    # Use current month/year if not provided
+    now = datetime.now()
+    target_month = month or now.month
+    target_year = year or now.year
+    
+    # Comprehensive Kerala Holidays and Special Days Database
+    kerala_holidays = {
+        1: [  # January
+            {"date": 1, "name": "New Year's Day", "type": "national", "category": "Public Holiday"},
+            {"date": 14, "name": "Makar Sankranti / Pongal", "type": "festival", "category": "Harvest Festival"},
+            {"date": 26, "name": "Republic Day", "type": "national", "category": "Public Holiday"},
+        ],
+        2: [  # February
+            {"date": 14, "name": "Valentine's Day", "type": "special", "category": "International Day"},
+            {"date": 21, "name": "International Mother Language Day", "type": "special", "category": "Cultural Day"},
+        ],
+        3: [  # March
+            {"date": 8, "name": "International Women's Day", "type": "special", "category": "International Day"},
+            {"date": 22, "name": "World Water Day", "type": "special", "category": "Environmental Day"},
+        ],
+        4: [  # April
+            {"date": 1, "name": "April Fool's Day", "type": "special", "category": "Fun Day"},
+            {"date": 14, "name": "Vishu", "type": "festival", "category": "Kerala New Year"},
+            {"date": 15, "name": "Vishu (Day 2)", "type": "festival", "category": "Kerala New Year"},
+            {"date": 22, "name": "Earth Day", "type": "special", "category": "Environmental Day"},
+        ],
+        5: [  # May
+            {"date": 1, "name": "May Day / Labour Day", "type": "national", "category": "Public Holiday"},
+            {"date": 12, "name": "International Nurses Day", "type": "special", "category": "Professional Day"},
+        ],
+        6: [  # June
+            {"date": 5, "name": "World Environment Day", "type": "special", "category": "Environmental Day"},
+            {"date": 21, "name": "International Yoga Day", "type": "special", "category": "Health Day"},
+        ],
+        7: [  # July
+            {"date": 1, "name": "Kerala Piravi (Kerala Formation Day)", "type": "state", "category": "State Holiday"},
+            {"date": 15, "name": "Karkkidakam Vavu", "type": "festival", "category": "Ancestral Day"},
+        ],
+        8: [  # August
+            {"date": 15, "name": "Independence Day", "type": "national", "category": "Public Holiday"},
+            {"date": 15, "name": "Onam Season Begins", "type": "festival", "category": "Kerala Festival"},
+            {"date": 26, "name": "Thiruvonam (Onam)", "type": "festival", "category": "Kerala Festival"},
+        ],
+        9: [  # September
+            {"date": 5, "name": "Teachers' Day", "type": "special", "category": "Professional Day"},
+            {"date": 10, "name": "Ganesh Chaturthi", "type": "festival", "category": "Religious Festival"},
+        ],
+        10: [  # October
+            {"date": 2, "name": "Gandhi Jayanti", "type": "national", "category": "Public Holiday"},
+            {"date": 15, "name": "Dussehra", "type": "festival", "category": "Religious Festival"},
+            {"date": 24, "name": "Diwali", "type": "festival", "category": "Festival of Lights"},
+            {"date": 31, "name": "Halloween", "type": "special", "category": "International Day"},
+        ],
+        11: [  # November
+            {"date": 1, "name": "Kerala Piravi Celebrations", "type": "state", "category": "Cultural Month"},
+            {"date": 12, "name": "Diwali (Kerala)", "type": "festival", "category": "Festival of Lights"},
+            {"date": 14, "name": "Children's Day", "type": "special", "category": "Special Day"},
+        ],
+        12: [  # December
+            {"date": 25, "name": "Christmas", "type": "national", "category": "Public Holiday"},
+            {"date": 31, "name": "New Year's Eve", "type": "special", "category": "Celebration"},
+        ]
+    }
+    
+    # Get holidays for the target month
+    month_holidays = kerala_holidays.get(target_month, [])
+    
+    # Get the number of days in the month
+    days_in_month = cal.monthrange(target_year, target_month)[1]
+    
+    # Generate AI suggestions for each holiday
+    suggestions = []
+    
+    for holiday in month_holidays:
+        day = holiday['date']
+        if day <= days_in_month:
+            date_str = f"{target_year}-{target_month:02d}-{day:02d}"
+            
+            # Generate AI-powered content suggestion using OpenAI
+            try:
+                prompt = f"""Generate a creative and engaging social media post idea for {holiday['name']} ({holiday['category']}) in Kerala.
+                
+Holiday Type: {holiday['type']}
+Context: This is for businesses/brands in Kerala to connect with their audience.
+
+Provide:
+1. A catchy post caption (2-3 sentences)
+2. 3-5 relevant hashtags
+3. Content theme suggestion
+
+Keep it culturally relevant, engaging, and suitable for Instagram/Facebook."""
+
+                response = openai_client.chat.completions.create(
+                    model="gpt-4",
+                    messages=[
+                        {"role": "system", "content": "You are a creative social media content expert specializing in Kerala culture and festivals."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    max_tokens=300,
+                    temperature=0.8
+                )
+                
+                ai_suggestion = response.choices[0].message.content.strip()
+                
+                suggestions.append({
+                    "date": date_str,
+                    "day": day,
+                    "holiday_name": holiday['name'],
+                    "holiday_type": holiday['type'],
+                    "category": holiday['category'],
+                    "ai_suggestion": ai_suggestion,
+                    "relevance_score": 95 if holiday['type'] in ['national', 'festival', 'state'] else 75
+                })
+                
+            except Exception as e:
+                # Fallback if OpenAI fails
+                suggestions.append({
+                    "date": date_str,
+                    "day": day,
+                    "holiday_name": holiday['name'],
+                    "holiday_type": holiday['type'],
+                    "category": holiday['category'],
+                    "ai_suggestion": f"Create engaging content celebrating {holiday['name']}. Share the cultural significance and connect with your audience through relevant visuals and messages.",
+                    "relevance_score": 90 if holiday['type'] in ['national', 'festival', 'state'] else 70,
+                    "note": "OpenAI suggestion unavailable"
+                })
+    
+    return {
+        "success": True,
+        "month": target_month,
+        "year": target_year,
+        "month_name": cal.month_name[target_month],
+        "total_suggestions": len(suggestions),
+        "suggestions": suggestions
+    }
+
+
+
+
+
+
+# ========== CREATE A/B TEST ==========
+@router.post("/ab-tests", summary="Create A/B test campaign")
+async def create_ab_test(
+    test: ABTestCreate,
+    current_user: dict = Depends(require_admin_or_employee)
+):
+    """
+    Create A/B test campaign with two post variants
+    Uses AI best time recommendations for optimal scheduling
+    """
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor(pymysql.cursors.DictCursor)
+        
+        # Verify client exists
+        cursor.execute("SELECT user_id FROM users WHERE user_id = %s AND role = 'client'", 
+                      (test.client_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Client not found")
+        
+        # Create A/B test campaign
+        cursor.execute("""
+            INSERT INTO ab_test_campaigns 
+            (client_id, platform, test_name, test_type, status, created_by)
+            VALUES (%s, %s, %s, %s, 'active', %s)
+        """, (test.client_id, test.platform, test.test_name, test.test_type, current_user['user_id']))
+        
+        ab_test_id = cursor.lastrowid
+        
+        # Parse scheduled times
+        variant_a_time = None
+        variant_b_time = None
+        
+        if test.variant_a_scheduled_at:
+            try:
+                variant_a_time = datetime.fromisoformat(test.variant_a_scheduled_at.replace('Z', '+00:00'))
+            except:
+                pass
+        
+        if test.variant_b_scheduled_at:
+            try:
+                variant_b_time = datetime.fromisoformat(test.variant_b_scheduled_at.replace('Z', '+00:00'))
+            except:
+                pass
+        
+        # Create Variant A Post
+        cursor.execute("""
+            INSERT INTO social_media_posts 
+            (client_id, created_by, platform, caption, media_urls, hashtags, 
+             scheduled_at, status, ab_test_id, ab_variant)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'A')
+        """, (
+            test.client_id,
+            current_user['user_id'],
+            test.platform,
+            test.variant_a_caption,
+            json.dumps(test.variant_a_media_urls),
+            json.dumps(test.variant_a_hashtags),
+            variant_a_time,
+            'scheduled' if variant_a_time else 'draft',
+            ab_test_id
+        ))
+        
+        variant_a_post_id = cursor.lastrowid
+        
+        # Create Variant B Post
+        cursor.execute("""
+            INSERT INTO social_media_posts 
+            (client_id, created_by, platform, caption, media_urls, hashtags, 
+             scheduled_at, status, ab_test_id, ab_variant)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'B')
+        """, (
+            test.client_id,
+            current_user['user_id'],
+            test.platform,
+            test.variant_b_caption,
+            json.dumps(test.variant_b_media_urls),
+            json.dumps(test.variant_b_hashtags),
+            variant_b_time,
+            'scheduled' if variant_b_time else 'draft',
+            ab_test_id
+        ))
+        
+        variant_b_post_id = cursor.lastrowid
+        
+        # Update A/B test with post IDs
+        cursor.execute("""
+            UPDATE ab_test_campaigns 
+            SET variant_a_post_id = %s, variant_b_post_id = %s, started_at = NOW()
+            WHERE test_id = %s
+        """, (variant_a_post_id, variant_b_post_id, ab_test_id))
+        
+        connection.commit()
+        
+        return {
+            "success": True,
+            "message": "A/B test campaign created successfully",
+            "test_id": ab_test_id,
+            "variant_a_post_id": variant_a_post_id,
+            "variant_b_post_id": variant_b_post_id,
+            "variant_a_scheduled_at": test.variant_a_scheduled_at,
+            "variant_b_scheduled_at": test.variant_b_scheduled_at
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        print(f"Error creating A/B test: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create A/B test: {str(e)}"
+        )
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+# ========== GET A/B TESTS ==========
+@router.get("/ab-tests", summary="Get all A/B test campaigns")
+async def get_ab_tests(
+    client_id: Optional[int] = None,
+    status_filter: Optional[str] = None,
+    current_user: dict = Depends(require_admin_or_employee)
+):
+    """Get all A/B test campaigns with results"""
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor(pymysql.cursors.DictCursor)
+        
+        # Build query
+        query = """
+            SELECT 
+                abt.*,
+                u.full_name as client_name,
+                pa.caption as variant_a_caption,
+                pa.scheduled_at as variant_a_scheduled,
+                pb.caption as variant_b_caption,
+                pb.scheduled_at as variant_b_scheduled
+            FROM ab_test_campaigns abt
+            JOIN users u ON abt.client_id = u.user_id
+            LEFT JOIN social_media_posts pa ON abt.variant_a_post_id = pa.post_id
+            LEFT JOIN social_media_posts pb ON abt.variant_b_post_id = pb.post_id
+            WHERE 1=1
+        """
+        params = []
+        
+        if client_id:
+            query += " AND abt.client_id = %s"
+            params.append(client_id)
+        
+        if status_filter:
+            query += " AND abt.status = %s"
+            params.append(status_filter)
+        
+        query += " ORDER BY abt.created_at DESC"
+        
+        cursor.execute(query, params)
+        tests = cursor.fetchall()
+        
+        # Format response
+        results = []
+        for test in tests:
+            results.append({
+                "test_id": test['test_id'],
+                "client_id": test['client_id'],
+                "client_name": test['client_name'],
+                "platform": test['platform'],
+                "test_name": test['test_name'],
+                "test_type": test['test_type'],
+                "status": test['status'],
+                "variant_a": {
+                    "post_id": test['variant_a_post_id'],
+                    "caption": test['variant_a_caption'],
+                    "scheduled_at": test['variant_a_scheduled'].isoformat() if test['variant_a_scheduled'] else None
+                },
+                "variant_b": {
+                    "post_id": test['variant_b_post_id'],
+                    "caption": test['variant_b_caption'],
+                    "scheduled_at": test['variant_b_scheduled'].isoformat() if test['variant_b_scheduled'] else None
+                },
+                "winner_variant": test['winner_variant'],
+                "confidence_score": float(test['confidence_score']) if test['confidence_score'] else None,
+                "started_at": test['started_at'].isoformat() if test['started_at'] else None,
+                "completed_at": test['completed_at'].isoformat() if test['completed_at'] else None,
+                "created_at": test['created_at'].isoformat()
+            })
+        
+        return {
+            "success": True,
+            "tests": results,
+            "total": len(results)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+# ========== GET A/B TEST RESULTS ==========
+@router.get("/ab-tests/{test_id}/results", summary="Get A/B test results and winner")
+async def get_ab_test_results(
+    test_id: int,
+    current_user: dict = Depends(require_admin_or_employee)
+):
+    """
+    Get detailed results for an A/B test
+    Calculates winner based on engagement rate and statistical significance
+    """
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor(pymysql.cursors.DictCursor)
+        
+        # Get test details
+        cursor.execute("""
+            SELECT * FROM ab_test_campaigns WHERE test_id = %s
+        """, (test_id,))
+        
+        test = cursor.fetchone()
+        if not test:
+            raise HTTPException(status_code=404, detail="A/B test not found")
+        
+        # Get results from ab_test_results table
+        cursor.execute("""
+            SELECT * FROM ab_test_results 
+            WHERE test_id = %s 
+            ORDER BY variant, recorded_at DESC
+        """, (test_id,))
+        
+        results = cursor.fetchall()
+        
+        # Calculate aggregated metrics for each variant
+        variant_a_metrics = {
+            "impressions": 0,
+            "reach": 0,
+            "engagement_count": 0,
+            "clicks": 0,
+            "engagement_rate": 0.0
+        }
+        
+        variant_b_metrics = {
+            "impressions": 0,
+            "reach": 0,
+            "engagement_count": 0,
+            "clicks": 0,
+            "engagement_rate": 0.0
+        }
+        
+        for result in results:
+            if result['variant'] == 'A':
+                variant_a_metrics['impressions'] += result['impressions']
+                variant_a_metrics['reach'] += result['reach']
+                variant_a_metrics['engagement_count'] += result['engagement_count']
+                variant_a_metrics['clicks'] += result['clicks']
+            else:
+                variant_b_metrics['impressions'] += result['impressions']
+                variant_b_metrics['reach'] += result['reach']
+                variant_b_metrics['engagement_count'] += result['engagement_count']
+                variant_b_metrics['clicks'] += result['clicks']
+        
+        # Calculate engagement rates
+        if variant_a_metrics['impressions'] > 0:
+            variant_a_metrics['engagement_rate'] = round(
+                (variant_a_metrics['engagement_count'] / variant_a_metrics['impressions']) * 100, 2
+            )
+        
+        if variant_b_metrics['impressions'] > 0:
+            variant_b_metrics['engagement_rate'] = round(
+                (variant_b_metrics['engagement_count'] / variant_b_metrics['impressions']) * 100, 2
+            )
+        
+        # Determine winner
+        winner = None
+        confidence = 0.0
+        
+        if variant_a_metrics['engagement_rate'] > variant_b_metrics['engagement_rate']:
+            winner = 'A'
+            if variant_b_metrics['engagement_rate'] > 0:
+                confidence = round(
+                    ((variant_a_metrics['engagement_rate'] - variant_b_metrics['engagement_rate']) / 
+                     variant_b_metrics['engagement_rate']) * 100, 2
+                )
+        elif variant_b_metrics['engagement_rate'] > variant_a_metrics['engagement_rate']:
+            winner = 'B'
+            if variant_a_metrics['engagement_rate'] > 0:
+                confidence = round(
+                    ((variant_b_metrics['engagement_rate'] - variant_a_metrics['engagement_rate']) / 
+                     variant_a_metrics['engagement_rate']) * 100, 2
+                )
+        else:
+            winner = 'tie'
+        
+        # Update test with winner if not already set
+        if test['status'] == 'active' and (variant_a_metrics['impressions'] > 100 or variant_b_metrics['impressions'] > 100):
+            cursor.execute("""
+                UPDATE ab_test_campaigns 
+                SET winner_variant = %s, confidence_score = %s, 
+                    status = 'completed', completed_at = NOW()
+                WHERE test_id = %s
+            """, (winner, confidence, test_id))
+            connection.commit()
+        
+        return {
+            "success": True,
+            "test_id": test_id,
+            "test_name": test['test_name'],
+            "status": test['status'],
+            "variant_a": variant_a_metrics,
+            "variant_b": variant_b_metrics,
+            "winner": winner,
+            "confidence_score": confidence,
+            "recommendation": f"Variant {winner} performed {confidence}% better" if winner != 'tie' else "Both variants performed equally"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if cursor:

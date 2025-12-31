@@ -1108,7 +1108,7 @@ function changeMonth(delta) {
 }
 
 function showDayPosts(dateStr) {
-    showNotification(`Showing posts for ${dateStr}`, 'info');
+    // showNotification(`Showing posts for ${dateStr}`, 'info');
 }
 
 // =====================================================
@@ -1227,11 +1227,181 @@ function closePostModal() {
     document.getElementById('postModal').classList.remove('active');
 }
 
+
+
+    // =====================================================
+// A/B TESTING FUNCTIONALITY - ADD THIS SECTION
 // =====================================================
-// SAVE POST
+
+let abTestEnabled = false;
+
+function toggleABTest() {
+    const toggle = document.getElementById('abTestToggle');
+    const config = document.getElementById('abTestConfig');
+    
+    abTestEnabled = toggle.checked;
+    
+    if (abTestEnabled) {
+        config.style.display = 'block';
+        // Hide regular fields
+        document.getElementById('postCaption').closest('.modal-section').style.display = 'none';
+        document.getElementById('postHashtags').closest('.form-group').style.display = 'none';
+        document.getElementById('postScheduledAt').closest('.form-group').style.display = 'none';
+        document.getElementById('postStatus').closest('.form-group').style.display = 'none';
+    } else {
+        config.style.display = 'none';
+        // Show regular fields
+        document.getElementById('postCaption').closest('.modal-section').style.display = 'block';
+        document.getElementById('postHashtags').closest('.form-group').style.display = 'block';
+        document.getElementById('postScheduledAt').closest('.form-group').style.display = 'block';
+        document.getElementById('postStatus').closest('.form-group').style.display = 'block';
+    }
+}
+
+function switchVariant(variant) {
+    // Update tab active state
+    document.querySelectorAll('.variant-tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    event.target.closest('.variant-tab').classList.add('active');
+    
+    // Show/hide variant fields
+    if (variant === 'A') {
+        document.getElementById('variantAFields').style.display = 'block';
+        document.getElementById('variantBFields').style.display = 'none';
+    } else {
+        document.getElementById('variantAFields').style.display = 'none';
+        document.getElementById('variantBFields').style.display = 'block';
+    }
+}
+
+async function getABTestTimeSuggestions() {
+    const clientId = document.getElementById('postClient').value;
+    const platform = document.getElementById('postPlatform').value;
+    const suggestionsDiv = document.getElementById('abTimeSuggestions');
+    
+    if (!clientId || !platform) {
+        showNotification('Please select client and platform first', 'error');
+        return;
+    }
+    
+    suggestionsDiv.style.display = 'block';
+    suggestionsDiv.innerHTML = '<div style="text-align: center; padding: 1rem;"><i class="ti ti-loader" style="font-size: 2rem; color: #9926F3; animation: spin 1s linear infinite;"></i></div>';
+    
+    try {
+        const token = localStorage.getItem('access_token');
+        const response = await fetch(`${API_BASE}/best-times?client_id=${clientId}&platform=${platform}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!response.ok) throw new Error('Failed to get time suggestions');
+        
+        const data = await response.json();
+        
+        if (data.recommendations && data.recommendations.length >= 2) {
+            const primary = data.recommendations[0];
+            const alternative = data.recommendations[1];
+            
+            let html = `
+                <div style="background: white; padding: 1rem; border-radius: 8px; border: 2px solid #e2e8f0;">
+                    <h4 style="margin-bottom: 1rem; color: #1e293b; font-size: 14px;">
+                        <i class="ti ti-sparkles" style="color: #9926F3;"></i> 
+                        AI-Recommended Times for A/B Testing
+                    </h4>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div style="background: linear-gradient(135deg, rgba(153, 38, 243, 0.05), rgba(29, 216, 252, 0.05)); 
+                                    padding: 1rem; border-radius: 8px; border-left: 3px solid #9926F3;">
+                            <div style="font-weight: 600; color: #9926F3; margin-bottom: 0.5rem;">
+                                <i class="ti ti-letter-a"></i> Variant A - Best Time
+                            </div>
+                            <div style="font-size: 18px; font-weight: 600; color: #1e293b; margin-bottom: 0.25rem;">
+                                ${primary.day} at ${primary.time_formatted}
+                            </div>
+                            <div style="font-size: 12px; color: #64748b; margin-bottom: 0.75rem;">
+                                Engagement Score: ${primary.engagement_score}/100
+                            </div>
+                            <button type="button" class="btn-small" onclick="applyABTime('A', '${primary.day}', ${primary.hour})" 
+                                    style="width: 100%; padding: 0.5rem; background: linear-gradient(135deg, #9926F3, #1DD8FC); 
+                                           color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                                Apply to Variant A
+                            </button>
+                        </div>
+                        <div style="background: linear-gradient(135deg, rgba(29, 216, 252, 0.05), rgba(153, 38, 243, 0.05)); 
+                                    padding: 1rem; border-radius: 8px; border-left: 3px solid #1DD8FC;">
+                            <div style="font-weight: 600; color: #1DD8FC; margin-bottom: 0.5rem;">
+                                <i class="ti ti-letter-b"></i> Variant B - Alternative Time
+                            </div>
+                            <div style="font-size: 18px; font-weight: 600; color: #1e293b; margin-bottom: 0.25rem;">
+                                ${alternative.day} at ${alternative.time_formatted}
+                            </div>
+                            <div style="font-size: 12px; color: #64748b; margin-bottom: 0.75rem;">
+                                Engagement Score: ${alternative.engagement_score}/100
+                            </div>
+                            <button type="button" class="btn-small" onclick="applyABTime('B', '${alternative.day}', ${alternative.hour})" 
+                                    style="width: 100%; padding: 0.5rem; background: linear-gradient(135deg, #1DD8FC, #9926F3); 
+                                           color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                                Apply to Variant B
+                            </button>
+                        </div>
+                    </div>
+                    <div style="margin-top: 1rem; padding: 0.75rem; background: #fef3c7; border-radius: 6px; 
+                                border-left: 3px solid #f59e0b;">
+                        <div style="font-size: 12px; color: #92400e;">
+                            <i class="ti ti-bulb"></i> <strong>A/B Testing Tip:</strong> Testing at different times helps identify when your audience is most engaged
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            suggestionsDiv.innerHTML = html;
+        } else {
+            suggestionsDiv.innerHTML = '<div style="padding: 1rem; text-align: center; color: #64748b;">Not enough data for time suggestions</div>';
+        }
+        
+    } catch (error) {
+        console.error('Error getting time suggestions:', error);
+        suggestionsDiv.innerHTML = '<div style="padding: 1rem; text-align: center; color: #ef4444;">Failed to load suggestions</div>';
+    }
+}
+
+function applyABTime(variant, day, hour) {
+    const inputId = variant === 'A' ? 'variantASchedule' : 'variantBSchedule';
+    const input = document.getElementById(inputId);
+    
+    if (!input) return;
+    
+    // Calculate next occurrence of this day
+    const dayMap = {
+        'Sunday': 0, 'Monday': 1, 'Tuesday': 2, 'Wednesday': 3,
+        'Thursday': 4, 'Friday': 5, 'Saturday': 6
+    };
+    
+    const targetDayIndex = dayMap[day];
+    const now = new Date();
+    const currentDayIndex = now.getDay();
+    
+    let daysUntil = targetDayIndex - currentDayIndex;
+    if (daysUntil <= 0) daysUntil += 7;
+    
+    const targetDate = new Date();
+    targetDate.setDate(targetDate.getDate() + daysUntil);
+    targetDate.setHours(hour, 0, 0, 0);
+    
+    const year = targetDate.getFullYear();
+    const month = String(targetDate.getMonth() + 1).padStart(2, '0');
+    const dateNum = String(targetDate.getDate()).padStart(2, '0');
+    const hourStr = String(hour).padStart(2, '0');
+    
+    input.value = `${year}-${month}-${dateNum}T${hourStr}:00`;
+    
+    showNotification(`Applied ${day} at ${hour}:00 to Variant ${variant}`, 'success');
+}
+
+
+
+
 // =====================================================
-// =====================================================
-// SAVE POST (WITH CONFLICT DETECTION)
+// SAVE POST (WITH A/B TESTING & CONFLICT DETECTION)
 // =====================================================
 
 async function savePost(event) {
@@ -1246,17 +1416,97 @@ async function savePost(event) {
 
         const token = localStorage.getItem('access_token');
         const clientId = document.getElementById('postClient').value;
+
+        if (!clientId) {
+            showNotification('Please select a client', 'error');
+            throw new Error('Client required');
+        }
+
+        // ============================================================
+        // CHECK IF A/B TESTING IS ENABLED
+        // ============================================================
+        if (abTestEnabled) {
+            const platform = document.getElementById('postPlatform').value;
+            const testName = document.getElementById('abTestName').value;
+            const testType = document.getElementById('abTestType').value;
+            
+            const variantACaption = document.getElementById('variantACaption').value;
+            const variantAHashtags = document.getElementById('variantAHashtags').value.split(',').map(h => h.trim()).filter(h => h);
+            const variantASchedule = document.getElementById('variantASchedule').value;
+            
+            const variantBCaption = document.getElementById('variantBCaption').value;
+            const variantBHashtags = document.getElementById('variantBHashtags').value.split(',').map(h => h.trim()).filter(h => h);
+            const variantBSchedule = document.getElementById('variantBSchedule').value;
+            
+            // Validation for A/B Test
+            if (!platform) {
+                showNotification('Please select a platform', 'error');
+                throw new Error('Platform required');
+            }
+            
+            if (!testName) {
+                showNotification('Please enter a test name', 'error');
+                throw new Error('Test name required');
+            }
+            
+            if (!variantACaption || !variantBCaption) {
+                showNotification('Please enter captions for both variants', 'error');
+                throw new Error('Captions required');
+            }
+            
+            if (!variantASchedule || !variantBSchedule) {
+                showNotification('Please schedule times for both variants', 'error');
+                throw new Error('Schedule times required');
+            }
+            
+            // Create A/B Test
+            const abTestData = {
+                client_id: parseInt(clientId),
+                platform: platform,
+                test_name: testName,
+                test_type: testType,
+                variant_a_caption: variantACaption,
+                variant_a_hashtags: variantAHashtags,
+                variant_a_media_urls: selectedMediaUrls,
+                variant_a_scheduled_at: variantASchedule,
+                variant_b_caption: variantBCaption,
+                variant_b_hashtags: variantBHashtags,
+                variant_b_media_urls: selectedMediaUrls,
+                variant_b_scheduled_at: variantBSchedule
+            };
+            
+            const response = await fetch(`${API_BASE}/ab-tests`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(abTestData)
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                showNotification(`A/B test "${testName}" created successfully! Variants will be published at scheduled times.`, 'success');
+                closePostModal();
+                loadPosts();
+                loadCalendar();
+                loadStats();
+                return; // Exit function after A/B test creation
+            } else {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || 'Failed to create A/B test');
+            }
+        }
+
+        // ============================================================
+        // REGULAR POST CREATION (NON A/B TEST)
+        // ============================================================
         const platforms = document.getElementById('postPlatform').value;
         const caption = document.getElementById('postCaption').value;
         const hashtagsInput = document.getElementById('postHashtags').value;
         const hashtags = hashtagsInput.split(',').map(h => h.trim()).filter(h => h);
         const status = document.getElementById('postStatus').value;
         const scheduledAt = document.getElementById('postScheduledAt').value;
-
-        if (!clientId) {
-            showNotification('Please select a client', 'error');
-            throw new Error('Client required');
-        }
 
         if (!platforms) {
             showNotification('Please select at least one platform', 'error');
@@ -1268,46 +1518,48 @@ async function savePost(event) {
             throw new Error('Caption required');
         }
 
-        // ✅ NEW: Check for scheduling conflicts if scheduling a post
+        // ============================================================
+        // CHECK FOR SCHEDULING CONFLICTS
+        // ============================================================
         if (status === 'scheduled' && scheduledAt) {
             const platformList = platforms.split(',').filter(p => p.trim());
-            const firstPlatform = platformList[0].trim();
             
             try {
-                const conflictResponse = await fetch(`${API_BASE}/check-conflicts`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({
-                        client_id: parseInt(clientId),
-                        platform: firstPlatform,
-                        scheduled_at: scheduledAt
-                    })
-                });
-                
-                if (conflictResponse.ok) {
-                    const conflictData = await conflictResponse.json();
-                    
-                    if (conflictData.has_conflicts) {
-                        // Build detailed conflict message
-                        let conflictMessage = `⚠️ SCHEDULING CONFLICT DETECTED!\n\n`;
-                        conflictMessage += `Found ${conflictData.conflict_count} post(s) scheduled within 2 hours:\n\n`;
+                for (const platform of platformList) {
+                    const conflictResponse = await fetch(`${API_BASE}/check-conflicts`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({
+                            client_id: parseInt(clientId),
+                            platform: platform.trim(),
+                            scheduled_at: scheduledAt
+                        })
+                    });
+
+                    if (conflictResponse.ok) {
+                        const conflictData = await conflictResponse.json();
                         
-                        conflictData.conflicts.forEach((conflict, index) => {
-                            conflictMessage += `${index + 1}. "${conflict.caption_preview}"\n`;
-                            conflictMessage += `   Scheduled: ${new Date(conflict.scheduled_at).toLocaleString()}\n`;
-                            conflictMessage += `   Time difference: ${conflict.time_difference}\n\n`;
-                        });
-                        
-                        conflictMessage += `${conflictData.recommendation}\n\n`;
-                        conflictMessage += `Do you want to proceed anyway?`;
-                        
-                        const proceed = confirm(conflictMessage);
-                        
-                        if (!proceed) {
-                            throw new Error('Cancelled due to scheduling conflicts');
+                        if (conflictData.has_conflicts) {
+                            let conflictMessage = `⚠️ SCHEDULING CONFLICT DETECTED\n\n`;
+                            conflictMessage += `${conflictData.conflict_count} post(s) scheduled within 2 hours on ${platform}:\n\n`;
+                            
+                            conflictData.conflicts.forEach((conflict, index) => {
+                                conflictMessage += `${index + 1}. "${conflict.caption_preview}"\n`;
+                                conflictMessage += `   Scheduled: ${new Date(conflict.scheduled_at).toLocaleString()}\n`;
+                                conflictMessage += `   Time difference: ${conflict.time_difference}\n\n`;
+                            });
+                            
+                            conflictMessage += `${conflictData.recommendation}\n\n`;
+                            conflictMessage += `Do you want to proceed anyway?`;
+                            
+                            const proceed = confirm(conflictMessage);
+                            
+                            if (!proceed) {
+                                throw new Error('Cancelled due to scheduling conflicts');
+                            }
                         }
                     }
                 }
@@ -1320,6 +1572,9 @@ async function savePost(event) {
             }
         }
 
+        // ============================================================
+        // CREATE/UPDATE POSTS FOR EACH PLATFORM
+        // ============================================================
         const platformList = platforms.split(',').filter(p => p.trim());
         let successCount = 0;
 
@@ -1338,6 +1593,7 @@ async function savePost(event) {
             let url = `${API_BASE}/posts`;
             let method = 'POST';
 
+            // If editing and only one platform, update existing post
             if (currentEditingPostId && platformList.length === 1) {
                 url += `/${currentEditingPostId}`;
                 method = 'PUT';
@@ -1354,11 +1610,18 @@ async function savePost(event) {
 
             if (response.ok) {
                 successCount++;
+            } else {
+                const errorData = await response.json();
+                console.error(`Failed to save post for ${platform}:`, errorData);
             }
         }
 
+        // ============================================================
+        // SHOW SUCCESS/ERROR MESSAGE
+        // ============================================================
         if (successCount > 0) {
-            showNotification(`Successfully saved ${successCount} post(s)`, 'success');
+            const action = currentEditingPostId ? 'updated' : 'created';
+            showNotification(`Successfully ${action} ${successCount} post(s)`, 'success');
             closePostModal();
             loadPosts();
             loadCalendar();
@@ -1369,7 +1632,7 @@ async function savePost(event) {
 
     } catch (error) {
         console.error('Error saving post:', error);
-        if (!['Client required', 'Platform required', 'Caption required', 'Cancelled due to scheduling conflicts'].includes(error.message)) {
+        if (!['Client required', 'Platform required', 'Caption required', 'Test name required', 'Captions required', 'Schedule times required', 'Cancelled due to scheduling conflicts'].includes(error.message)) {
             showNotification(error.message || 'Failed to save post', 'error');
         }
     } finally {
@@ -2213,3 +2476,9 @@ window.loadTrendingTopics = loadTrendingTopics;
 window.loadConnectedAccounts = loadConnectedAccounts;
 window.disconnectAccount = disconnectAccount;
 window.displayConnectedAccounts = displayConnectedAccounts;
+
+window.toggleABTest = toggleABTest;
+window.switchVariant = switchVariant;
+window.getABTestTimeSuggestions = getABTestTimeSuggestions;
+window.applyABTime = applyABTime;
+

@@ -431,7 +431,7 @@ def get_keyword_position_from_gsc(site_url: str, keyword: str) -> Optional[float
         # Silent fail - any GSC error
         return None
 
-        
+
 
 async def get_keyword_position_serp(website_url: str, keyword: str) -> Dict[str, Any]:
     """
@@ -1280,12 +1280,17 @@ Create a compelling outreach email that:
 4. Includes a specific request
 5. Has a professional sign-off
 
-Return as JSON with fields: subject, body, follow_up (for a follow-up email)"""
+Return ONLY a valid JSON object with these exact fields:
+- subject: email subject line (plain text, no newlines)
+- body: email body (use \\n for line breaks)
+- follow_up: follow-up email text (use \\n for line breaks)
+
+Ensure all text uses \\n for line breaks and has no unescaped control characters."""
 
             response = client.chat.completions.create(
                 model="gpt-4",
                 messages=[
-                    {"role": "system", "content": "You are an expert outreach specialist. Return only valid JSON."},
+                    {"role": "system", "content": "You are an expert outreach specialist. Return ONLY valid JSON with properly escaped strings. Use \\n for line breaks."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.8,
@@ -1293,13 +1298,34 @@ Return as JSON with fields: subject, body, follow_up (for a follow-up email)"""
             )
             
             response_text = response.choices[0].message.content.strip()
+            
+            # Remove markdown code blocks if present
             if response_text.startswith('```'):
                 response_text = response_text.split('```')[1]
                 if response_text.startswith('json'):
                     response_text = response_text[4:]
                 response_text = response_text.strip()
             
-            email_content = json.loads(response_text)
+            # Remove any trailing code block markers
+            if response_text.endswith('```'):
+                response_text = response_text[:-3].strip()
+            
+            # Clean up any remaining control characters before parsing
+            response_text = response_text.replace('\r\n', '\\n').replace('\r', '\\n').replace('\t', '    ')
+            
+            try:
+                email_content = json.loads(response_text)
+                
+                # Ensure all required fields exist
+                if not all(key in email_content for key in ['subject', 'body', 'follow_up']):
+                    raise ValueError("Missing required fields in AI response")
+                    
+            except (json.JSONDecodeError, ValueError) as e:
+                # Fallback if AI response is malformed
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to parse AI response: {str(e)}"
+                )
         else:
             email_content = {
                 "subject": f"Collaboration Opportunity - {request.anchor_text}",
@@ -1307,19 +1333,22 @@ Return as JSON with fields: subject, body, follow_up (for a follow-up email)"""
                 "follow_up": "Hi,\n\nJust following up on my previous email about a potential collaboration.\n\nLet me know if you'd like to discuss further.\n\nBest"
             }
         
-        # Save backlink to database
+        # Save backlink to database with correct status value
         query = """
             INSERT INTO backlinks 
             (seo_project_id, source_url, target_url, anchor_text, status, outreach_email)
-            VALUES (%s, %s, %s, %s, 'pending', %s)
+            VALUES (%s, %s, %s, %s, 'active', %s)
         """
+        
+        # Ensure JSON is properly serialized
+        outreach_email_json = json.dumps(email_content, ensure_ascii=False)
         
         cursor.execute(query, (
             request.seo_project_id,
             request.target_url,
             website_url,
             request.anchor_text,
-            json.dumps(email_content)
+            outreach_email_json
         ))
         connection.commit()
         
@@ -1348,6 +1377,7 @@ Return as JSON with fields: subject, body, follow_up (for a follow-up email)"""
             cursor.close()
         if connection:
             connection.close()
+
 
 
 @router.get("/backlinks/list/{project_id}")
