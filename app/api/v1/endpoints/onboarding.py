@@ -356,6 +356,9 @@ async def get_my_onboarding(current_user: dict = Depends(get_current_user)):
         if connection:
             connection.close()
 
+# File: app/api/v1/endpoints/onboarding.py
+# Update the submit-verification endpoint
+
 @router.post("/submit-verification", summary="Submit verification data")
 async def submit_verification_data(
     verification_data: dict,
@@ -363,6 +366,7 @@ async def submit_verification_data(
 ):
     """
     Client submits business verification data
+    FIXED: Now also creates/updates client_profiles table
     """
     connection = None
     cursor = None
@@ -371,8 +375,10 @@ async def submit_verification_data(
         connection = get_db_connection()
         cursor = connection.cursor()
         
+        # Convert to JSON for onboarding_sessions
         verification_json = json.dumps(verification_data)
         
+        # Step 1: Update onboarding_sessions with verification data
         cursor.execute(
             "UPDATE onboarding_sessions SET verification_data = %s, verification_status = 'pending' WHERE user_id = %s",
             (verification_json, current_user['user_id'])
@@ -383,6 +389,60 @@ async def submit_verification_data(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Onboarding session not found. Please select a package first."
             )
+        
+        # Step 2: Extract data for client_profiles table
+        business_name = verification_data.get('business_name')
+        business_type = verification_data.get('business_type')
+        website_url = verification_data.get('website_url')
+        monthly_budget = verification_data.get('monthly_budget')  # Form sends monthly_budget
+        
+        # Convert monthly_budget to current_budget (if provided)
+        current_budget = None
+        if monthly_budget:
+            try:
+                current_budget = float(monthly_budget)
+            except (ValueError, TypeError):
+                current_budget = None
+        
+        # Step 3: Check if client profile already exists
+        cursor.execute(
+            "SELECT COUNT(*) as count FROM client_profiles WHERE client_id = %s",
+            (current_user['user_id'],)
+        )
+        
+        profile_exists = cursor.fetchone()['count'] > 0
+        
+        if profile_exists:
+            # Update existing profile
+            cursor.execute("""
+                UPDATE client_profiles 
+                SET business_name = %s,
+                    business_type = %s,
+                    website_url = %s,
+                    current_budget = %s
+                WHERE client_id = %s
+            """, (
+                business_name,
+                business_type,
+                website_url,
+                current_budget,
+                current_user['user_id']
+            ))
+            print(f"✅ Updated client profile for user {current_user['user_id']}")
+        else:
+            # Create new profile
+            cursor.execute("""
+                INSERT INTO client_profiles 
+                (client_id, business_name, business_type, website_url, current_budget)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (
+                current_user['user_id'],
+                business_name,
+                business_type,
+                website_url,
+                current_budget
+            ))
+            print(f"✅ Created client profile for user {current_user['user_id']}")
         
         connection.commit()
         
@@ -397,6 +457,8 @@ async def submit_verification_data(
         if connection:
             connection.rollback()
         print(f"❌ Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to submit verification data: {str(e)}"
