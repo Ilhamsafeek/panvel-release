@@ -17,6 +17,7 @@ import base64
 from fastapi import Body
 import requests
 
+
 from app.core.config import settings
 from app.core.security import require_admin_or_employee, get_current_user
 from app.core.security import get_db_connection
@@ -731,14 +732,24 @@ async def get_audience_insights_endpoint(
 
 # ========== API ENDPOINTS ==========
 
+# ========== UPDATE EXISTING ENDPOINT IN app/api/v1/endpoints/content.py ==========
+# Replace the existing /generate endpoint with this enhanced version
+
 @router.post("/generate")
 async def generate_content(
     request: ContentGenerateRequest,
     current_user: dict = Depends(require_admin_or_employee)
 ):
-    """Generate AI-powered content for social media"""
+    """
+    Generate AI-powered content for social media
+    ENHANCED with UC017 requirements:
+    - Text sentiment analysis (positive/neutral/negative)
+    - Performance score 1-100 (≥70 = Optimized)
+    - Improvement tips with percentage increases
+    """
     
     try:
+        # Generate content
         result = generate_ai_content(
             platform=request.platform,
             content_type=request.content_type,
@@ -748,12 +759,14 @@ async def generate_content(
             keywords=request.keywords
         )
         
+        # Generate hashtags
         hashtags = generate_hashtags(
             platform=request.platform,
             topic=request.topic,
             keywords=request.keywords
         )
         
+        # ENHANCED: Calculate performance with sentiment + improvement tips
         performance = await calculate_performance_score(
             content_text=result.get('content', ''),
             platform=request.platform,
@@ -764,10 +777,24 @@ async def generate_content(
         return {
             "success": True,
             "data": {
+                # Original content
                 **result,
                 "hashtags": hashtags,
+                
+                # ENHANCED: Complete performance analysis
                 "performance_score": performance.get('overall_score', 0),
                 "optimization_status": performance.get('optimization_status', 'Unknown'),
+                "is_optimized": performance.get('is_optimized', False),
+                "score_color": performance.get('score_color', 'gray'),
+                "score_label": performance.get('score_label', 'Unknown'),
+                
+                # NEW: Sentiment Analysis
+                "sentiment_analysis": performance.get('sentiment_analysis', {}),
+                
+                # NEW: Improvement Tips with % increases
+                "improvement_tips": performance.get('improvement_tips', []),
+                
+                # Full performance breakdown
                 "performance_analysis": performance
             }
         }
@@ -776,6 +803,137 @@ async def generate_content(
         raise
     except Exception as e:
         print(f"Error in generate_content: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
+@router.post("/intelligence/generate")
+async def generate_multi_platform_content(
+    request: MultiPlatformContentRequest,
+    current_user: dict = Depends(require_admin_or_employee)
+):
+    """
+    Generate AI-powered content for multiple platforms simultaneously
+    ENHANCED with UC017 requirements
+    """
+    try:
+        if not openai_client:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="AI service not available"
+            )
+        
+        # Generate audience insights if requested
+        audience_insights = None
+        suggested_keywords = None
+        
+        if request.generate_audience_insights:
+            try:
+                insights_data = await generate_audience_and_keywords(
+                    client_id=request.client_id,
+                    topic=request.topic,
+                    platform=request.platforms[0] if request.platforms else "instagram",
+                    industry=None  # ✅ Fixed: pass None since industry not in model
+                )
+                audience_insights = insights_data.get('audience_insights', [])
+                suggested_keywords = insights_data.get('keywords', [])
+            except Exception as e:
+                print(f"Audience insights generation failed: {e}")
+                # ✅ Continue without insights instead of crashing
+                audience_insights = None
+                suggested_keywords = None
+        
+        # Use suggested keywords if available
+        final_keywords = request.keywords or suggested_keywords or []
+        
+        # Generate content for each platform
+        variants = []
+        for platform in request.platforms:
+            try:
+                result = generate_ai_content(
+                    platform=platform,
+                    content_type=request.content_type,
+                    topic=request.topic,
+                    tone=request.tone,
+                    target_audience=request.target_audience,
+                    keywords=final_keywords
+                )
+                
+                hashtags = generate_hashtags(
+                    platform=platform,
+                    topic=request.topic,
+                    keywords=final_keywords
+                )
+                
+                # ENHANCED: Calculate performance with sentiment + improvement tips
+                performance = await calculate_performance_score(
+                    content_text=result.get('content', ''),
+                    platform=platform,
+                    target_audience=request.target_audience,
+                    keywords=final_keywords
+                )
+                
+                guidelines = get_platform_guidelines(platform)
+                
+                variants.append({
+                    "platform": platform,
+                    "content": result.get('content', ''),
+                    "caption": result.get('caption', result.get('content', '')),
+                    "headline": result.get('headline', ''),
+                    "hashtags": hashtags,
+                    "cta": result.get('cta', ''),
+                    
+                    # Performance metrics
+                    "performance_score": performance.get('overall_score', 0),
+                    "optimization_status": performance.get('optimization_status', 'Unknown'),
+                    "is_optimized": performance.get('is_optimized', False),
+                    "score_color": performance.get('score_color', 'gray'),
+                    "score_label": performance.get('score_label', 'Unknown'),
+                    
+                    # NEW: Sentiment Analysis
+                    "sentiment_analysis": performance.get('sentiment_analysis', {}),
+                    
+                    # NEW: Improvement Tips with % increases
+                    "improvement_tips": performance.get('improvement_tips', []),
+                    
+                    # Guidelines
+                    "guidelines": guidelines,
+                    "character_count": len(result.get('content', '')),
+                    "optimal_length": guidelines.get('optimal_chars', 150)
+                })
+                
+            except Exception as e:
+                print(f"Error generating content for {platform}: {e}")
+                variants.append({
+                    "platform": platform,
+                    "error": str(e),
+                    "content": "",
+                    "caption": "",
+                    "hashtags": [],
+                    "performance_score": 0,
+                    "is_optimized": False,
+                    "sentiment_analysis": {},
+                    "improvement_tips": []
+                })
+        
+        return {
+            "success": True,
+            "data": {
+                "variants": variants,
+                "audience_insights": audience_insights,
+                "suggested_keywords": suggested_keywords,
+                "topic": request.topic,
+                "content_type": request.content_type,
+                "tone": request.tone
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in generate_multi_platform_content: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
@@ -802,18 +960,21 @@ async def generate_multi_platform_content(
         audience_insights = None
         suggested_keywords = None
         
-        if request.generate_audience_insights and request.client_id:
+        if request.generate_audience_insights:
             try:
-                ai_data = await generate_audience_and_keywords(
+                insights_data = await generate_audience_and_keywords(
                     client_id=request.client_id,
                     topic=request.topic,
                     platform=request.platforms[0] if request.platforms else "instagram",
-                    industry=None
+                    industry=None  # ✅ Fixed: pass None since industry not in model
                 )
-                audience_insights = ai_data.get('target_audience', {})
-                suggested_keywords = ai_data.get('keywords', {})
+                audience_insights = insights_data.get('audience_insights', [])
+                suggested_keywords = insights_data.get('keywords', [])
             except Exception as e:
-                print(f"Warning: Could not generate audience insights: {e}")
+                print(f"Audience insights generation failed: {e}")
+                # ✅ Continue without insights instead of crashing
+                audience_insights = None
+                suggested_keywords = None
         
         # Use AI-generated audience if not provided
         target_audience = request.target_audience
@@ -1493,3 +1654,328 @@ async def get_audience_insights_endpoint(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
+
+async def analyze_text_sentiment(content_text: str) -> Dict[str, Any]:
+    """
+    NLP Sentiment Analysis for content text
+    BRD REQUIREMENT: UC017 - Text Analysis: NLP for sentiment (positive/neutral/negative)
+    """
+    try:
+        if not openai_client:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="AI service not available for sentiment analysis"
+            )
+        
+        prompt = f"""Analyze the sentiment of this social media content. 
+
+Content: "{content_text}"
+
+Respond with ONLY valid JSON in this exact format:
+{{
+    "sentiment": "positive|neutral|negative",
+    "score": 0.0-1.0,
+    "confidence": 0.0-1.0,
+    "emotion": "specific emotion",
+    "reasoning": "brief explanation"
+}}"""
+
+        response = openai_client.chat.completions.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=200
+        )
+        
+        result = response.choices[0].message.content.strip()
+        
+        # Remove markdown code blocks if present
+        if result.startswith('```'):
+            result = result.split('```')[1]
+            if result.startswith('json'):
+                result = result[4:]
+            result = result.strip()
+        
+        sentiment_data = json.loads(result)
+        
+        return {
+            "sentiment": sentiment_data.get("sentiment", "neutral"),
+            "score": sentiment_data.get("score", 0.5),
+            "confidence": sentiment_data.get("confidence", 0.5),
+            "emotion": sentiment_data.get("emotion", "unknown"),
+            "reasoning": sentiment_data.get("reasoning", "")
+        }
+        
+    except json.JSONDecodeError as e:
+        print(f"Sentiment analysis JSON error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to parse sentiment analysis: {str(e)}"
+        )
+    except Exception as e:
+        print(f"Sentiment analysis error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to analyze sentiment: {str(e)}"
+        )
+
+
+async def generate_improvement_tips(
+    content_text: str,
+    platform: str,
+    current_score: float,
+    sentiment: str,
+    has_cta: bool,
+    has_hashtags: bool,
+    has_emoji: bool,
+    content_length: int
+) -> List[Dict[str, Any]]:
+    """
+    Generate AI-powered improvement tips with percentage increases
+    BRD REQUIREMENT: UC017 - Improvement Tips with percentage increases
+    Example: "Add call-to-action button (CTR +15%)"
+    """
+    try:
+        if not openai_client:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="AI service not available for improvement tips generation"
+            )
+        
+        prompt = f"""You are an expert social media analyst. Analyze this {platform} content and provide specific, actionable improvement suggestions with predicted percentage increases.
+
+Content: "{content_text}"
+Current Performance Score: {current_score}/100
+Platform: {platform}
+Sentiment: {sentiment}
+Has CTA: {has_cta}
+Has Hashtags: {has_hashtags}
+Has Emoji: {has_emoji}
+Content Length: {content_length} characters
+
+Provide 3-5 specific improvement tips. Each tip must include:
+1. What to improve
+2. Predicted percentage increase in engagement/CTR/reach
+3. Priority level (high/medium/low)
+
+Respond with ONLY valid JSON array:
+[
+    {{
+        "tip": "Specific actionable improvement",
+        "impact": "CTR +15%",
+        "category": "Call-to-Action|Content Length|Visual Elements|Hashtags|Sentiment|Timing",
+        "priority": "high|medium|low",
+        "reasoning": "Why this will help"
+    }}
+]
+
+Make tips specific to {platform} best practices."""
+
+        response = openai_client.chat.completions.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=800
+        )
+        
+        result = response.choices[0].message.content.strip()
+        
+        # Remove markdown code blocks if present
+        if result.startswith('```'):
+            result = result.split('```')[1]
+            if result.startswith('json'):
+                result = result[4:]
+            result = result.strip()
+        
+        tips = json.loads(result)
+        
+        # Ensure it's a list
+        if not isinstance(tips, list):
+            tips = [tips]
+        
+        return tips[:5]  # Max 5 tips
+        
+    except Exception as e:
+        print(f"Improvement tips generation error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate improvement tips: {str(e)}"
+        )
+
+
+async def calculate_performance_score(
+    content_text: str,
+    platform: str,
+    target_audience: Optional[str] = None,
+    keywords: Optional[List[str]] = None
+) -> Dict[str, Any]:
+    """
+    Enhanced Content Performance Score Calculator
+    BRD REQUIREMENT: UC017 - Performance Score 1-100 scale (≥70 = "Optimized")
+    
+    Returns:
+        Dict with:
+        - overall_score: 1-100
+        - sentiment_analysis: NLP results
+        - improvement_tips: AI suggestions with % increases
+        - optimization_status: "Optimized" or "Needs Improvement"
+    """
+    
+    guidelines = get_platform_guidelines(platform)
+    content_length = len(content_text)
+    
+    # ========== 1. SENTIMENT ANALYSIS (NEW) ==========
+    sentiment_analysis = await analyze_text_sentiment(content_text)
+    
+    # Sentiment score contribution (10% weight)
+    sentiment_score = 50  # default neutral
+    if sentiment_analysis['sentiment'] == 'positive':
+        sentiment_score = 80 + (sentiment_analysis['score'] * 20)
+    elif sentiment_analysis['sentiment'] == 'negative':
+        sentiment_score = 30 - (sentiment_analysis['score'] * 20)
+    else:
+        sentiment_score = 50
+    
+    # ========== 2. LENGTH SCORE (30% weight) ==========
+    optimal_length = guidelines['optimal_chars']
+    max_length = guidelines['max_chars']
+    
+    if content_length <= optimal_length:
+        length_score = (content_length / optimal_length) * 100
+    elif content_length <= max_length:
+        length_score = 100 - ((content_length - optimal_length) / (max_length - optimal_length)) * 30
+    else:
+        length_score = 40
+    
+    # ========== 3. ENGAGEMENT INDICATORS (30% weight) ==========
+    engagement_score = 50
+    has_emoji = bool(re.search(r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\U0001F1E0-\U0001F1FF]', content_text))
+    has_question = '?' in content_text
+    has_cta = any(cta in content_text.lower() for cta in ['click', 'learn', 'discover', 'get', 'try', 'join', 'start', 'buy', 'shop', 'download'])
+    has_personal = any(word in content_text.lower() for word in ['you', 'your', "you're"])
+    
+    if has_emoji:
+        engagement_score += 15
+    if has_question:
+        engagement_score += 10
+    if has_personal:
+        engagement_score += 10
+    if has_cta:
+        engagement_score += 15
+    if content_text.strip() and content_text[0].isupper():
+        engagement_score += 10
+    
+    engagement_score = min(100, engagement_score)
+    
+    # ========== 4. HASHTAG USAGE (15% weight) ==========
+    hashtag_count = content_text.count('#')
+    has_hashtags = hashtag_count > 0
+    optimal_hashtags = guidelines.get('optimal_hashtags', 5)
+    
+    if hashtag_count == 0:
+        hashtag_score = 30
+    elif hashtag_count <= optimal_hashtags:
+        hashtag_score = (hashtag_count / optimal_hashtags) * 100
+    else:
+        hashtag_score = max(50, 100 - ((hashtag_count - optimal_hashtags) * 10))
+    
+    # ========== 5. KEYWORD INTEGRATION (15% weight) ==========
+    keyword_score = 70
+    if keywords:
+        keywords_found = sum(1 for kw in keywords if kw.lower() in content_text.lower())
+        keyword_score = (keywords_found / len(keywords)) * 100 if keywords else 70
+    
+    # ========== 6. CALCULATE OVERALL SCORE ==========
+    overall_score = (
+        (sentiment_score * 0.10) +
+        (length_score * 0.30) + 
+        (engagement_score * 0.30) + 
+        (hashtag_score * 0.15) +
+        (keyword_score * 0.15)
+    )
+    overall_score = min(100, max(0, overall_score))
+    
+    # ========== 7. OPTIMIZATION STATUS ==========
+    is_optimized = overall_score >= 70
+    optimization_status = "Optimized" if is_optimized else "Needs Improvement"
+    
+    # Determine color zone for UI
+    if overall_score >= 80:
+        score_color = "green"
+        score_label = "Excellent"
+    elif overall_score >= 70:
+        score_color = "yellow"
+        score_label = "Good"
+    elif overall_score >= 50:
+        score_color = "orange"
+        score_label = "Fair"
+    else:
+        score_color = "red"
+        score_label = "Poor"
+    
+    # ========== 8. GENERATE IMPROVEMENT TIPS (NEW) ==========
+    improvement_tips = await generate_improvement_tips(
+        content_text=content_text,
+        platform=platform,
+        current_score=overall_score,
+        sentiment=sentiment_analysis['sentiment'],
+        has_cta=has_cta,
+        has_hashtags=has_hashtags,
+        has_emoji=has_emoji,
+        content_length=content_length
+    )
+    
+    # ========== 9. RETURN COMPLETE ANALYSIS ==========
+    return {
+        # Score metrics
+        "overall_score": round(overall_score, 1),
+        "sentiment_score": round(sentiment_score, 1),
+        "length_score": round(length_score, 1),
+        "engagement_score": round(engagement_score, 1),
+        "hashtag_score": round(hashtag_score, 1),
+        "keyword_score": round(keyword_score, 1),
+        
+        # Status
+        "optimization_status": optimization_status,
+        "is_optimized": is_optimized,
+        "score_color": score_color,
+        "score_label": score_label,
+        
+        # NEW: Sentiment Analysis
+        "sentiment_analysis": {
+            "sentiment": sentiment_analysis['sentiment'],
+            "score": round(sentiment_analysis['score'], 2),
+            "confidence": round(sentiment_analysis['confidence'], 2),
+            "emotion": sentiment_analysis['emotion'],
+            "reasoning": sentiment_analysis['reasoning']
+        },
+        
+        # NEW: Improvement Tips with % increases
+        "improvement_tips": improvement_tips,
+        
+        # Content metrics
+        "character_count": content_length,
+        "optimal_length": optimal_length,
+        "max_length": max_length,
+        "hashtag_count": hashtag_count,
+        
+        # Indicators
+        "has_cta": has_cta,
+        "has_hashtags": has_hashtags,
+        "has_emoji": has_emoji,
+        "has_question": has_question
+    }
+
+
+def get_platform_guidelines(platform: str) -> Dict[str, int]:
+    """Get platform-specific guidelines"""
+    guidelines = {
+        'instagram': {'optimal_chars': 125, 'max_chars': 2200, 'optimal_hashtags': 5},
+        'facebook': {'optimal_chars': 40, 'max_chars': 63206, 'optimal_hashtags': 3},
+        'twitter': {'optimal_chars': 71, 'max_chars': 280, 'optimal_hashtags': 2},
+        'linkedin': {'optimal_chars': 150, 'max_chars': 3000, 'optimal_hashtags': 3},
+        'tiktok': {'optimal_chars': 100, 'max_chars': 150, 'optimal_hashtags': 5},
+        'youtube': {'optimal_chars': 100, 'max_chars': 5000, 'optimal_hashtags': 3}
+    }
+    return guidelines.get(platform.lower(), {'optimal_chars': 150, 'max_chars': 1000, 'optimal_hashtags': 3})
+

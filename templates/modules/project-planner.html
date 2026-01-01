@@ -2352,6 +2352,7 @@ PanvelIQ Team</textarea>
         let value_propositions = [];
         let competitive_analysis = {};
         let roi_simulation = {};
+        let achievability_assessment = {};
 
         try {
             strategy = typeof proposal.ai_generated_strategy === 'string'
@@ -2379,6 +2380,18 @@ PanvelIQ Team</textarea>
                 ? JSON.parse(proposal.suggested_timeline)
                 : (proposal.suggested_timeline || {});
             console.log('Parsed timeline:', timeline);
+
+            // Unwrap project wrapper if it exists
+            if (timeline && timeline.project && !timeline.phases) {
+                console.log('Unwrapping timeline.project structure');
+                timeline = {
+                    ...timeline,
+                    phases: timeline.project.phases,
+                    budget: timeline.project.budget
+                };
+            }
+
+            console.log('Final timeline structure:', timeline);
         } catch (e) {
             console.error('Error parsing timeline:', e);
             timeline = {};
@@ -2417,12 +2430,26 @@ PanvelIQ Team</textarea>
             roi_simulation = {};
         }
 
+
+        // Parse achievability assessment
+        try {
+            achievability_assessment = typeof proposal.achievability_assessment === 'string'
+                ? JSON.parse(proposal.achievability_assessment)
+                : (proposal.achievability_assessment || {});
+        } catch (e) {
+            console.error('Error parsing achievability_assessment:', e);
+            achievability_assessment = {};
+        }
+
+
+        achievability_assessment = JSON.parse(achievability_assessment);
+
         console.log('=== CHECKING DATA AVAILABILITY ===');
         console.log('Campaigns:', strategy.campaigns || strategy.Recommended_Campaigns);
         console.log('Tools:', strategy.automation_tools || strategy.Automation_Tools);
         console.log('Company:', proposal.company_name || proposal.Company || strategy.Company);
 
-        const content = generateProposalHTML(proposal, strategy, differentiators, timeline, value_propositions, competitive_analysis, roi_simulation);
+        const content = generateProposalHTML(proposal, strategy, differentiators, timeline, value_propositions, competitive_analysis, roi_simulation, achievability_assessment);
 
         // Set content in editor
         quillEditor.clipboard.dangerouslyPasteHTML(content);
@@ -2433,7 +2460,7 @@ PanvelIQ Team</textarea>
         console.log('=== CONTENT LOADED SUCCESSFULLY ===');
     }
 
-    function generateProposalHTML(proposal, strategy, differentiators, timeline, value_propositions, competitive_analysis, roi_simulation) {
+    function generateProposalHTML(proposal, strategy, differentiators, timeline, value_propositions, competitive_analysis, roi_simulation, achievability_assessment) {
 
         console.log('=== GENERATING PROPOSAL HTML ===');
         console.log('Strategy:', strategy);
@@ -2441,11 +2468,13 @@ PanvelIQ Team</textarea>
 
         console.log('=== GENERATING PROPOSAL HTML ===');
         console.log('Strategy:', strategy);
+        console.log('Achievability:', achievability_assessment);
 
         // FIX: Unwrap nested roi_simulation if it exists
         if (roi_simulation && roi_simulation.roi_simulation) {
             roi_simulation = roi_simulation.roi_simulation;
         }
+        
 
         console.log('Unwrapped ROI:', roi_simulation); // ADD THIS TO VERIFY
 
@@ -2455,7 +2484,14 @@ PanvelIQ Team</textarea>
         const campaigns = strategy.Recommended_Campaigns || strategy.campaigns || [];
         const tools = strategy.Automation_Tools || strategy.automation_tools || [];
         const diffItems = differentiators.differentiators || [];
+        // Extract phases - handle both nested and flat structures
         const phases = timeline.phases || [];
+
+        console.log('=== TIMELINE DEBUG ===');
+        console.log('Timeline structure:', timeline);
+        console.log('Phases extracted:', phases);
+        console.log('Phases count:', phases.length);
+        console.log('=== END DEBUG ===');
 
         console.log('Campaigns found:', campaigns.length);
         console.log('Tools found:', tools.length);
@@ -2609,18 +2645,55 @@ PanvelIQ Team</textarea>
       `
             : '';
 
-        // Build timeline HTML
+        // Build timeline HTML - support both phase_name and phase fields
         const timelineHTML = phases.length > 0
-            ? phases.map((phase, idx) => `
-            <h3><strong>Phase ${idx + 1}: ${phase.phase || phase.name || `Phase ${idx + 1}`}</strong></h3>
-            <p><strong>Duration:</strong> ${phase.duration}</p>
-            <p><strong>Key Deliverables:</strong></p>
-            <ul>
-                ${(phase.deliverables || []).map(del => `<li>${del}</li>`).join('')}
-            </ul>
-          `).join('')
-            : `<h3><strong>Phase 1: Planning & Setup</strong></h3><p><strong>Duration:</strong> 2-4 weeks</p><ul><li>Initial strategy development</li></ul>`;
+            ? phases.map((phase, idx) => {
+                const phaseName = phase.phase_name || phase.phase || phase.name || `Phase ${idx + 1}`;
+                const phaseNumber = phase.phase_number || idx + 1;
+                const duration = phase.duration || 'TBD';
+                const milestones = phase.milestones || [];
+                const deliverables = phase.deliverables || [];
 
+                return `
+            <div style="margin-bottom: 1.5rem; padding: 1.5rem; background: linear-gradient(135deg, #f9fafb 0%, #ffffff 100%); border-left: 4px solid #9926F3; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                <h3 style="margin: 0 0 0.75rem 0; color: #111827; font-size: 1.25rem;">
+                    <strong>Phase ${phaseNumber}: ${phaseName}</strong>
+                </h3>
+                <p style="margin: 0 0 1rem 0; color: #6B7280; font-size: 0.95rem;">
+                    <strong style="color: #9926F3;">⏱ Duration:</strong> ${duration}
+                </p>
+                
+                ${milestones.length > 0 ? `
+                    <div style="margin-bottom: 1rem;">
+                        <p style="margin: 0 0 0.5rem 0; font-weight: 600; color: #374151; font-size: 0.95rem;">
+                            🎯 Key Milestones:
+                        </p>
+                        <ul style="margin: 0; padding-left: 1.5rem; color: #4B5563;">
+                            ${milestones.map(m => `<li style="margin-bottom: 0.25rem;">${m}</li>`).join('')}
+                        </ul>
+                    </div>
+                ` : ''}
+                
+                ${deliverables.length > 0 ? `
+                    <div>
+                        <p style="margin: 0 0 0.5rem 0; font-weight: 600; color: #374151; font-size: 0.95rem;">
+                            📦 Deliverables:
+                        </p>
+                        <ul style="margin: 0; padding-left: 1.5rem; color: #4B5563;">
+                            ${deliverables.map(d => `<li style="margin-bottom: 0.25rem;">${d}</li>`).join('')}
+                        </ul>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+            }).join('')
+            : `
+    <div style="margin-bottom: 1.5rem; padding: 1.5rem; background: #f9fafb; border-left: 4px solid #9926F3; border-radius: 10px;">
+        <h3 style="margin: 0 0 0.5rem 0;"><strong>Phase 1: Planning & Setup</strong></h3>
+        <p style="margin: 0.25rem 0;"><strong>Duration:</strong> 2-4 weeks</p>
+        <ul style="margin: 0.5rem 0;"><li>Initial strategy development</li></ul>
+    </div>
+    `;
         const challenges = proposal.challenges || (strategy.Challenges ? strategy.Challenges.join(', ') : 'Enhancing digital presence');
         const targetAudience = proposal.target_audience || strategy.Target_Audience || 'Target market segments';
         const budget = proposal.budget || strategy.Budget || 0;
@@ -2690,6 +2763,50 @@ PanvelIQ Team</textarea>
         <hr style="margin: 2rem 0;">
         
         <br>
+
+     ${achievability_assessment ? `
+<h2><strong>Achievability Assessment</strong></h2>
+<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 2rem; border-radius: 12px; color: white; margin: 2rem 0;">
+    ${(() => {
+
+        console.log(achievability_assessment);
+        // Handle nested structure
+        const assessment = achievability_assessment.realistic_assessment || achievability_assessment;
+        const score = assessment.achievability_score || 0;
+        const status = assessment.status || 'Assessment';
+        const text = assessment.assessment || '';
+        const recommendations = assessment.recommendations || [];
+        const risks = assessment.risk_factors || [];
+        
+        return `
+    <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+        <div style="font-size: 3rem; font-weight: bold;">${score}%</div>
+        <div>
+            <h3 style="margin: 0; color: white;">Achievability Score</h3>
+            <p style="margin: 0.25rem 0 0 0; font-size: 1.25rem;"><strong>${status}</strong></p>
+        </div>
+    </div>
+    <p style="margin: 1rem 0; font-size: 1rem;">${text}</p>
+    
+    ${recommendations.length > 0 ? `
+    <h4 style="margin: 1.5rem 0 0.5rem 0; color: white;">✅ Recommendations:</h4>
+    <ul style="margin: 0; padding-left: 1.5rem;">
+        ${recommendations.map(rec => `<li style="margin: 0.25rem 0;">${rec}</li>`).join('')}
+    </ul>
+    ` : ''}
+    
+    ${risks.length > 0 ? `
+    <h4 style="margin: 1.5rem 0 0.5rem 0; color: white;">⚠️ Risk Factors:</h4>
+    <ul style="margin: 0; padding-left: 1.5rem;">
+        ${risks.map(risk => `<li style="margin: 0.25rem 0;">${risk}</li>`).join('')}
+    </ul>
+    ` : ''}
+        `;
+    })()}
+</div>
+` : ''}
+
+
         
         <h2><strong>Next Steps</strong></h2>
         <ol>

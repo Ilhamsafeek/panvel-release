@@ -1,4 +1,4 @@
-<!-- AI Assistant Chatbot Widget - COMPLETE IMPLEMENTATION -->
+<!-- AI Assistant Chatbot Widget - WITH 500 CHARACTER LIMIT -->
 <div class="chatbot-widget" id="chatbotWidget">
     <!-- Chatbot Button -->
     <button class="chatbot-button" id="chatbotButton">
@@ -37,7 +37,6 @@
             <!-- Welcome message will be inserted here -->
         </div>
 
-        <!-- Quick Actions -->
         <!-- Quick Actions - BRD SPECIFIED BUTTONS -->
         <div class="chatbot-quick-actions" id="quickActions">
             <button class="quick-action-btn" data-message="I need help with document upload and validation">
@@ -70,12 +69,21 @@
             </div>
         </div>
 
-        <!-- Input -->
+        <!-- Input with Character Counter -->
         <div class="chatbot-input">
-            <textarea id="chatbotTextarea" placeholder="Type your message..." rows="1"></textarea>
-            <button class="chatbot-send-btn" id="chatbotSend">
-                <i class="ti ti-send"></i>
-            </button>
+            <div class="chatbot-input-wrapper">
+                <div class="chatbot-textarea-container">
+                    <textarea 
+                        id="chatbotTextarea" 
+                        placeholder="Type your message..." 
+                        rows="1"
+                        maxlength="500"></textarea>
+                    <div class="char-counter" id="charCounter">0/500</div>
+                </div>
+                <button class="chatbot-send-btn" id="chatbotSend">
+                    <i class="ti ti-send"></i>
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -134,12 +142,10 @@
         bottom: 80px;
         right: 0;
         width: 400px;
-        max-width: 90vw;
         height: 600px;
-        max-height: 80vh;
         background: white;
         border-radius: 16px;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
         display: none;
         flex-direction: column;
         overflow: hidden;
@@ -166,7 +172,7 @@
     .chatbot-header {
         background: linear-gradient(135deg, #9926F3, #1DD8FC);
         color: white;
-        padding: 1rem 1.25rem;
+        padding: 1.25rem;
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -174,8 +180,8 @@
 
     .chatbot-header-info {
         display: flex;
-        align-items: center;
         gap: 0.75rem;
+        align-items: center;
     }
 
     .chatbot-avatar {
@@ -213,7 +219,6 @@
     }
 
     @keyframes pulse {
-
         0%,
         100% {
             opacity: 1;
@@ -230,16 +235,17 @@
     }
 
     .chatbot-action-btn {
-        background: rgba(255, 255, 255, 0.2);
-        border: none;
-        color: white;
         width: 32px;
         height: 32px;
-        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.2);
+        border: none;
+        border-radius: 8px;
+        color: white;
         cursor: pointer;
         display: flex;
         align-items: center;
         justify-content: center;
+        font-size: 18px;
         transition: background 0.2s;
     }
 
@@ -247,7 +253,7 @@
         background: rgba(255, 255, 255, 0.3);
     }
 
-    /* Messages Area */
+    /* Messages */
     .chatbot-messages {
         flex: 1;
         overflow-y: auto;
@@ -258,13 +264,13 @@
         gap: 1rem;
     }
 
-    .chatbot-message {
+    .message {
         display: flex;
         gap: 0.75rem;
-        animation: messageSlideIn 0.3s ease;
+        animation: messageSlide 0.3s ease;
     }
 
-    @keyframes messageSlideIn {
+    @keyframes messageSlide {
         from {
             opacity: 0;
             transform: translateY(10px);
@@ -276,27 +282,27 @@
         }
     }
 
-    .chatbot-message.user {
+    .message.user {
         flex-direction: row-reverse;
     }
 
     .message-avatar {
-        width: 36px;
-        height: 36px;
+        width: 32px;
+        height: 32px;
         border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
+        font-size: 16px;
         flex-shrink: 0;
-        font-size: 18px;
     }
 
-    .chatbot-message.bot .message-avatar {
+    .message.bot .message-avatar {
         background: linear-gradient(135deg, #9926F3, #1DD8FC);
         color: white;
     }
 
-    .chatbot-message.user .message-avatar {
+    .message.user .message-avatar {
         background: #e9ecef;
         color: #495057;
     }
@@ -305,21 +311,20 @@
         max-width: 70%;
     }
 
-    .message-content p {
-        margin: 0 0 0.25rem 0;
+    .message-bubble {
         padding: 0.75rem 1rem;
         border-radius: 12px;
-        font-size: 14px;
         line-height: 1.5;
+        font-size: 14px;
     }
 
-    .chatbot-message.bot .message-content p {
+    .message.bot .message-bubble {
         background: white;
-        color: #2d3748;
         border-bottom-left-radius: 4px;
+        color: #2c3e50;
     }
 
-    .chatbot-message.user .message-content p {
+    .message.user .message-bubble {
         background: linear-gradient(135deg, #9926F3, #1DD8FC);
         color: white;
         border-bottom-right-radius: 4px;
@@ -327,35 +332,19 @@
 
     .message-time {
         font-size: 11px;
-        color: #999;
-        padding: 0 0.5rem;
+        color: #6c757d;
+        margin-top: 0.25rem;
+        padding: 0 0.25rem;
     }
 
-    .sentiment-indicator {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.25rem;
-        font-size: 11px;
-        padding: 0 0.5rem;
-        color: #999;
-    }
-
-    .sentiment-indicator.positive {
-        color: #2ecc71;
-    }
-
-    .sentiment-indicator.neutral {
-        color: #95a5a6;
-    }
-
-    .sentiment-indicator.negative {
-        color: #e74c3c;
+    .message.user .message-time {
+        text-align: right;
     }
 
     /* Quick Actions */
     .chatbot-quick-actions {
-        padding: 1rem 1.25rem;
-        background: white;
+        padding: 0.75rem 1.25rem;
+        background: #f8f9fa;
         border-top: 1px solid #e9ecef;
         display: flex;
         gap: 0.5rem;
@@ -428,18 +417,27 @@
         }
     }
 
-    /* Input Area */
+    /* Input Area with Character Counter */
     .chatbot-input {
-        padding: 1rem 1.25rem;
+        padding: 1rem 1.25rem 1.25rem;
         background: white;
         border-top: 1px solid #e9ecef;
+    }
+
+    .chatbot-input-wrapper {
         display: flex;
         gap: 0.75rem;
         align-items: flex-end;
     }
 
-    .chatbot-input textarea {
+    .chatbot-textarea-container {
         flex: 1;
+        position: relative;
+        padding-bottom: 20px;
+    }
+
+    .chatbot-input textarea {
+        width: 100%;
         border: 1px solid #e9ecef;
         border-radius: 20px;
         padding: 0.625rem 1rem;
@@ -453,6 +451,33 @@
 
     .chatbot-input textarea:focus {
         border-color: #9926F3;
+    }
+
+    .chatbot-input textarea.limit-warning {
+        border-color: #ff9f43;
+    }
+
+    .chatbot-input textarea.limit-exceeded {
+        border-color: #ff4757;
+    }
+
+    /* Character Counter */
+    .char-counter {
+        position: absolute;
+        bottom: 0;
+        right: 0;
+        font-size: 11px;
+        color: #6c757d;
+        font-weight: 500;
+    }
+
+    .char-counter.warning {
+        color: #ff9f43;
+    }
+
+    .char-counter.exceeded {
+        color: #ff4757;
+        font-weight: 600;
     }
 
     .chatbot-send-btn {
@@ -478,6 +503,7 @@
     .chatbot-send-btn:disabled {
         opacity: 0.5;
         cursor: not-allowed;
+        transform: scale(1);
     }
 
     /* Scrollbar */
@@ -506,7 +532,7 @@
 </style>
 
 <script>
-    // Chatbot Widget JavaScript
+    // Chatbot Widget JavaScript with 500 Character Limit
     (function () {
         const API_BASE = `/api/v1/chatbot`;
         let sessionId = localStorage.getItem('chatbot_session_id') || null;
@@ -520,6 +546,7 @@
         const chatbotMessages = document.getElementById('chatbotMessages');
         const chatbotTextarea = document.getElementById('chatbotTextarea');
         const chatbotSend = document.getElementById('chatbotSend');
+        const charCounter = document.getElementById('charCounter');
         const typingIndicator = document.getElementById('typingIndicator');
         const quickActions = document.querySelectorAll('.quick-action-btn');
 
@@ -535,10 +562,33 @@
             chatbotSend.addEventListener('click', sendMessage);
             chatbotTextarea.addEventListener('keypress', handleKeyPress);
 
-            // Auto-resize textarea
+            // Auto-resize textarea and character counter
             chatbotTextarea.addEventListener('input', function () {
+                // Auto-resize
                 this.style.height = 'auto';
                 this.style.height = Math.min(this.scrollHeight, 100) + 'px';
+                
+                // Update character counter
+                const currentLength = this.value.length;
+                const maxLength = 500;
+                
+                charCounter.textContent = `${currentLength}/${maxLength}`;
+                
+                // Apply visual feedback
+                chatbotTextarea.classList.remove('limit-warning', 'limit-exceeded');
+                charCounter.classList.remove('warning', 'exceeded');
+                
+                if (currentLength >= maxLength) {
+                    chatbotTextarea.classList.add('limit-exceeded');
+                    charCounter.classList.add('exceeded');
+                    chatbotSend.disabled = true;
+                } else if (currentLength >= 450) {
+                    chatbotTextarea.classList.add('limit-warning');
+                    charCounter.classList.add('warning');
+                    chatbotSend.disabled = false;
+                } else {
+                    chatbotSend.disabled = false;
+                }
             });
 
             // Quick actions
@@ -546,6 +596,11 @@
                 btn.addEventListener('click', function () {
                     const message = this.getAttribute('data-message');
                     chatbotTextarea.value = message;
+                    
+                    // Update character counter
+                    const currentLength = message.length;
+                    charCounter.textContent = `${currentLength}/500`;
+                    
                     sendMessage();
                 });
             });
@@ -631,12 +686,25 @@
         async function sendMessage() {
             const message = chatbotTextarea.value.trim();
 
+            // Validate message
             if (!message || isTyping) return;
+            
+            // Enforce 500-character limit (double-check)
+            if (message.length > 500) {
+                alert('Message exceeds 500 character limit. Please shorten your message.');
+                return;
+            }
 
             // Add user message to UI
             addMessage('user', message, new Date());
             chatbotTextarea.value = '';
             chatbotTextarea.style.height = 'auto';
+            
+            // Reset character counter
+            charCounter.textContent = '0/500';
+            charCounter.classList.remove('warning', 'exceeded');
+            chatbotTextarea.classList.remove('limit-warning', 'limit-exceeded');
+            chatbotSend.disabled = false;
 
             // Show typing indicator
             showTypingIndicator();
@@ -679,42 +747,6 @@
             }
         }
 
-        function addMessage(sender, text, timestamp, sentiment = null) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `chatbot-message ${sender}`;
-
-            const avatarDiv = document.createElement('div');
-            avatarDiv.className = 'message-avatar';
-            avatarDiv.innerHTML = sender === 'bot' ? '<i class="ti ti-robot"></i>' : '<i class="ti ti-user"></i>';
-
-            const contentDiv = document.createElement('div');
-            contentDiv.className = 'message-content';
-
-            const textP = document.createElement('p');
-            textP.textContent = text;
-
-            const timeSpan = document.createElement('span');
-            timeSpan.className = 'message-time';
-            timeSpan.textContent = formatTime(timestamp);
-
-            contentDiv.appendChild(textP);
-            contentDiv.appendChild(timeSpan);
-
-            // Add sentiment indicator for user messages
-            if (sender === 'user' && sentiment) {
-                const sentimentSpan = document.createElement('span');
-                sentimentSpan.className = `sentiment-indicator ${sentiment}`;
-                sentimentSpan.innerHTML = `<i class="ti ti-mood-${getSentimentIcon(sentiment)}"></i>`;
-                contentDiv.appendChild(sentimentSpan);
-            }
-
-            messageDiv.appendChild(avatarDiv);
-            messageDiv.appendChild(contentDiv);
-
-            chatbotMessages.appendChild(messageDiv);
-            chatbotMessages.scrollTop = chatbotMessages.scrollHeight;
-        }
-
         function showTypingIndicator() {
             isTyping = true;
             typingIndicator.style.display = 'flex';
@@ -726,25 +758,54 @@
             typingIndicator.style.display = 'none';
         }
 
+        function addMessage(type, text, time, sentiment = null) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+
+            const avatar = document.createElement('div');
+            avatar.className = 'message-avatar';
+            avatar.innerHTML = type === 'bot' ? '<i class="ti ti-robot"></i>' : '<i class="ti ti-user"></i>';
+
+            const content = document.createElement('div');
+            content.className = 'message-content';
+
+            const bubble = document.createElement('div');
+            bubble.className = 'message-bubble';
+            bubble.textContent = text;
+
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'message-time';
+            timeDiv.textContent = formatTime(time);
+
+            content.appendChild(bubble);
+            content.appendChild(timeDiv);
+
+            messageDiv.appendChild(avatar);
+            messageDiv.appendChild(content);
+
+            chatbotMessages.appendChild(messageDiv);
+            chatbotMessages.scrollTop = chatbotMessages.scrollHeight;
+        }
+
         function formatTime(date) {
             const now = new Date();
-            const diff = now - date;
+            const messageDate = new Date(date);
 
-            if (diff < 60000) return 'Just now';
-            if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+            const diffMs = now - messageDate;
+            const diffMins = Math.floor(diffMs / 60000);
 
-            return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+            if (diffMins < 1) return 'Just now';
+            if (diffMins < 60) return `${diffMins}m ago`;
+
+            const hours = messageDate.getHours();
+            const minutes = messageDate.getMinutes();
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            const displayHours = hours % 12 || 12;
+
+            return `${displayHours}:${minutes.toString().padStart(2, '0')} ${ampm}`;
         }
 
-        function getSentimentIcon(sentiment) {
-            switch (sentiment) {
-                case 'positive': return 'happy';
-                case 'negative': return 'sad';
-                default: return 'neutral';
-            }
-        }
-
-        // Initialize on load
+        // Initialize when DOM is ready
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', init);
         } else {

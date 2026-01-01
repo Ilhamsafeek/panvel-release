@@ -356,70 +356,123 @@ async def get_my_onboarding(current_user: dict = Depends(get_current_user)):
         if connection:
             connection.close()
 
-# File: app/api/v1/endpoints/onboarding.py
-# Update the submit-verification endpoint
-
 @router.post("/submit-verification", summary="Submit verification data")
 async def submit_verification_data(
     verification_data: dict,
     current_user: dict = Depends(get_current_user)
 ):
     """
-    Client submits business verification data
-    FIXED: Now also creates/updates client_profiles table
+    Client submits business verification data - DIAGNOSTIC VERSION
     """
     connection = None
     cursor = None
     
+    print("\n" + "="*80)
+    print("🔍 VERIFICATION SUBMISSION STARTED")
+    print("="*80)
+    
     try:
+        # Log incoming data
+        print(f"📥 Current User: {current_user}")
+        print(f"📥 Verification Data: {json.dumps(verification_data, indent=2)}")
+        
+        # Get database connection
+        print("\n🔌 Connecting to database...")
         connection = get_db_connection()
         cursor = connection.cursor()
+        print("✅ Database connected successfully")
         
-        # Convert to JSON for onboarding_sessions
-        verification_json = json.dumps(verification_data)
+        # Check if user exists
+        print(f"\n👤 Checking if user {current_user['user_id']} exists...")
+        cursor.execute("SELECT * FROM users WHERE user_id = %s", (current_user['user_id'],))
+        user = cursor.fetchone()
         
-        # Step 1: Update onboarding_sessions with verification data
+        if not user:
+            print(f"❌ ERROR: User {current_user['user_id']} not found in database!")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found in database"
+            )
+        
+        print(f"✅ User found: {user['email']} (Role: {user['role']}, Status: {user['status']})")
+        
+        # Check if onboarding session exists
+        print(f"\n📋 Checking onboarding session for user {current_user['user_id']}...")
         cursor.execute(
-            "UPDATE onboarding_sessions SET verification_data = %s, verification_status = 'pending' WHERE user_id = %s",
-            (verification_json, current_user['user_id'])
+            "SELECT * FROM onboarding_sessions WHERE user_id = %s",
+            (current_user['user_id'],)
         )
+        onboarding = cursor.fetchone()
         
-        if cursor.rowcount == 0:
+        if not onboarding:
+            print("❌ ERROR: No onboarding session found!")
+            print("💡 User must select a package first")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Onboarding session not found. Please select a package first."
             )
         
-        # Step 2: Extract data for client_profiles table
+        print(f"✅ Onboarding session found (ID: {onboarding['onboarding_id']})")
+        print(f"   Package ID: {onboarding['selected_package_id']}")
+        print(f"   Status: {onboarding['verification_status']}")
+        
+        # Convert to JSON for onboarding_sessions
+        verification_json = json.dumps(verification_data)
+        print(f"\n📝 Verification JSON length: {len(verification_json)} characters")
+        
+        # STEP 1: Update onboarding_sessions
+        print("\n🔄 STEP 1: Updating onboarding_sessions table...")
+        cursor.execute(
+            """UPDATE onboarding_sessions 
+               SET verification_data = %s, 
+                   verification_status = 'pending' 
+               WHERE user_id = %s""",
+            (verification_json, current_user['user_id'])
+        )
+        rows_updated = cursor.rowcount
+        print(f"✅ Onboarding sessions updated: {rows_updated} row(s)")
+        
+        # STEP 2: Extract client profile data
+        print("\n📊 STEP 2: Extracting client profile data...")
         business_name = verification_data.get('business_name')
         business_type = verification_data.get('business_type')
         website_url = verification_data.get('website_url')
-        monthly_budget = verification_data.get('monthly_budget')  # Form sends monthly_budget
+        monthly_budget = verification_data.get('monthly_budget')
         
-        # Convert monthly_budget to current_budget (if provided)
+        print(f"   business_name: {business_name}")
+        print(f"   business_type: {business_type}")
+        print(f"   website_url: {website_url}")
+        print(f"   monthly_budget: {monthly_budget}")
+        
+        # Convert budget
         current_budget = None
         if monthly_budget:
             try:
                 current_budget = float(monthly_budget)
-            except (ValueError, TypeError):
+                print(f"   ✅ Budget converted: {current_budget}")
+            except (ValueError, TypeError) as e:
+                print(f"   ⚠️ Budget conversion failed: {e}")
                 current_budget = None
         
-        # Step 3: Check if client profile already exists
+        # STEP 3: Check if profile exists
+        print("\n🔍 STEP 3: Checking if client_profiles entry exists...")
         cursor.execute(
-            "SELECT COUNT(*) as count FROM client_profiles WHERE client_id = %s",
+            "SELECT * FROM client_profiles WHERE client_id = %s",
             (current_user['user_id'],)
         )
+        existing_profile = cursor.fetchone()
         
-        profile_exists = cursor.fetchone()['count'] > 0
-        
-        if profile_exists:
-            # Update existing profile
+        if existing_profile:
+            print(f"✅ Profile found (ID: {existing_profile['profile_id']})")
+            print("🔄 UPDATING existing profile...")
+            
             cursor.execute("""
                 UPDATE client_profiles 
                 SET business_name = %s,
                     business_type = %s,
                     website_url = %s,
-                    current_budget = %s
+                    current_budget = %s,
+                    updated_at = NOW()
                 WHERE client_id = %s
             """, (
                 business_name,
@@ -428,9 +481,14 @@ async def submit_verification_data(
                 current_budget,
                 current_user['user_id']
             ))
-            print(f"✅ Updated client profile for user {current_user['user_id']}")
+            
+            rows_updated = cursor.rowcount
+            print(f"✅ Profile UPDATED: {rows_updated} row(s)")
+            
         else:
-            # Create new profile
+            print("❌ No profile found")
+            print("➕ CREATING new profile...")
+            
             cursor.execute("""
                 INSERT INTO client_profiles 
                 (client_id, business_name, business_type, website_url, current_budget)
@@ -442,23 +500,67 @@ async def submit_verification_data(
                 website_url,
                 current_budget
             ))
-            print(f"✅ Created client profile for user {current_user['user_id']}")
+            
+            new_profile_id = cursor.lastrowid
+            print(f"✅ Profile CREATED (ID: {new_profile_id})")
         
+        # COMMIT TRANSACTION
+        print("\n💾 COMMITTING transaction to database...")
         connection.commit()
+        print("✅ TRANSACTION COMMITTED SUCCESSFULLY!")
+        
+        # Verify the data was saved
+        print("\n🔍 VERIFICATION: Checking if data was actually saved...")
+        
+        cursor.execute(
+            "SELECT verification_data, verification_status FROM onboarding_sessions WHERE user_id = %s",
+            (current_user['user_id'],)
+        )
+        saved_onboarding = cursor.fetchone()
+        print(f"   Onboarding status: {saved_onboarding['verification_status']}")
+        print(f"   Verification data saved: {len(str(saved_onboarding['verification_data']))} chars")
+        
+        cursor.execute(
+            "SELECT * FROM client_profiles WHERE client_id = %s",
+            (current_user['user_id'],)
+        )
+        saved_profile = cursor.fetchone()
+        if saved_profile:
+            print(f"   ✅ Profile saved - Business: {saved_profile['business_name']}")
+        else:
+            print("   ❌ WARNING: Profile NOT found in database after commit!")
+        
+        print("\n" + "="*80)
+        print("✅ VERIFICATION SUBMISSION COMPLETED SUCCESSFULLY")
+        print("="*80 + "\n")
         
         return {
             "status": "success",
-            "message": "Verification data submitted successfully. Awaiting admin review."
+            "message": "Verification data submitted successfully. Awaiting admin review.",
+            "debug": {
+                "user_id": current_user['user_id'],
+                "onboarding_updated": True,
+                "profile_created_or_updated": True
+            }
         }
     
     except HTTPException:
-        raise
-    except Exception as e:
+        print("\n❌ HTTP EXCEPTION RAISED")
         if connection:
+            print("🔙 Rolling back transaction...")
             connection.rollback()
-        print(f"❌ Error: {str(e)}")
+        raise
+        
+    except Exception as e:
+        print(f"\n❌ UNEXPECTED ERROR: {str(e)}")
+        if connection:
+            print("🔙 Rolling back transaction...")
+            connection.rollback()
+        
         import traceback
-        traceback.print_exc()
+        print("\n📋 FULL TRACEBACK:")
+        print(traceback.format_exc())
+        
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to submit verification data: {str(e)}"
@@ -469,7 +571,58 @@ async def submit_verification_data(
             cursor.close()
         if connection:
             connection.close()
+        print("🔌 Database connection closed\n")
 
+
+
+@router.get("/debug/check-tables", summary="DEBUG: Check database tables")
+async def debug_check_tables():
+    """
+    Diagnostic endpoint to verify tables exist
+    """
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        results = {}
+        
+        # Check onboarding_sessions
+        cursor.execute("SELECT COUNT(*) as count FROM onboarding_sessions")
+        results['onboarding_sessions_count'] = cursor.fetchone()['count']
+        
+        # Check client_profiles
+        cursor.execute("SELECT COUNT(*) as count FROM client_profiles")
+        results['client_profiles_count'] = cursor.fetchone()['count']
+        
+        # Check users
+        cursor.execute("SELECT COUNT(*) as count FROM users WHERE role = 'client'")
+        results['client_users_count'] = cursor.fetchone()['count']
+        
+        # Check packages
+        cursor.execute("SELECT * FROM packages")
+        results['packages'] = cursor.fetchall()
+        
+        return {
+            "status": "success",
+            "results": results
+        }
+    
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+    
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+            
 # ============================================
 # ADMIN ENDPOINTS
 # ============================================
@@ -605,6 +758,7 @@ async def verify_onboarding(
         # Handle approval vs rejection
         if verification.verification_status == 'verified':
             # APPROVAL: Create subscription and activate user
+            print(f"\n✅ APPROVING onboarding for user {session['user_id']}")
             
             # Get package billing cycle
             cursor.execute(
@@ -613,32 +767,50 @@ async def verify_onboarding(
             )
             package = cursor.fetchone()
             
-            # Calculate subscription dates based on billing cycle
+            if not package:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Package not found"
+                )
+            
+            # Calculate subscription dates
             start_date = datetime.now().date()
             
-            if package and package['billing_cycle'] == 'monthly':
+            if package['billing_cycle'] == 'monthly':
                 end_date = start_date + timedelta(days=30)
-            elif package and package['billing_cycle'] == 'quarterly':
+            elif package['billing_cycle'] == 'quarterly':
                 end_date = start_date + timedelta(days=90)
-            elif package and package['billing_cycle'] == 'yearly':
+            elif package['billing_cycle'] == 'yearly':
                 end_date = start_date + timedelta(days=365)
             else:
-                end_date = start_date + timedelta(days=30)  # Default to monthly
+                end_date = start_date + timedelta(days=30)
+            
+            print(f"📅 Subscription: {start_date} to {end_date} ({package['billing_cycle']})")
             
             # Create subscription
-            cursor.execute(
-                """INSERT INTO client_subscriptions (client_id, package_id, start_date, end_date, status)
-                   VALUES (%s, %s, %s, %s, 'active')""",
-                (session['user_id'], session['selected_package_id'], start_date, end_date)
-            )
+            print("➕ Creating subscription...")
+            cursor.execute("""
+                INSERT INTO client_subscriptions 
+                (client_id, package_id, start_date, end_date, status)
+                VALUES (%s, %s, %s, %s, 'active')
+            """, (
+                session['user_id'], 
+                session['selected_package_id'], 
+                start_date, 
+                end_date
+            ))
+            
+            subscription_id = cursor.lastrowid
+            print(f"✅ Subscription created (ID: {subscription_id})")
             
             # Activate user
+            print("🔓 Activating user account...")
             cursor.execute(
                 "UPDATE users SET status = 'active' WHERE user_id = %s", 
                 (session['user_id'],)
             )
             
-            print(f" User {session['user_id']} APPROVED - Status set to 'active'")
+            print(f"✅ User {session['user_id']} APPROVED - Status set to 'active'")
             
         else:
             # REJECTION: Set user status to 'inactive'

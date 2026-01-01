@@ -677,11 +677,11 @@
             </div>
 
             <div class="card-actions">
-                <button class="btn-approve" onclick="openVerificationModal(${verification.onboarding_id}, 'verified', '${verification.full_name}')">
+                <button class="btn btn-approve" onclick="openVerificationModal(${verification.onboarding_id}, 'verified', '${verification.full_name}')">
                     <i class="ti ti-check"></i>
                     Approve
                 </button>
-                <button class="btn-reject" onclick="openVerificationModal(${verification.onboarding_id}, 'rejected', '${verification.full_name}')">
+                <button class="btn btn-reject" onclick="openVerificationModal(${verification.onboarding_id}, 'rejected', '${verification.full_name}')">
                     <i class="ti ti-x"></i>
                     Reject
                 </button>
@@ -692,7 +692,7 @@
         });
     }
 
-    function openModal(action, onboardingId) {
+    function openVerificationModal(onboardingId, action, userName) {
         currentAction = action;
         currentOnboardingId = onboardingId;
 
@@ -701,13 +701,13 @@
         const confirmBtn = document.getElementById('confirmBtn');
         const confirmText = document.getElementById('confirmText');
 
-        if (action === 'approve') {
-            modalTitle.textContent = 'Approve Onboarding';
+        if (action === 'verified') {
+            modalTitle.textContent = `Approve ${userName}'s Onboarding`;
             confirmText.textContent = 'Approve';
             confirmBtn.className = 'btn btn-confirm';
             confirmBtn.style.background = '#10B981';
         } else {
-            modalTitle.textContent = 'Reject Onboarding';
+            modalTitle.textContent = `Reject ${userName}'s Onboarding`;
             confirmText.textContent = 'Reject';
             confirmBtn.className = 'btn btn-confirm';
             confirmBtn.style.background = '#EF4444';

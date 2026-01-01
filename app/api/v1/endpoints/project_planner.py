@@ -210,21 +210,107 @@ async def generate_proposal(
         """
         roi_simulation = await ai_service.generate_content(roi_prompt, "roi")
         print("   ✓ ROI Simulation complete")
+
+        # Generate Achievability Assessment (NEW - Client Request)
+        print("[6/7] Evaluating Achievability...")
+        achievability_prompt = f"""
+        Evaluate if client expectations are achievable:
+
+        Client Details:
+        - Company: {project_input.company_name}
+        - Budget: ${project_input.budget}
+        - Challenges: {project_input.challenges}
+        - Target Audience: {project_input.target_audience}
+        - Business Type: {project_input.business_type}
+
+        Provide realistic assessment:
+        - achievability_score: 0-100 (100 = highly achievable)
+        - status: "Realistic" / "Optimistic" / "Needs Adjustment"
+        - assessment: 2-3 sentence explanation
+        - recommendations: Array of 2-3 suggestions to improve achievability
+        - risk_factors: Array of 2-3 potential risks
+
+        Format as JSON with above keys.
+        """
+        achievability = await ai_service.generate_content(achievability_prompt, "achievability")
+        print("   ✓ Achievability Assessment complete")
+
         
         # Generate Timeline
         print("[6/6] Generating Timeline...")
+        # Generate Timeline
         timeline_prompt = f"""
-        Create project timeline for:
-        Budget: ${project_input.budget}
-        
-        Include:
-        - 4-6 phases with durations
-        - Milestones per phase
-        - Deliverables
-        
-        Format as JSON with phases array.
+        You are a digital marketing project manager creating a detailed implementation timeline.
+
+        Client Information:
+        - Company: {project_input.company_name}
+        - Business Type: {project_input.business_type}
+        - Budget: ${project_input.budget}
+        - Challenges: {project_input.challenges}
+        - Target Audience: {project_input.target_audience}
+
+        Create a comprehensive 4-6 phase project timeline for implementing their digital marketing strategy.
+
+        Each phase MUST include:
+        1. phase: Phase name (e.g., "Discovery & Strategy", "Campaign Development")
+        2. duration: Duration in weeks or specific timeframe (e.g., "4 weeks", "Week 1-4")
+        3. milestones: Array of 3-5 specific milestones for each phase
+        4. deliverables: Array of 3-4 key deliverables for each phase
+
+        Phases should cover the complete marketing implementation lifecycle:
+        - Phase 1: Discovery, audit, strategy planning
+        - Phase 2: Campaign setup, content creation, creative development
+        - Phase 3: Launch preparation, testing, optimization setup
+        - Phase 4: Campaign launch, monitoring, initial optimization
+        - Phase 5: Performance analysis, scaling successful campaigns
+        - Phase 6 (optional): Ongoing optimization, reporting, continuous improvement
+
+        CRITICAL: Return ONLY valid JSON with NO markdown, NO code blocks, NO explanations.
+
+        Required JSON structure (exactly like this):
+        {{
+        "phases": [
+            {{
+            "phase": "Discovery & Strategy",
+            "duration": "3-4 weeks",
+            "milestones": [
+                "Complete brand and competitor audit",
+                "Finalize target audience personas",
+                "Set up tracking and analytics infrastructure",
+                "Establish KPI baselines and success metrics"
+            ],
+            "deliverables": [
+                "Comprehensive marketing strategy document",
+                "Detailed audience personas",
+                "Analytics dashboard setup",
+                "KPI tracking system"
+            ]
+            }},
+            {{
+            "phase": "Campaign Development",
+            "duration": "4-5 weeks",
+            "milestones": [
+                "Create campaign concepts and messaging",
+                "Develop content calendar",
+                "Design creative assets",
+                "Set up campaign infrastructure"
+            ],
+            "deliverables": [
+                "Campaign creative assets",
+                "Content calendar for 90 days",
+                "Ad campaign structure",
+                "Landing pages and conversion funnels"
+            ]
+            }}
+        ]
+        }}
+
+        Make it specific to {project_input.business_type} industry with a ${project_input.budget} budget.
+        Use realistic timelines based on industry standards.
+        Total timeline should be 12-24 weeks for complete implementation.
+        Include both milestones AND deliverables for each phase.
         """
-        
+
         timeline = await ai_service.generate_timeline(timeline_prompt)
         print("   ✓ Timeline generated")
         
@@ -251,10 +337,10 @@ async def generate_proposal(
         cursor.execute("""
             INSERT INTO project_proposals 
             (client_id, created_by, lead_name, lead_email, company_name, website_url, 
-             business_type, budget, challenges, target_audience, existing_presence, 
-             ai_generated_strategy, competitive_differentiators, value_propositions,
-             competitive_analysis, roi_simulation, suggested_timeline, status)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            business_type, budget, challenges, target_audience, existing_presence, 
+            ai_generated_strategy, competitive_differentiators, value_propositions,
+            competitive_analysis, roi_simulation, achievability_assessment, suggested_timeline, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             lead_user_id,
             current_user['user_id'],
@@ -272,6 +358,7 @@ async def generate_proposal(
             json.dumps(value_propositions) if value_propositions else '[]',      # NEW
             json.dumps(competitive_analysis) if competitive_analysis else '{}',  # NEW
             json.dumps(roi_simulation) if roi_simulation else '{}',              # NEW
+            json.dumps(achievability) if achievability else '{}',  # NEW
             json.dumps(timeline),
             'draft'
         ))

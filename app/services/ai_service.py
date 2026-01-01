@@ -428,5 +428,21 @@ class AIService:
                     "roi_percentage": 200,
                     "timeframe_to_roi": 6
                 }
+
+            elif content_type == "achievability":
+                return {
+                        "achievability_score": 75,
+                        "status": "Realistic",
+                        "assessment": "The budget and goals align well with industry standards. Timeline expectations are achievable with proper resource allocation.",
+                        "recommendations": [
+                            "Focus on high-impact channels first",
+                            "Set incremental milestones to track progress",
+                            "Allocate 10-15% buffer for optimization"
+                        ],
+                        "risk_factors": [
+                            "Market competition may require higher ad spend",
+                            "Content production timelines might need adjustment"
+                        ]
+                }                   
             
             return "Content generation unavailable"
