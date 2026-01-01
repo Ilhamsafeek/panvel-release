@@ -324,11 +324,12 @@ async def login(user_credentials: UserLogin):
         # ========== PASSWORD CORRECT - CHECK STATUS ==========
         
         # Check user status BEFORE allowing login
-        if user['status'] == 'pending':
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Your account is pending verification. Please wait for admin approval."
-            )
+        # if user['status'] == 'pending':
+
+            # raise HTTPException(
+            #     status_code=status.HTTP_403_FORBIDDEN,
+            #     detail="Your account is pending verification. Please wait for admin approval."
+            # )
         
         if user['status'] == 'suspended':
             raise HTTPException(
@@ -343,11 +344,11 @@ async def login(user_credentials: UserLogin):
             )
         
         # Only allow login for 'active' users
-        if user['status'] != 'active':
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Your account cannot login at this time. Please contact support."
-            )
+        # if user['status'] != 'active':
+        #     raise HTTPException(
+        #         status_code=status.HTTP_403_FORBIDDEN,
+        #         detail="Your account cannot login at this time. Please contact support."
+        #     )
         
         # ========== SUCCESSFUL LOGIN ==========
         
