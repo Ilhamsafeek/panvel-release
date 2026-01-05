@@ -21,6 +21,7 @@ from app.api.v1.endpoints import brand_kit
 from app.core.config import settings
 from app.api.v1.router import api_router
 
+
 # Create FastAPI application
 app = FastAPI(
     title=settings.APP_NAME,
@@ -49,6 +50,7 @@ templates = Jinja2Templates(directory="templates")
 # Include API routes
 app.include_router(api_router, prefix=f"/api/{settings.API_VERSION}")
 app.include_router(brand_kit.router)
+
 
 
 # Custom StaticFiles class that disables caching
@@ -1151,6 +1153,29 @@ async def verify_dual_otp_page(request: Request):
             "hide_footer": True
         }
     )
+
+
+
+@app.get("/department-leader/dashboard", response_class=HTMLResponse)
+async def department_leader_dashboard(request: Request):
+    return templates.TemplateResponse("department_leader/dashboard.html", {"request": request})
+
+@app.get("/department-leader/tasks", response_class=HTMLResponse)
+async def department_leader_tasks(request: Request):
+    return templates.TemplateResponse("admin/tasks.html", {"request": request})
+
+@app.get("/department-leader/tasks/create", response_class=HTMLResponse)
+async def department_leader_create_task(request: Request):
+    return templates.TemplateResponse("admin/tasks.html", {"request": request})
+
+@app.get("/admin/departments", response_class=HTMLResponse)
+async def admin_departments(request: Request):
+    return templates.TemplateResponse("admin/departments.html", {"request": request})
+
+@app.get("/admin/departments/{department_id}/manage", response_class=HTMLResponse)
+async def manage_department_members(request: Request, department_id: int):
+    return templates.TemplateResponse("admin/department_manage.html", {"request": request})
+
 
 # ========== HEALTH CHECK ==========
 

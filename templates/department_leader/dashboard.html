@@ -1,0 +1,427 @@
+{% extends "base.html" %}
+
+{% block title %}Department Leader Dashboard - PanvelIQ{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --primary-purple: #9926F3;
+        --primary-cyan: #1DD8FC;
+        --color-gray-50: #F9FAFB;
+        --color-gray-100: #F3F4F6;
+        --color-gray-200: #E5E7EB;
+        --color-gray-300: #D1D5DB;
+        --color-gray-500: #6B7280;
+        --color-gray-700: #374151;
+        --color-gray-900: #111827;
+        --gradient-primary: linear-gradient(135deg, var(--primary-purple), var(--primary-cyan));
+        --radius-lg: 12px;
+        --radius-full: 9999px;
+    }
+
+    body {
+        font-family: 'Gilroy', sans-serif;
+        background: var(--color-gray-50);
+    }
+
+    .dashboard-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 2rem;
+    }
+
+    .header-hero {
+        background: var(--gradient-primary);
+        border-radius: var(--radius-lg);
+        padding: 2rem;
+        color: white;
+        margin-bottom: 2rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .header-hero h1 {
+        font-size: 2rem;
+        font-weight: 700;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .header-hero p {
+        margin: 0.5rem 0 0 0;
+        opacity: 0.95;
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .stat-card {
+        background: white;
+        border-radius: var(--radius-lg);
+        padding: 1.5rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .stat-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+
+    .stat-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: var(--radius-full);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+    }
+
+    .stat-icon.purple { background: linear-gradient(135deg, #9926F3, #B857FF); color: white; }
+    .stat-icon.cyan { background: linear-gradient(135deg, #1DD8FC, #4AE8FF); color: white; }
+    .stat-icon.green { background: linear-gradient(135deg, #10B981, #34D399); color: white; }
+    .stat-icon.orange { background: linear-gradient(135deg, #F59E0B, #FBBF24); color: white; }
+
+    .stat-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--color-gray-900);
+        margin-bottom: 0.25rem;
+    }
+
+    .stat-label {
+        color: var(--color-gray-500);
+        font-size: 0.875rem;
+    }
+
+    .content-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+        gap: 1.5rem;
+    }
+
+    .content-card {
+        background: white;
+        border-radius: var(--radius-lg);
+        padding: 1.5rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid var(--color-gray-100);
+    }
+
+    .card-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--color-gray-900);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .btn-primary {
+        background: var(--gradient-primary);
+        color: white;
+        padding: 0.75rem 1.5rem;
+        border-radius: var(--radius-full);
+        border: none;
+        font-weight: 600;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: transform 0.2s;
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-2px);
+    }
+
+    .btn-link {
+        color: var(--primary-purple);
+        text-decoration: none;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: var(--color-gray-500);
+    }
+
+    .empty-state i {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+
+    .team-list, .task-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .team-member, .task-item {
+        padding: 1rem;
+        background: var(--color-gray-50);
+        border-radius: var(--radius-lg);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .member-info, .task-info {
+        flex: 1;
+    }
+
+    .member-name, .task-title {
+        font-weight: 600;
+        color: var(--color-gray-900);
+        margin-bottom: 0.25rem;
+    }
+
+    .member-email, .task-description {
+        font-size: 0.875rem;
+        color: var(--color-gray-500);
+    }
+
+    .member-stats {
+        display: flex;
+        gap: 1rem;
+        font-size: 0.875rem;
+    }
+
+    .stat-badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: var(--radius-full);
+        font-weight: 600;
+    }
+
+    .stat-badge.pending { background: #FEF3C7; color: #92400E; }
+    .stat-badge.completed { background: #D1FAE5; color: #065F46; }
+
+    .priority-badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: var(--radius-full);
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .priority-badge.low { background: var(--color-gray-200); color: var(--color-gray-700); }
+    .priority-badge.medium { background: #DBEAFE; color: #1E40AF; }
+    .priority-badge.high { background: #FED7AA; color: #92400E; }
+    .priority-badge.urgent { background: #FECACA; color: #991B1B; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <div class="header-hero">
+        <div>
+            <h1>
+                <i class="ti ti-users"></i>
+                Department Leader Dashboard
+            </h1>
+            <p>Manage your team and assign tasks</p>
+        </div>
+        <button class="btn-primary" onclick="window.location.href='/department-leader/tasks/create'">
+            <i class="ti ti-plus"></i>
+            Create Task
+        </button>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon purple">
+                    <i class="ti ti-users"></i>
+                </div>
+            </div>
+            <div class="stat-value" id="teamMemberCount">0</div>
+            <div class="stat-label">Team Members</div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon cyan">
+                    <i class="ti ti-checklist"></i>
+                </div>
+            </div>
+            <div class="stat-value" id="totalTasks">0</div>
+            <div class="stat-label">Active Tasks</div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon orange">
+                    <i class="ti ti-clock"></i>
+                </div>
+            </div>
+            <div class="stat-value" id="pendingTasks">0</div>
+            <div class="stat-label">Pending Tasks</div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon green">
+                    <i class="ti ti-circle-check"></i>
+                </div>
+            </div>
+            <div class="stat-value" id="completedTasks">0</div>
+            <div class="stat-label">Completed Tasks</div>
+        </div>
+    </div>
+
+    <!-- Content Grid -->
+    <div class="content-grid">
+        <!-- My Team -->
+        <div class="content-card">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="ti ti-users"></i>
+                    My Team
+                </h3>
+            </div>
+            <div class="team-list" id="teamList">
+                <div class="empty-state">
+                    <i class="ti ti-users-off"></i>
+                    <p>No team members assigned yet</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Tasks -->
+        <div class="content-card">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="ti ti-checklist"></i>
+                    Recent Tasks
+                </h3>
+                <a href="/department-leader/tasks" class="btn-link">
+                    View All
+                    <i class="ti ti-arrow-right"></i>
+                </a>
+            </div>
+            <div class="task-list" id="taskList">
+                <div class="empty-state">
+                    <i class="ti ti-clipboard-off"></i>
+                    <p>No tasks created yet</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadDepartmentData();
+});
+
+async function loadDepartmentData() {
+    const token = localStorage.getItem('token');
+    
+    try {
+        // Load department and team info
+        const deptResponse = await fetch('/api/v1/departments/my-department', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (!deptResponse.ok) {
+            throw new Error('Failed to load department data');
+        }
+        
+        const deptData = await deptResponse.json();
+        
+        if (deptData.success) {
+            // Update team member count
+            document.getElementById('teamMemberCount').textContent = deptData.member_count || 0;
+            
+            // Display team members
+            if (deptData.members && deptData.members.length > 0) {
+                displayTeamMembers(deptData.members);
+            }
+        }
+        
+        // Load tasks
+        const tasksResponse = await fetch('/api/v1/tasks/department-tasks', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (tasksResponse.ok) {
+            const tasksData = await tasksResponse.json();
+            
+            if (tasksData.success && tasksData.tasks) {
+                const pending = tasksData.tasks.filter(t => t.status === 'pending').length;
+                const completed = tasksData.tasks.filter(t => t.status === 'completed').length;
+                
+                document.getElementById('totalTasks').textContent = tasksData.total || 0;
+                document.getElementById('pendingTasks').textContent = pending;
+                document.getElementById('completedTasks').textContent = completed;
+                
+                // Display recent tasks (top 5)
+                if (tasksData.tasks.length > 0) {
+                    displayRecentTasks(tasksData.tasks.slice(0, 5));
+                }
+            }
+        }
+        
+    } catch (error) {
+        console.error('Error loading dashboard:', error);
+    }
+}
+
+function displayTeamMembers(members) {
+    const teamList = document.getElementById('teamList');
+    
+    teamList.innerHTML = members.map(member => `
+        <div class="team-member">
+            <div class="member-info">
+                <div class="member-name">${member.full_name}</div>
+                <div class="member-email">${member.email}</div>
+            </div>
+            <div class="member-stats">
+                <span class="stat-badge pending">${member.pending_tasks || 0} Pending</span>
+                <span class="stat-badge completed">${member.completed_tasks || 0} Done</span>
+            </div>
+        </div>
+    `).join('');
+}
+
+function displayRecentTasks(tasks) {
+    const taskList = document.getElementById('taskList');
+    
+    taskList.innerHTML = tasks.map(task => `
+        <div class="task-item">
+            <div class="task-info">
+                <div class="task-title">${task.task_title || 'Untitled'}</div>
+                <div class="task-description">${task.assigned_employees || 'Unassigned'}</div>
+            </div>
+            <span class="priority-badge ${task.priority}">${task.priority.toUpperCase()}</span>
+        </div>
+    `).join('');
+}
+</script>
+{% endblock %}

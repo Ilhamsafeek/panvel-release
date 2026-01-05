@@ -1,0 +1,545 @@
+{% extends "base.html" %}
+
+{% block title %}Department Management - PanvelIQ{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --primary-purple: #9926F3;
+        --primary-cyan: #1DD8FC;
+        --color-gray-50: #F9FAFB;
+        --color-gray-100: #F3F4F6;
+        --color-gray-200: #E5E7EB;
+        --color-gray-300: #D1D5DB;
+        --color-gray-500: #6B7280;
+        --color-gray-700: #374151;
+        --color-gray-900: #111827;
+        --gradient-primary: linear-gradient(135deg, var(--primary-purple), var(--primary-cyan));
+        --radius-lg: 12px;
+        --radius-full: 9999px;
+    }
+
+    body {
+        font-family: 'Gilroy', sans-serif;
+        background: var(--color-gray-50);
+    }
+
+    .departments-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 2rem;
+    }
+
+    .header-hero {
+        background: var(--gradient-primary);
+        border-radius: var(--radius-lg);
+        padding: 2rem;
+        color: white;
+        margin-bottom: 2rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .header-hero h1 {
+        font-size: 2rem;
+        font-weight: 700;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .header-hero p {
+        margin: 0.5rem 0 0 0;
+        opacity: 0.95;
+    }
+
+    .btn-primary {
+        background: white;
+        color: var(--primary-purple);
+        padding: 0.75rem 1.5rem;
+        border-radius: var(--radius-full);
+        border: none;
+        font-weight: 600;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: transform 0.2s;
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-2px);
+    }
+
+    .departments-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+        gap: 1.5rem;
+    }
+
+    .department-card {
+        background: white;
+        border-radius: var(--radius-lg);
+        padding: 1.5rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        transition: transform 0.2s;
+    }
+
+    .department-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+
+    .department-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: start;
+        margin-bottom: 1rem;
+    }
+
+    .department-name {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--color-gray-900);
+        margin-bottom: 0.5rem;
+    }
+
+    .department-description {
+        font-size: 0.875rem;
+        color: var(--color-gray-500);
+        margin-bottom: 1rem;
+    }
+
+    .leader-info {
+        background: var(--color-gray-50);
+        padding: 1rem;
+        border-radius: var(--radius-lg);
+        margin-bottom: 1rem;
+    }
+
+    .leader-label {
+        font-size: 0.75rem;
+        color: var(--color-gray-500);
+        text-transform: uppercase;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+    }
+
+    .leader-name {
+        font-weight: 600;
+        color: var(--color-gray-900);
+    }
+
+    .leader-email {
+        font-size: 0.875rem;
+        color: var(--color-gray-500);
+    }
+
+    .department-stats {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .stat-item {
+        flex: 1;
+        text-align: center;
+        padding: 0.75rem;
+        background: var(--color-gray-50);
+        border-radius: var(--radius-lg);
+    }
+
+    .stat-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--primary-purple);
+    }
+
+    .stat-label {
+        font-size: 0.75rem;
+        color: var(--color-gray-500);
+        margin-top: 0.25rem;
+    }
+
+    .department-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .btn-icon {
+        padding: 0.5rem;
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--color-gray-300);
+        background: white;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .btn-icon:hover {
+        background: var(--color-gray-50);
+        border-color: var(--primary-purple);
+        color: var(--primary-purple);
+    }
+
+    .btn-icon.danger:hover {
+        background: #FEE2E2;
+        border-color: #DC2626;
+        color: #DC2626;
+    }
+
+    .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .modal.active {
+        display: flex;
+    }
+
+    .modal-content {
+        background: white;
+        border-radius: var(--radius-lg);
+        padding: 2rem;
+        max-width: 500px;
+        width: 90%;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+    }
+
+    .modal-title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--color-gray-900);
+    }
+
+    .btn-close {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        cursor: pointer;
+        color: var(--color-gray-500);
+    }
+
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+
+    .form-label {
+        display: block;
+        font-weight: 600;
+        color: var(--color-gray-700);
+        margin-bottom: 0.5rem;
+    }
+
+    .form-input, .form-select, .form-textarea {
+        width: 100%;
+        padding: 0.75rem;
+        border: 2px solid var(--color-gray-200);
+        border-radius: var(--radius-lg);
+        font-family: 'Gilroy', sans-serif;
+        transition: border-color 0.2s;
+    }
+
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+        outline: none;
+        border-color: var(--primary-purple);
+    }
+
+    .form-textarea {
+        resize: vertical;
+        min-height: 100px;
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 1rem;
+        justify-content: flex-end;
+        margin-top: 2rem;
+    }
+
+    .btn-secondary {
+        padding: 0.75rem 1.5rem;
+        border-radius: var(--radius-full);
+        border: 2px solid var(--color-gray-300);
+        background: white;
+        color: var(--color-gray-700);
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    .btn-submit {
+        padding: 0.75rem 1.5rem;
+        border-radius: var(--radius-full);
+        border: none;
+        background: var(--gradient-primary);
+        color: white;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 4rem 2rem;
+        color: var(--color-gray-500);
+    }
+
+    .empty-state i {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="departments-container">
+    <div class="header-hero">
+        <div>
+            <h1>
+                <i class="ti ti-building"></i>
+                Department Management
+            </h1>
+            <p>Organize your team into departments with leaders</p>
+        </div>
+        <button class="btn-primary" onclick="openCreateModal()">
+            <i class="ti ti-plus"></i>
+            Create Department
+        </button>
+    </div>
+
+    <div class="departments-grid" id="departmentsGrid">
+        <div class="empty-state">
+            <i class="ti ti-building-community"></i>
+            <p>No departments created yet</p>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="createModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="modal-title">Create New Department</h3>
+            <button class="btn-close" onclick="closeCreateModal()">×</button>
+        </div>
+        <form id="createDepartmentForm" onsubmit="createDepartment(event)">
+            <div class="form-group">
+                <label class="form-label">Department Name *</label>
+                <input type="text" class="form-input" id="departmentName" required>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Department Leader *</label>
+                <select class="form-select" id="departmentLeader" required>
+                    <option value="">Select a leader...</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Description</label>
+                <textarea class="form-textarea" id="departmentDescription"></textarea>
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="btn-secondary" onclick="closeCreateModal()">Cancel</button>
+                <button type="submit" class="btn-submit">Create Department</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadDepartments();
+    loadPotentialLeaders();
+});
+
+async function loadDepartments() {
+    const token = localStorage.getItem('token');
+    
+    if (!token) {
+        window.location.href = '/auth/login';
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/v1/departments/all', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to load departments');
+        }
+        
+        const data = await response.json();
+        
+        if (data.success && data.departments && data.departments.length > 0) {
+            displayDepartments(data.departments);
+        }
+    } catch (error) {
+        console.error('Error loading departments:', error);
+    }
+}
+
+function displayDepartments(departments) {
+    const grid = document.getElementById('departmentsGrid');
+    
+    grid.innerHTML = departments.map(dept => `
+        <div class="department-card">
+            <div class="department-header">
+                <div>
+                    <div class="department-name">${dept.department_name}</div>
+                    ${dept.description ? `<div class="department-description">${dept.description}</div>` : ''}
+                </div>
+            </div>
+
+            <div class="leader-info">
+                <div class="leader-label">Department Leader</div>
+                <div class="leader-name">${dept.leader_name || 'Not assigned'}</div>
+                <div class="leader-email">${dept.leader_email || ''}</div>
+            </div>
+
+            <div class="department-stats">
+                <div class="stat-item">
+                    <div class="stat-value">${dept.member_count || 0}</div>
+                    <div class="stat-label">Team Members</div>
+                </div>
+            </div>
+
+            <div class="department-actions">
+                <button class="btn-icon" onclick="manageDepartment(${dept.department_id})" title="Manage Team">
+                    <i class="ti ti-users"></i>
+                </button>
+                <button class="btn-icon danger" onclick="deleteDepartment(${dept.department_id}, '${dept.department_name}')" title="Delete">
+                    <i class="ti ti-trash"></i>
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function loadPotentialLeaders() {
+    const token = localStorage.getItem('token');
+    
+    try {
+        const response = await fetch('/api/v1/admin/employees?status=active', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (!response.ok) return;
+        
+        const data = await response.json();
+        
+        if (data.success && data.employees) {
+            const select = document.getElementById('departmentLeader');
+            
+            select.innerHTML = '<option value="">Select a leader...</option>' +
+                data.employees.map(emp => `
+                    <option value="${emp.user_id}">${emp.full_name} (${emp.email})</option>
+                `).join('');
+        }
+    } catch (error) {
+        console.error('Error loading employees:', error);
+    }
+}
+
+function openCreateModal() {
+    document.getElementById('createModal').classList.add('active');
+}
+
+function closeCreateModal() {
+    document.getElementById('createModal').classList.remove('active');
+    document.getElementById('createDepartmentForm').reset();
+}
+
+async function createDepartment(event) {
+    event.preventDefault();
+    
+    const token = localStorage.getItem('token');
+    const name = document.getElementById('departmentName').value;
+    const leaderId = parseInt(document.getElementById('departmentLeader').value);
+    const description = document.getElementById('departmentDescription').value;
+    
+    try {
+        const response = await fetch('/api/v1/departments/create', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                department_name: name,
+                department_leader_id: leaderId,
+                description: description || null
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('Department created successfully!');
+            closeCreateModal();
+            loadDepartments();
+        } else {
+            alert(data.detail || 'Failed to create department');
+        }
+    } catch (error) {
+        console.error('Error creating department:', error);
+        alert('Failed to create department');
+    }
+}
+
+function manageDepartment(departmentId) {
+    window.location.href = `/admin/departments/${departmentId}/manage`;
+}
+
+async function deleteDepartment(departmentId, departmentName) {
+    if (!confirm(`Are you sure you want to delete "${departmentName}"? This will remove all team assignments.`)) {
+        return;
+    }
+    
+    const token = localStorage.getItem('token');
+    
+    try {
+        const response = await fetch(`/api/v1/departments/${departmentId}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('Department deleted successfully');
+            loadDepartments();
+        } else {
+            alert(data.detail || 'Failed to delete department');
+        }
+    } catch (error) {
+        console.error('Error deleting department:', error);
+        alert('Failed to delete department');
+    }
+}
+</script>
+{% endblock %}

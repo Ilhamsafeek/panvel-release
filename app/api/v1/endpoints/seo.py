@@ -1910,4 +1910,325 @@ async def get_competitor_heatmap(
         if connection:
             connection.close()
 
+
+
+# Add these endpoints to app/api/v1/endpoints/seo.py
+
+# ========== SEO MONTHLY REPORTS ==========
+
+@router.post("/reports/sync/{project_id}")
+async def sync_seo_performance_data(
+    project_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Sync SEO performance data from Google Search Console
+    Fetches last 30 days of data: Traffic, Clicks, Impressions
+    """
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor(pymysql.cursors.DictCursor)
+        
+        # Get project details
+        cursor.execute(
+            "SELECT website_url FROM seo_projects WHERE seo_project_id = %s AND client_id = %s",
+            (project_id, current_user['user_id'])
+        )
+        project = cursor.fetchone()
+        
+        if not project:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="SEO project not found"
+            )
+        
+        website_url = project['website_url']
+        
+        # Get Google Search Console service
+        search_console = get_search_console_service()
+        
+        if not search_console:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Google Search Console not configured. Please add credentials in settings."
+            )
+        
+        # Fetch last 30 days of data
+        from datetime import datetime, timedelta
+        end_date = datetime.now().date()
+        start_date = end_date - timedelta(days=30)
+        
+        # Build Search Console API request
+        request_body = {
+            'startDate': start_date.isoformat(),
+            'endDate': end_date.isoformat(),
+            'dimensions': ['date'],
+            'rowLimit': 30
+        }
+        
+        # Execute Search Console query
+        response = search_console.searchanalytics().query(
+            siteUrl=website_url,
+            body=request_body
+        ).execute()
+        
+        rows = response.get('rows', [])
+        
+        if not rows:
+            return {
+                "success": True,
+                "message": "No data available from Google Search Console",
+                "records_synced": 0
+            }
+        
+        # Process and store data
+        records_synced = 0
+        for row in rows:
+            metric_date = row['keys'][0]  # Date string YYYY-MM-DD
+            impressions = int(row.get('impressions', 0))
+            clicks = int(row.get('clicks', 0))
+            ctr = float(row.get('ctr', 0)) * 100  # Convert to percentage
+            position = float(row.get('position', 0))
             
+            # Insert or update record
+            cursor.execute("""
+                INSERT INTO seo_performance_data 
+                (seo_project_id, metric_date, impressions, clicks, ctr, average_position, traffic_source)
+                VALUES (%s, %s, %s, %s, %s, %s, 'organic')
+                ON DUPLICATE KEY UPDATE
+                    impressions = VALUES(impressions),
+                    clicks = VALUES(clicks),
+                    ctr = VALUES(ctr),
+                    average_position = VALUES(average_position),
+                    updated_at = CURRENT_TIMESTAMP
+            """, (project_id, metric_date, impressions, clicks, ctr, position))
+            
+            records_synced += 1
+        
+        connection.commit()
+        
+        return {
+            "success": True,
+            "message": f"Successfully synced {records_synced} days of performance data",
+            "records_synced": records_synced,
+            "date_range": {
+                "start": start_date.isoformat(),
+                "end": end_date.isoformat()
+            }
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Error syncing SEO performance data: {error_details}")
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to sync performance data: {str(e)}"
+        )
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+@router.get("/reports/monthly/{project_id}")
+async def get_monthly_report(
+    project_id: int,
+    months: int = 3,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get monthly SEO performance report with graphs data
+    Returns Traffic, Clicks, Impressions for specified number of months
+    """
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor(pymysql.cursors.DictCursor)
+        
+        # Verify project ownership
+        cursor.execute(
+            "SELECT website_url FROM seo_projects WHERE seo_project_id = %s AND client_id = %s",
+            (project_id, current_user['user_id'])
+        )
+        project = cursor.fetchone()
+        
+        if not project:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="SEO project not found"
+            )
+        
+        # Calculate date range
+        from datetime import datetime, timedelta
+        end_date = datetime.now().date()
+        start_date = end_date - timedelta(days=months * 30)
+        
+        # Fetch performance data
+        cursor.execute("""
+            SELECT 
+                metric_date,
+                impressions,
+                clicks,
+                ctr,
+                average_position
+            FROM seo_performance_data
+            WHERE seo_project_id = %s
+                AND metric_date BETWEEN %s AND %s
+            ORDER BY metric_date ASC
+        """, (project_id, start_date, end_date))
+        
+        daily_data = cursor.fetchall()
+        
+        # Calculate monthly aggregates
+        monthly_summary = {}
+        for row in daily_data:
+            month_key = row['metric_date'].strftime('%Y-%m')
+            
+            if month_key not in monthly_summary:
+                monthly_summary[month_key] = {
+                    'total_impressions': 0,
+                    'total_clicks': 0,
+                    'avg_ctr': [],
+                    'avg_position': [],
+                    'days_count': 0
+                }
+            
+            monthly_summary[month_key]['total_impressions'] += row['impressions']
+            monthly_summary[month_key]['total_clicks'] += row['clicks']
+            monthly_summary[month_key]['avg_ctr'].append(float(row['ctr']))
+            monthly_summary[month_key]['avg_position'].append(float(row['average_position']))
+            monthly_summary[month_key]['days_count'] += 1
+        
+        # Format monthly data for graphs
+        monthly_labels = []
+        monthly_impressions = []
+        monthly_clicks = []
+        monthly_ctr = []
+        monthly_traffic = []  # Clicks = Traffic
+        
+        for month_key in sorted(monthly_summary.keys()):
+            data = monthly_summary[month_key]
+            month_name = datetime.strptime(month_key, '%Y-%m').strftime('%B %Y')
+            
+            monthly_labels.append(month_name)
+            monthly_impressions.append(data['total_impressions'])
+            monthly_clicks.append(data['total_clicks'])
+            monthly_traffic.append(data['total_clicks'])  # Traffic = Clicks in SEO context
+            
+            # Calculate average CTR for the month
+            avg_ctr = sum(data['avg_ctr']) / len(data['avg_ctr']) if data['avg_ctr'] else 0
+            monthly_ctr.append(round(avg_ctr, 2))
+        
+        # Calculate overall summary
+        total_impressions = sum([row['impressions'] for row in daily_data])
+        total_clicks = sum([row['clicks'] for row in daily_data])
+        avg_ctr = (total_clicks / total_impressions * 100) if total_impressions > 0 else 0
+        avg_position = sum([float(row['average_position']) for row in daily_data]) / len(daily_data) if daily_data else 0
+        
+        # Format daily data for detailed view
+        daily_formatted = []
+        for row in daily_data:
+            daily_formatted.append({
+                'date': row['metric_date'].isoformat(),
+                'impressions': row['impressions'],
+                'clicks': row['clicks'],
+                'ctr': float(row['ctr']),
+                'position': float(row['average_position'])
+            })
+        
+        return {
+            "success": True,
+            "project_id": project_id,
+            "website_url": project['website_url'],
+            "date_range": {
+                "start": start_date.isoformat(),
+                "end": end_date.isoformat(),
+                "months": months
+            },
+            "summary": {
+                "total_impressions": total_impressions,
+                "total_clicks": total_clicks,
+                "total_traffic": total_clicks,
+                "average_ctr": round(avg_ctr, 2),
+                "average_position": round(avg_position, 2)
+            },
+            "monthly_data": {
+                "labels": monthly_labels,
+                "impressions": monthly_impressions,
+                "clicks": monthly_clicks,
+                "traffic": monthly_traffic,
+                "ctr": monthly_ctr
+            },
+            "daily_data": daily_formatted
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Error fetching monthly report: {error_details}")
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch monthly report: {str(e)}"
+        )
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+@router.get("/reports/export/{project_id}")
+async def export_monthly_report(
+    project_id: int,
+    format: str = 'json',
+    months: int = 3,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Export monthly SEO report
+    Formats: json, csv (future)
+    """
+    try:
+        # Reuse the monthly report data
+        report_data = await get_monthly_report(project_id, months, current_user)
+        
+        if format == 'json':
+            return report_data
+        elif format == 'csv':
+            # Future: Convert to CSV format
+            return {
+                "success": True,
+                "message": "CSV export coming soon",
+                "data": report_data
+            }
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid format. Supported: json, csv"
+            )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Export failed: {str(e)}"
+        )
+
+        
