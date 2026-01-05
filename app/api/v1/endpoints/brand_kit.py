@@ -51,7 +51,7 @@ class BrandKitResponse(BaseModel):
 def get_brand_kit_by_client(client_id: int) -> Optional[Dict[str, Any]]:
     """Retrieve brand kit for a client"""
     connection = get_db_connection()
-    cursor = connection.cursor(dictionary=True)
+    cursor = connection.cursor()  # ✅ FIXED - No need for dictionary parameter
     
     try:
         cursor.execute("""

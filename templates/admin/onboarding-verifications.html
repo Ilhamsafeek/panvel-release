@@ -723,6 +723,7 @@
         currentOnboardingId = null;
     }
 
+
     async function confirmAction() {
         if (!currentAction || !currentOnboardingId) return;
 
@@ -733,7 +734,9 @@
         confirmBtn.innerHTML = '<div style="width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>';
 
         try {
-            const status = currentAction === 'approve' ? 'verified' : 'rejected';
+            // ✅ FIX: Check for 'verified' not 'approve'
+            const status = currentAction === 'verified' ? 'verified' : 'rejected';
+            const displayMessage = currentAction === 'verified' ? 'approved' : 'rejected';
 
             const response = await fetch(`${APP_CONFIG.apiBaseUrl}/onboarding/verify/${currentOnboardingId}`, {
                 method: 'PUT',
@@ -750,7 +753,7 @@
             const data = await response.json();
 
             if (response.ok && data.status === 'success') {
-                showAlert(`Onboarding ${status} successfully!`, 'success');
+                showAlert(`Onboarding ${displayMessage} successfully!`, 'success');
                 closeModal();
 
                 // Reload the list after 1 second
@@ -765,9 +768,11 @@
             console.error('Error:', error);
             showAlert(error.message || 'Failed to process verification', 'error');
             confirmBtn.disabled = false;
-            confirmBtn.innerHTML = `<i class="ti ti-check"></i><span>${currentAction === 'approve' ? 'Approve' : 'Reject'}</span>`;
+            // ✅ FIX: Check for 'verified' not 'approve'
+            confirmBtn.innerHTML = `<i class="ti ti-check"></i><span>${currentAction === 'verified' ? 'Approve' : 'Reject'}</span>`;
         }
     }
+
 
     function showAlert(message, type) {
         const alertContainer = document.getElementById('alertContainer');

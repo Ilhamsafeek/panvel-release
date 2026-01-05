@@ -273,6 +273,7 @@ async def generate_dalle_image(prompt: str, size: str, quality: str, style: str,
         )
 
 
+
 # ========== SYNTHESIA VIDEO GENERATION ==========
 
 async def generate_synthesia_video(
@@ -287,14 +288,31 @@ async def generate_synthesia_video(
     try:
         print(f"[SYNTHESIA] Generating video: {script[:50]}...")
         
+        # ✅ DEBUG: Check if API key is loaded
+        if not settings.SYNTHESIA_API_KEY:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="SYNTHESIA_API_KEY is not configured in environment variables"
+            )
+        
+        # ✅ DEBUG: Print API key info (masked for security)
+        api_key_preview = f"{settings.SYNTHESIA_API_KEY[:8]}...{settings.SYNTHESIA_API_KEY[-4:]}" if len(settings.SYNTHESIA_API_KEY) > 12 else "TOO_SHORT"
+        print(f"[SYNTHESIA] Using API key: {api_key_preview} (length: {len(settings.SYNTHESIA_API_KEY)})")
+        
         api_url = "https://api.synthesia.io/v2/videos"
         avatar = avatar_id or settings.SYNTHESIA_AVATAR_ID or "anna_costume1_cameraA"
         
+        # ✅ Strip any whitespace from API key
+        api_key_clean = settings.SYNTHESIA_API_KEY.strip()
+        
         headers = {
-         "Authorization": f"Bearer {settings.SYNTHESIA_API_KEY}",  # ✅ Add "Bearer " prefix
-         "Content-Type": "application/json",
-         "Accept": "application/json"
+            "Authorization": api_key_clean,  # ✅ NO Bearer prefix per Synthesia docs
+            "Content-Type": "application/json",
+            "Accept": "application/json"
         }
+        
+        # ✅ DEBUG: Print headers (masked)
+        print(f"[SYNTHESIA] Headers: Authorization={api_key_clean[:8]}..., Content-Type=application/json")
         
         payload = {
             "test": True,  # Use test mode
@@ -333,7 +351,7 @@ async def generate_synthesia_video(
             error_msg = error_data.get("message") or error_data.get("error") or "Unknown error"
             
             print(f"[SYNTHESIA] Error: {error_msg}")
-            print(f"[SYNTHESIA] Full error response: {response.text}")
+            print(f"[SYNTHESIA] Full error response: {error_data}")
             
             raise HTTPException(
                 status_code=response.status_code,
@@ -356,18 +374,18 @@ async def generate_synthesia_video(
         )
 
 
-# ========== IDEOGRAM ANIMATION GENERATION ==========
-# ========== IDEOGRAM ANIMATION GENERATION ==========
 
+
+# ========== IDEOGRAM ANIMATION GENERATION ==========
 async def generate_ideogram_animation(
     prompt: str,
     style: str = "modern",
     aspect_ratio: str = "16:9"
 ) -> Dict[str, Any]:
-    """Generate animation using Ideogram API"""
+    """Generate dynamic/artistic image using Ideogram API (NOT actual animation)"""
     
     try:
-        print(f"[IDEOGRAM] Generating animation: {prompt[:50]}...")
+        print(f"[IDEOGRAM] Generating artistic image: {prompt[:50]}...")
         
         api_url = "https://api.ideogram.ai/generate"
         
@@ -376,24 +394,16 @@ async def generate_ideogram_animation(
             "Content-Type": "application/json"
         }
         
-        # ✅ Map aspect ratios to Ideogram format
         aspect_ratio_map = {
             "1:1": "ASPECT_1_1",
             "16:9": "ASPECT_16_9",
             "9:16": "ASPECT_9_16",
             "4:3": "ASPECT_4_3",
-            "3:4": "ASPECT_3_4",
-            "10:16": "ASPECT_10_16",
-            "16:10": "ASPECT_16_10",
-            "3:2": "ASPECT_3_2",
-            "2:3": "ASPECT_2_3",
-            "3:1": "ASPECT_3_1",
-            "1:3": "ASPECT_1_3"
+            "3:4": "ASPECT_3_4"
         }
         
-        ideogram_aspect_ratio = aspect_ratio_map.get(aspect_ratio, "ASPECT_1_1")
+        ideogram_aspect_ratio = aspect_ratio_map.get(aspect_ratio, "ASPECT_16_9")
         
-        # ✅ Map styles to Ideogram style types
         style_type_map = {
             "modern": "DESIGN",
             "realistic": "REALISTIC",
@@ -406,11 +416,11 @@ async def generate_ideogram_animation(
         
         payload = {
             "image_request": {
-                "prompt": prompt,  # ✅ Don't modify the prompt
+                "prompt": prompt,
                 "model": "V_2",
-                "aspect_ratio": ideogram_aspect_ratio,  # ✅ Use correct format
+                "aspect_ratio": ideogram_aspect_ratio,
                 "magic_prompt_option": "AUTO",
-                "style_type": ideogram_style  # ✅ Add style
+                "style_type": ideogram_style
             }
         }
         
@@ -431,11 +441,11 @@ async def generate_ideogram_animation(
                     # Download and save locally
                     saved_file = download_and_save_file(
                         url=image_url,
-                        asset_type='animation',
-                        file_extension='png'  # Ideogram returns PNG
+                        asset_type='image',  # ✅ Changed from 'animation' to 'image'
+                        file_extension='png'
                     )
                     
-                    print(f"[IDEOGRAM] Animation saved: {saved_file['file_path']}")
+                    print(f"[IDEOGRAM] Artistic image saved: {saved_file['file_path']}")
                     
                     return {
                         "success": True,
@@ -447,36 +457,26 @@ async def generate_ideogram_animation(
             
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="No animation generated"
+                detail="No image generated"
             )
         else:
             error_data = response.json() if response.text else {}
             error_msg = error_data.get("message") or error_data.get("error") or "Unknown error"
             
             print(f"[IDEOGRAM] Error: {error_msg}")
-            print(f"[IDEOGRAM] Full error response: {response.text}")
             
             raise HTTPException(
                 status_code=response.status_code,
                 detail=f"Ideogram API error: {error_msg}"
             )
             
-    except requests.exceptions.Timeout:
-        print(f"[IDEOGRAM] Request timeout")
-        raise HTTPException(
-            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-            detail="Ideogram API timeout"
-        )
-    except HTTPException:
-        raise
     except Exception as e:
         print(f"[IDEOGRAM] Error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Ideogram generation failed: {str(e)}"
         )
-
-
+        
 # ========== CANVA DESIGN CREATION ==========
 async def create_canva_design(
     client_id: int,
@@ -611,18 +611,21 @@ async def generate_image(
             cursor.execute("""
                 INSERT INTO media_assets (
                     client_id, created_by, asset_type, asset_name,
-                    file_url, file_path, ai_generated, generation_type, prompt_used
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    file_url, ai_generated, generation_type, prompt_used
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 request.client_id,
                 current_user['user_id'],
                 'image',
                 f"DALL-E Image {idx + 1}",
                 image["url"],
-                image.get("file_path", ""),
                 True,
                 "dall-e-3",
-                request.prompt
+                json.dumps({
+                    "original_prompt": request.prompt,
+                    "revised_prompt": image.get("revised_prompt", request.prompt),
+                    "file_path": image.get("file_path", "")
+                })
             ))
             
             saved_assets.append({
@@ -684,28 +687,25 @@ async def generate_video(
         connection = get_db_connection()
         cursor = connection.cursor()  # ✅ Standard cursor
         
-        # Save video asset with processing status
+                # Save video asset with processing status
         cursor.execute("""
             INSERT INTO media_assets (
                 client_id, created_by, asset_type, asset_name,
-                file_url, ai_generated, generation_type, prompt_used,
-                metadata
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                file_url, ai_generated, generation_type, prompt_used
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             request.client_id,
             current_user['user_id'],
             'video',
             request.title or "Synthesia Video",
-            "",
+            "",  # Empty until video is ready
             True,
             "synthesia",
-            request.script,
             json.dumps({
+                "script": request.script,
                 "video_id": result["video_id"],
                 "status": "processing",
-                "brand_applied": brand_kit is not None,
-                "brand_voice": brand_kit.get('brand_voice') if brand_kit else None,
-                "background_color": brand_kit.get('primary_color') if brand_kit else None
+                "brand_applied": brand_kit is not None
             })
         ))
         
@@ -755,7 +755,7 @@ async def get_video_status(
         
         # ✅ CORRECTED HEADERS
         headers = {
-            "Authorization": f"Bearer {settings.SYNTHESIA_API_KEY}",
+            "Authorization": settings.SYNTHESIA_API_KEY,
             "Accept": "application/json"  # Add Accept header
         }
         
@@ -824,6 +824,8 @@ async def get_video_status(
         if connection:
             connection.close()
 
+
+
 @router.post("/generate/animation")
 async def generate_animation(
     request: AnimationGenerateRequest,
@@ -843,38 +845,35 @@ async def generate_animation(
         print(f"[BRAND KIT] Animation - Enhanced prompt: {enhanced_prompt}")
         
         result = await generate_ideogram_animation(
-            prompt=enhanced_prompt,  # ✅ Use enhanced prompt
+            prompt=enhanced_prompt,
             style=request.style,
             aspect_ratio="16:9"
         )
         
         connection = get_db_connection()
-        cursor = connection.cursor()  # ✅ Standard cursor
+        cursor = connection.cursor()
       
+        # ✅ FIXED: Removed metadata and file_path columns
         cursor.execute("""
             INSERT INTO media_assets (
                 client_id, created_by, asset_type, asset_name,
-                file_url, file_path, ai_generated, generation_type, prompt_used,
-                metadata
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                file_url, ai_generated, generation_type, prompt_used
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             request.client_id,
             current_user['user_id'],
             'animation',
             request.title,
-            result["url"],
-            result.get("file_path", ""),
+            result["url"],  # This can be the Ideogram URL or local file URL
             True,
             "ideogram",
-            request.prompt,
             json.dumps({
                 "original_prompt": request.prompt,
                 "enhanced_prompt": enhanced_prompt,
                 "brand_applied": brand_kit is not None,
-                "brand_colors": {
-                    "primary": brand_kit.get('primary_color') if brand_kit else None
-                }
-            })
+                "file_path": result.get("file_path", ""),
+                "style": request.style
+            })  # ✅ Store metadata in prompt_used as JSON
         ))
         
         asset_id = cursor.lastrowid
@@ -884,7 +883,7 @@ async def generate_animation(
             "success": True,
             "asset_id": asset_id,
             "url": result["url"],
-            "brand_applied": brand_kit is not None
+            "message": "Animation generated successfully"
         }
         
     except HTTPException:
@@ -902,6 +901,7 @@ async def generate_animation(
             cursor.close()
         if connection:
             connection.close()
+
 
 @router.post("/image-to-video")
 async def image_to_video(
@@ -951,9 +951,8 @@ async def image_to_video(
         cursor.execute("""
             INSERT INTO media_assets (
                 client_id, created_by, asset_type, asset_name,
-                file_url, ai_generated, generation_type, prompt_used,
-                metadata
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                file_url, ai_generated, generation_type, prompt_used
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             request.client_id,
             current_user['user_id'],
@@ -962,11 +961,12 @@ async def image_to_video(
             "",
             True,
             "synthesia",
-            request.motion_prompt,
             json.dumps({
+                "motion_prompt": request.motion_prompt,
                 "video_id": video_result["video_id"],
                 "status": "processing",
-                "source_image": saved_image["file_url"]
+                "source_image": saved_image["file_url"],
+                "script": script
             })
         ))
         

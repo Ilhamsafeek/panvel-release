@@ -1732,3 +1732,182 @@ async def test_all_apis():
         "message": "All APIs working" if all_success else "Some APIs have issues",
         "results": results
     }
+
+
+
+# Add this endpoint to app/api/v1/endpoints/seo.py
+# Insert after the existing endpoints
+
+class CompetitorHeatmapRequest(BaseModel):
+    seo_project_id: int
+    competitor_urls: List[str]  # Max 5 competitors
+    
+    @validator('competitor_urls')
+    def validate_competitors(cls, v):
+        if len(v) > 5:
+            raise ValueError("Maximum 5 competitors allowed")
+        # Clean URLs
+        cleaned = []
+        for url in v:
+            url = url.strip()
+            if not url.startswith(('http://', 'https://')):
+                url = f"https://{url}"
+            cleaned.append(url)
+        return cleaned
+
+
+@router.post("/competitor-heatmap")
+async def get_competitor_heatmap(
+    request: CompetitorHeatmapRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Generate competitor comparison heatmap using real Moz API data
+    
+    Compares metrics across:
+    - Domain Authority
+    - Page Authority
+    - Spam Score
+    - Total Backlinks
+    - Referring Domains
+    - Top Pages
+    """
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor(pymysql.cursors.DictCursor)
+        
+        # Get project details
+        cursor.execute(
+            "SELECT website_url FROM seo_projects WHERE seo_project_id = %s AND client_id = %s",
+            (request.seo_project_id, current_user['user_id'])
+        )
+        project = cursor.fetchone()
+        
+        if not project:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="SEO project not found"
+            )
+        
+        client_url = project['website_url']
+        
+        # Array to store comparison data
+        comparison_data = []
+        
+        # 1. Get client's metrics (YOUR SITE)
+        client_moz = get_moz_url_metrics(client_url)
+        client_backlinks = get_moz_backlinks(client_url, limit=10)
+        
+        if not client_moz.get('success'):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to fetch client metrics from Moz API"
+            )
+        
+        client_data = {
+            "name": "Your Site",
+            "url": client_url,
+            "domain_authority": client_moz.get('domain_authority', 0),
+            "page_authority": client_moz.get('page_authority', 0),
+            "spam_score": client_moz.get('spam_score', 0),
+            "total_backlinks": client_backlinks.get('total_backlinks', 0),
+            "referring_domains": client_backlinks.get('unique_domains', 0),
+            "is_client": True
+        }
+        comparison_data.append(client_data)
+        
+        # 2. Get competitor metrics
+        for idx, comp_url in enumerate(request.competitor_urls, 1):
+            comp_moz = get_moz_url_metrics(comp_url)
+            comp_backlinks = get_moz_backlinks(comp_url, limit=10)
+            
+            if comp_moz.get('success'):
+                competitor_data = {
+                    "name": f"Competitor {idx}",
+                    "url": comp_url,
+                    "domain_authority": comp_moz.get('domain_authority', 0),
+                    "page_authority": comp_moz.get('page_authority', 0),
+                    "spam_score": comp_moz.get('spam_score', 0),
+                    "total_backlinks": comp_backlinks.get('total_backlinks', 0),
+                    "referring_domains": comp_backlinks.get('unique_domains', 0),
+                    "is_client": False
+                }
+                comparison_data.append(competitor_data)
+            else:
+                # If competitor fails, add placeholder with error
+                comparison_data.append({
+                    "name": f"Competitor {idx}",
+                    "url": comp_url,
+                    "error": "Failed to fetch data",
+                    "is_client": False
+                })
+        
+        # 3. Calculate gaps and opportunities
+        metrics_to_compare = [
+            "domain_authority",
+            "page_authority", 
+            "spam_score",
+            "total_backlinks",
+            "referring_domains"
+        ]
+        
+        gaps = {}
+        max_values = {}
+        
+        # Find max values for each metric
+        for metric in metrics_to_compare:
+            valid_values = [
+                item.get(metric, 0) 
+                for item in comparison_data 
+                if metric in item and not item.get('error')
+            ]
+            max_values[metric] = max(valid_values) if valid_values else 0
+        
+        # Calculate gaps for client vs best competitor
+        for metric in metrics_to_compare:
+            client_value = client_data.get(metric, 0)
+            max_value = max_values[metric]
+            
+            if metric == 'spam_score':
+                # For spam score, lower is better
+                gap = client_value - max_value if max_value > 0 else 0
+                opportunity = "Lower spam score" if gap > 0 else "Maintain low spam"
+            else:
+                # For other metrics, higher is better
+                gap = max_value - client_value
+                opportunity = f"Increase by {gap}" if gap > 0 else "Leading"
+            
+            gaps[metric] = {
+                "client_value": client_value,
+                "max_competitor_value": max_value,
+                "gap": gap,
+                "opportunity": opportunity,
+                "is_winning": (gap <= 0 and metric != 'spam_score') or (gap >= 0 and metric == 'spam_score')
+            }
+        
+        return {
+            "success": True,
+            "client_url": client_url,
+            "comparison_data": comparison_data,
+            "gaps_analysis": gaps,
+            "max_values": max_values,
+            "timestamp": datetime.now().isoformat()
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate competitor heatmap: {str(e)}"
+        )
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+            

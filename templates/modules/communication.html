@@ -529,6 +529,94 @@
     .btn-action.btn-danger:hover {
         background: #fee2e2;
     }
+
+    /* Loading Animation */
+    .rotating {
+        animation: rotate 1s linear infinite;
+    }
+
+    @keyframes rotate {
+        from {
+            transform: rotate(0deg);
+        }
+
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    /* Disabled button state */
+    button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+
+    /* Attachment Display in View Modal */
+    .attachment-display {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 16px;
+        background: linear-gradient(135deg, #f0fdf4 0%, #ecfeff 100%);
+        border: 1px solid #86efac;
+        border-radius: 8px;
+    }
+
+    .attachment-info {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .attachment-info i {
+        font-size: 20px;
+        color: #10b981;
+    }
+
+    .attachment-info span {
+        font-size: 14px;
+        font-weight: 500;
+        color: #064e3b;
+    }
+
+    .attachment-actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .btn-action-sm {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        background: linear-gradient(135deg, #9926F3 0%, #1DD8FC 100%);
+        color: white;
+        text-decoration: none;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+
+    .btn-action-sm:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(153, 38, 243, 0.3);
+    }
+
+    .btn-action-sm i {
+        font-size: 14px;
+    }
+
+    .message-preview {
+        background: #f8fafc;
+        padding: 12px;
+        border-radius: 6px;
+        border-left: 3px solid #9926F3;
+        white-space: pre-wrap;
+        font-size: 14px;
+        line-height: 1.6;
+    }
 </style>
 
 
@@ -737,6 +825,33 @@
                     <textarea id="wa_message_content" rows="6" required
                         placeholder="Enter your WhatsApp message here..."></textarea>
                     <small class="form-hint">Use variables: {{name}}, {{company}}, {{link}}</small>
+                </div>
+
+
+                <!-- ADD THIS NEW ATTACHMENT UPLOAD SECTION -->
+                <div class="form-group">
+                    <label>Attachment (Optional)</label>
+                    <div class="file-upload-wrapper">
+                        <input type="file" id="wa_attachment" accept=".pdf,.jpg,.jpeg"
+                            onchange="handleWhatsAppAttachment(event)">
+                        <label for="wa_attachment" class="file-upload-label">
+                            <i class="ti ti-paperclip"></i>
+                            <div>
+                                <span class="upload-text">Click to upload attachment</span>
+                                <small>PDF or JPG only, max 10MB</small>
+                            </div>
+                        </label>
+                    </div>
+                    <div id="wa_attachment_preview" class="file-preview" style="display: none;">
+                        <div class="file-info">
+                            <i class="ti ti-file"></i>
+                            <span id="wa_attachment_name"></span>
+                            <span id="wa_attachment_size"></span>
+                        </div>
+                        <button type="button" class="btn-remove" onclick="removeWhatsAppAttachment()">
+                            <i class="ti ti-x"></i>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -2570,6 +2685,10 @@ jane@example.com"></textarea>
 
     async function submitWhatsAppCampaign() {
         try {
+            const token = localStorage.getItem('access_token');
+            console.log('🔄 Starting WhatsApp campaign submission...');
+
+            // Get segment ID
             const segmentId = document.getElementById('wa_audience_segment').value;
 
             if (!segmentId) {
@@ -2577,92 +2696,46 @@ jane@example.com"></textarea>
                 return;
             }
 
-            console.log('🔍 Step 1: Selected segment ID:', segmentId);
+            console.log('📊 Selected segment ID:', segmentId);
 
-            //  FETCH ACTUAL RECIPIENTS FROM SEGMENT
-            const token = localStorage.getItem('access_token');
-            const fetchUrl = `${API_BASE}/segments/${segmentId}`;
-
-            console.log('🔍 Step 2: Fetching from URL:', fetchUrl);
-
-            const segmentResponse = await fetch(fetchUrl, {
-                headers: { 'Authorization': `Bearer ${token}` }
+            // Get segment data to extract recipient list
+            const segmentResponse = await fetch(`${API_BASE}/segments/${segmentId}`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
             });
 
-            console.log('🔍 Step 3: Response status:', segmentResponse.status);
-
             const segmentData = await segmentResponse.json();
-            console.log('🔍 Step 4: Full segment response:', segmentData);
+            console.log('📦 Segment data:', segmentData);
 
-            if (!segmentData.success) {
-                console.error('❌ Segment fetch failed:', segmentData);
-                showNotification('Failed to load segment data', 'error');
-                return;
-            }
-
-            console.log('🔍 Step 5: Segment object:', segmentData.segment);
-            console.log('🔍 Step 6: contacts_data field:', segmentData.segment.contacts_data);
-            console.log('🔍 Step 7: contacts_data type:', typeof segmentData.segment.contacts_data);
-
-            // Extract phone numbers from contacts_data
             let recipientList = [];
 
-            if (segmentData.segment.contacts_data) {
-                let contactsData;
+            if (segmentData.success && segmentData.segment) {
+                const contacts = segmentData.segment.contacts_data;
+                console.log('👥 Contacts from segment:', contacts);
 
-                // Parse if string, use directly if already an array
-                if (typeof segmentData.segment.contacts_data === 'string') {
-                    console.log('🔍 Step 8a: contacts_data is STRING, parsing...');
-                    contactsData = JSON.parse(segmentData.segment.contacts_data);
-                } else if (Array.isArray(segmentData.segment.contacts_data)) {
-                    console.log('🔍 Step 8b: contacts_data is already ARRAY');
-                    contactsData = segmentData.segment.contacts_data;
-                } else {
-                    console.log('🔍 Step 8c: contacts_data is OBJECT, wrapping in array');
-                    contactsData = [segmentData.segment.contacts_data];
+                if (contacts && Array.isArray(contacts)) {
+                    recipientList = contacts.map(contact => {
+                        let phone = null;
+
+                        if (contact.phone) {
+                            phone = contact.phone;
+                        } else if (contact.Phone) {
+                            phone = contact.Phone;
+                        } else if (contact.mobile) {
+                            phone = contact.mobile;
+                        } else if (contact.Mobile) {
+                            phone = contact.Mobile;
+                        } else if (typeof contact === 'string' && !contact.includes('@')) {
+                            phone = contact;
+                        }
+
+                        return phone;
+                    }).filter(phone => phone && phone.trim());
                 }
-
-                console.log('🔍 Step 9: Parsed contactsData:', contactsData);
-                console.log('🔍 Step 10: contactsData length:', contactsData.length);
-
-                // Extract phone numbers
-                recipientList = contactsData.map((contact, index) => {
-                    console.log(`🔍 Step 11.${index}: Processing contact:`, contact);
-
-                    let phone = null;
-
-                    if (contact.type === 'phone' && contact.value) {
-                        phone = contact.value;
-                        console.log(`    Found phone via type/value: ${phone}`);
-                    } else if (contact.phone) {
-                        phone = contact.phone;
-                        console.log(`    Found phone via phone field: ${phone}`);
-                    } else if (contact.Phone) {
-                        phone = contact.Phone;
-                        console.log(`    Found phone via Phone field: ${phone}`);
-                    } else if (contact.mobile) {
-                        phone = contact.mobile;
-                        console.log(`    Found phone via mobile field: ${phone}`);
-                    } else if (contact.Mobile) {
-                        phone = contact.Mobile;
-                        console.log(`    Found phone via Mobile field: ${phone}`);
-                    } else if (typeof contact === 'string' && !contact.includes('@')) {
-                        phone = contact;
-                        console.log(`    Contact is string (phone): ${phone}`);
-                    } else {
-                        console.log(`   ❌ No phone found in contact`);
-                    }
-
-                    return phone;
-                }).filter(phone => phone && phone.trim());
-
-                console.log('🔍 Step 12: Filtered recipientList:', recipientList);
-            } else {
-                console.log('❌ contacts_data is null/undefined');
             }
 
-            console.log(' FINAL: recipient_list:', recipientList);
-            console.log(' FINAL: recipient_list length:', recipientList.length);
+            console.log(' FINAL recipient_list:', recipientList);
 
             if (recipientList.length === 0) {
                 showNotification('No phone numbers found in selected segment', 'error');
@@ -2673,17 +2746,20 @@ jane@example.com"></textarea>
             const isEditMode = form.dataset.editMode === 'true';
             const campaignId = form.dataset.campaignId;
 
-            const data = {
-                client_id: parseInt(document.getElementById('wa_client_id').value),
-                campaign_name: document.getElementById('wa_campaign_name').value,
-                template_name: document.getElementById('wa_template_name').value || "",
-                message_content: document.getElementById('wa_message_content').value,
-                recipient_list: recipientList,
-                schedule_type: document.getElementById('wa_schedule_type').value,
-                scheduled_at: document.getElementById('wa_scheduled_at').value || null
-            };
+            // Use FormData for file upload support
+            const formData = new FormData();
+            formData.append('client_id', document.getElementById('wa_client_id').value);
+            formData.append('campaign_name', document.getElementById('wa_campaign_name').value);
+            formData.append('template_name', document.getElementById('wa_template_name').value || "");
+            formData.append('message_content', document.getElementById('wa_message_content').value);
+            formData.append('recipient_list', JSON.stringify(recipientList));
+            formData.append('schedule_type', document.getElementById('wa_schedule_type').value);
+            formData.append('scheduled_at', document.getElementById('wa_scheduled_at').value || "");
 
-            console.log('Sending WhatsApp campaign data:', data);
+            // Add attachment if present
+            if (waAttachmentFile) {
+                formData.append('attachment', waAttachmentFile);
+            }
 
             const url = isEditMode
                 ? `${API_BASE}/whatsapp/campaigns/${campaignId}`
@@ -2693,10 +2769,10 @@ jane@example.com"></textarea>
             const response = await fetch(url, {
                 method: method,
                 headers: {
-                    'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
+                    // Don't set Content-Type - browser will set it with boundary for FormData
                 },
-                body: JSON.stringify(data)
+                body: formData
             });
 
             const result = await response.json();
@@ -2705,18 +2781,25 @@ jane@example.com"></textarea>
             if (result.success) {
                 showNotification(`WhatsApp campaign ${isEditMode ? 'updated' : 'created'} successfully!`, 'success');
                 closeModal('whatsappModal');
+
+                // Reset attachment
+                removeWhatsAppAttachment();
+
+                // Reset edit mode
                 delete form.dataset.editMode;
                 delete form.dataset.campaignId;
+
                 loadWhatsAppCampaigns();
                 loadAnalytics();
             } else {
                 showNotification(result.detail || `Failed to ${isEditMode ? 'update' : 'create'} campaign`, 'error');
             }
         } catch (error) {
-            console.error('❌ CATCH ERROR:', error);
+            console.error('❌ Error:', error);
             showNotification('An error occurred', 'error');
         }
     }
+
 
     async function submitEmailCampaign() {
         try {
@@ -2834,7 +2917,6 @@ jane@example.com"></textarea>
     }
 
     async function submitAIEmailGeneration() {
-        // Get the submit button
         const submitButton = document.querySelector('#aiEmailForm button[type="submit"]');
         const originalContent = submitButton ? submitButton.innerHTML : '';
 
@@ -2884,6 +2966,29 @@ jane@example.com"></textarea>
 
                 showNotification('AI email copy generated successfully!', 'success');
                 closeModal('aiEmailModal');
+
+                // CRITICAL FIX: Ensure we stay on the email tab
+                // Set the current tab explicitly to email
+                currentTab = 'email';
+
+                // Make sure email tab is active
+                document.querySelectorAll('.tab-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                const emailTabBtn = document.querySelector('[data-tab="email"]');
+                if (emailTabBtn) {
+                    emailTabBtn.classList.add('active');
+                }
+
+                // Make sure email content is visible
+                document.querySelectorAll('.tab-content').forEach(content => {
+                    content.classList.remove('active');
+                });
+                const emailTabContent = document.getElementById('email-tab');
+                if (emailTabContent) {
+                    emailTabContent.classList.add('active');
+                }
+
             } else {
                 showNotification('Failed to generate email copy', 'error');
             }
@@ -2944,10 +3049,18 @@ jane@example.com"></textarea>
     // =====================================================
 
 
-    async function viewCampaign(type, id) {
-        try {
-            openModal('viewCampaignModal');
 
+    async function viewCampaign(type, id) {
+        const modal = document.getElementById('viewCampaignModal');
+        if (!modal) {
+            console.error('View campaign modal not found');
+            return;
+        }
+
+        openModal('viewCampaignModal');
+        document.getElementById('viewCampaignContent').innerHTML = '<div class="loading-state"><div class="loader-spinner"></div></div>';
+
+        try {
             const token = localStorage.getItem('access_token');
             let endpoint;
 
@@ -2963,16 +3076,13 @@ jane@example.com"></textarea>
 
             const result = await response.json();
 
-            if (result.success) {
+            if (result.success && result.campaign) {
                 const campaign = result.campaign;
-
                 let contentHTML = '';
 
                 if (type === 'whatsapp') {
                     contentHTML = `
-                    <div class="campaign-detail-section">
-                        <h3><i class="ti ti-brand-whatsapp"></i> WhatsApp Campaign</h3>
-                        
+                    <div class="campaign-details">
                         <div class="detail-row">
                             <label>Campaign Name:</label>
                             <div>${campaign.campaign_name}</div>
@@ -2980,7 +3090,7 @@ jane@example.com"></textarea>
                         
                         <div class="detail-row">
                             <label>Client:</label>
-                            <div>${campaign.client_name || 'N/A'}</div>
+                            <div>${campaign.client_name}</div>
                         </div>
                         
                         <div class="detail-row">
@@ -2988,15 +3098,37 @@ jane@example.com"></textarea>
                             <div><span class="status-badge status-${campaign.status}">${campaign.status}</span></div>
                         </div>
                         
+                        ${campaign.template_name ? `
                         <div class="detail-row">
-                            <label>Template Name:</label>
-                            <div>${campaign.template_name || 'None'}</div>
+                            <label>Template:</label>
+                            <div>${campaign.template_name}</div>
                         </div>
+                        ` : ''}
                         
                         <div class="detail-row">
                             <label>Message:</label>
-                            <div class="message-content">${campaign.message_content}</div>
+                            <div class="message-preview">${campaign.message_content}</div>
                         </div>
+                        
+                        ${campaign.attachment_url ? `
+                        <div class="detail-row">
+                            <label>Attachment:</label>
+                            <div class="attachment-display">
+                                <div class="attachment-info">
+                                    <i class="ti ti-paperclip"></i>
+                                    <span>${getFileName(campaign.attachment_url)}</span>
+                                </div>
+                                <div class="attachment-actions">
+                                    <a href="${campaign.attachment_url}" target="_blank" class="btn-action-sm">
+                                        <i class="ti ti-eye"></i> View
+                                    </a>
+                                    <a href="${campaign.attachment_url}" download class="btn-action-sm">
+                                        <i class="ti ti-download"></i> Download
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        ` : ''}
                         
                         <div class="detail-row">
                             <label>Recipients:</label>
@@ -3009,11 +3141,6 @@ jane@example.com"></textarea>
                         </div>
                         
                         <div class="detail-row">
-                            <label>Failed:</label>
-                            <div>${campaign.failed_count || 0}</div>
-                        </div>
-                        
-                        <div class="detail-row">
                             <label>Schedule Type:</label>
                             <div>${campaign.schedule_type}</div>
                         </div>
@@ -3029,73 +3156,10 @@ jane@example.com"></textarea>
                             <label>Created:</label>
                             <div>${formatDate(campaign.created_at)}</div>
                         </div>
-                    </div>
-                `;
-                } else if (type === 'email') {
-                    contentHTML = `
-                    <div class="campaign-detail-section">
-                        <h3><i class="ti ti-mail"></i> Email Campaign</h3>
                         
                         <div class="detail-row">
-                            <label>Campaign Name:</label>
-                            <div>${campaign.campaign_name}</div>
-                        </div>
-                        
-                        <div class="detail-row">
-                            <label>Client:</label>
-                            <div>${campaign.client_name || 'N/A'}</div>
-                        </div>
-                        
-                        <div class="detail-row">
-                            <label>Status:</label>
-                            <div><span class="status-badge status-${campaign.status}">${campaign.status}</span></div>
-                        </div>
-                        
-                        <div class="detail-row">
-                            <label>Subject:</label>
-                            <div><strong>${campaign.subject_line}</strong></div>
-                        </div>
-                        
-                        <div class="detail-row">
-                            <label>Email Body:</label>
-                            <div class="email-body-preview">${campaign.email_body || 'No content'}</div>
-                        </div>
-                        
-                        <div class="detail-row">
-                            <label>Recipients:</label>
-                            <div>${campaign.total_recipients || 0}</div>
-                        </div>
-                        
-                        <div class="detail-row">
-                            <label>Open Rate:</label>
-                            <div>${campaign.open_rate || 0}%</div>
-                        </div>
-                        
-                        <div class="detail-row">
-                            <label>Click Rate:</label>
-                            <div>${campaign.click_rate || 0}%</div>
-                        </div>
-                        
-                        <div class="detail-row">
-                            <label>A/B Test:</label>
-                            <div>${campaign.is_ab_test ? 'Yes' : 'No'}</div>
-                        </div>
-                        
-                        <div class="detail-row">
-                            <label>Schedule Type:</label>
-                            <div>${campaign.schedule_type}</div>
-                        </div>
-                        
-                        ${campaign.scheduled_at ? `
-                        <div class="detail-row">
-                            <label>Scheduled For:</label>
-                            <div>${formatDate(campaign.scheduled_at)}</div>
-                        </div>
-                        ` : ''}
-                        
-                        <div class="detail-row">
-                            <label>Created:</label>
-                            <div>${formatDate(campaign.created_at)}</div>
+                            <label>Created By:</label>
+                            <div>${campaign.created_by_name}</div>
                         </div>
                     </div>
                 `;
@@ -3117,6 +3181,13 @@ jane@example.com"></textarea>
             </div>
         `;
         }
+    }
+
+    // Helper function to extract filename from URL
+    function getFileName(url) {
+        if (!url) return 'Attachment';
+        const parts = url.split('/');
+        return parts[parts.length - 1];
     }
 
 
@@ -4427,5 +4498,64 @@ Client: ${segment.client_name}
             hideActionMenu();
         }
     });
+
+
+    // Global variable to store attachment
+    let waAttachmentFile = null;
+
+    /**
+     * Handle WhatsApp attachment file selection
+     */
+    function handleWhatsAppAttachment(event) {
+        const file = event.target.files[0];
+
+        if (!file) {
+            return;
+        }
+
+        // Validate file type
+        const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg'];
+        if (!allowedTypes.includes(file.type)) {
+            showNotification('Only PDF and JPG files are allowed', 'error');
+            event.target.value = '';
+            return;
+        }
+
+        // Validate file size (10MB = 10 * 1024 * 1024 bytes)
+        const maxSize = 10 * 1024 * 1024;
+        if (file.size > maxSize) {
+            showNotification('File size must not exceed 10MB', 'error');
+            event.target.value = '';
+            return;
+        }
+
+        // Store file and show preview
+        waAttachmentFile = file;
+
+        // Show preview
+        document.getElementById('wa_attachment_name').textContent = file.name;
+        document.getElementById('wa_attachment_size').textContent = formatFileSize(file.size);
+        document.getElementById('wa_attachment_preview').style.display = 'flex';
+    }
+
+    /**
+     * Remove WhatsApp attachment
+     */
+    function removeWhatsAppAttachment() {
+        waAttachmentFile = null;
+        document.getElementById('wa_attachment').value = '';
+        document.getElementById('wa_attachment_preview').style.display = 'none';
+    }
+
+    /**
+     * Format file size for display
+     */
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+    }
 </script>
 {% endblock %}

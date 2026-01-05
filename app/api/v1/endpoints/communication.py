@@ -17,6 +17,15 @@ from app.services.ai_service import AIService
 from app.services.whatsapp_service import WhatsAppService
 from app.services.email_service import EmailService
 
+
+from fastapi import File, UploadFile, Form
+import os
+import uuid
+from pathlib import Path
+
+
+
+
 router = APIRouter()
 
 
@@ -90,142 +99,140 @@ class TriggeredFlowUpdate(BaseModel):
     is_active: Optional[bool] = None
 # ========== WHATSAPP CAMPAIGNS ==========
 
-@router.post("/whatsapp/campaigns/create")
-async def create_whatsapp_campaign(
-    campaign: WhatsAppCampaignCreate,
-    current_user: dict = Depends(require_admin_or_employee)
-):
-    """Create a new WhatsApp campaign with REAL API integration"""
-    connection = None
-    cursor = None
+# @router.post("/whatsapp/campaigns/create")
+# async def create_whatsapp_campaign(
+#     campaign: WhatsAppCampaignCreate,
+#     current_user: dict = Depends(require_admin_or_employee)
+# ):
+#     """Create a new WhatsApp campaign with REAL API integration"""
+#     connection = None
+#     cursor = None
     
-    try:
-        connection = get_db_connection()
-        cursor = connection.cursor()
+#     try:
+#         connection = get_db_connection()
+#         cursor = connection.cursor()
         
-        # Determine correct status based on schedule_type
-        if campaign.schedule_type == 'scheduled':
-            campaign_status = 'scheduled'
-        else:  # immediate
-            campaign_status = 'draft'  # Will be updated to 'sent' after API call
+#         # Determine correct status based on schedule_type
+#         if campaign.schedule_type == 'scheduled':
+#             campaign_status = 'scheduled'
+#         else:  # immediate
+#             campaign_status = 'draft'  # Will be updated to 'sent' after API call
         
-        # Insert campaign
-        query = """
-            INSERT INTO whatsapp_campaigns 
-            (client_id, created_by, campaign_name, template_name, message_content, 
-             schedule_type, scheduled_at, status, total_recipients, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
-        """
+#         # Insert campaign
+#         query = """
+#             INSERT INTO whatsapp_campaigns 
+#             (client_id, created_by, campaign_name, template_name, message_content, 
+#              schedule_type, scheduled_at, status, total_recipients, created_at)
+#             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+#         """
         
-        cursor.execute(query, (
-            campaign.client_id,
-            current_user['user_id'],
-            campaign.campaign_name,
-            campaign.template_name,
-            campaign.message_content,
-            campaign.schedule_type,
-            campaign.scheduled_at,
-            campaign_status,
-            len(campaign.recipient_list)
-        ))
+#         cursor.execute(query, (
+#             campaign.client_id,
+#             current_user['user_id'],
+#             campaign.campaign_name,
+#             campaign.template_name,
+#             campaign.message_content,
+#             campaign.schedule_type,
+#             campaign.scheduled_at,
+#             campaign_status,
+#             len(campaign.recipient_list)
+#         ))
         
-        connection.commit()
-        campaign_id = cursor.lastrowid
+#         connection.commit()
+#         campaign_id = cursor.lastrowid
         
-        # ===== REAL WHATSAPP API INTEGRATION =====
-        if campaign.schedule_type == 'immediate':
-            try:
-                whatsapp = WhatsAppService()
+#         # ===== REAL WHATSAPP API INTEGRATION =====
+#         if campaign.schedule_type == 'immediate':
+#             try:
+#                 whatsapp = WhatsAppService()
                 
-                # Validate phone numbers
-                valid_recipients = [
-                    phone for phone in campaign.recipient_list 
-                    if whatsapp.validate_phone_number(phone)
-                ]
+#                 # Validate phone numbers
+#                 valid_recipients = [
+#                     phone for phone in campaign.recipient_list 
+#                     if whatsapp.validate_phone_number(phone)
+#                 ]
                 
-                if not valid_recipients:
-                    raise HTTPException(
-                        status_code=400,
-                        detail="No valid phone numbers provided"
-                    )
+#                 if not valid_recipients:
+#                     raise HTTPException(
+#                         status_code=400,
+#                         detail="No valid phone numbers provided"
+#                     )
                 
-                # Send bulk messages
-                result = await whatsapp.send_bulk_messages(
-                    recipients=valid_recipients,
-                    message=campaign.message_content,
-                    template_name=campaign.template_name
-                )
+#                 # Send bulk messages
+#                 result = await whatsapp.send_bulk_messages(
+#                     recipients=valid_recipients,
+#                     message=campaign.message_content,
+#                     template_name=campaign.template_name
+#                 )
                 
-                # Update campaign with results
-                cursor.execute("""
-                    UPDATE whatsapp_campaigns 
-                    SET delivered_count = %s, 
-                        status = %s,
-                        total_recipients = %s
-                    WHERE campaign_id = %s
-                """, (
-                    result['successful'],
-                    'sent',
-                    len(valid_recipients),
-                    campaign_id
-                ))
-                connection.commit()
+#                 # Update campaign with results
+#                 cursor.execute("""
+#                     UPDATE whatsapp_campaigns 
+#                     SET delivered_count = %s, 
+#                         status = %s,
+#                         total_recipients = %s
+#                     WHERE campaign_id = %s
+#                 """, (
+#                     result['successful'],
+#                     'sent',
+#                     len(valid_recipients),
+#                     campaign_id
+#                 ))
+#                 connection.commit()
                 
-                return {
-                    "success": True,
-                    "message": "WhatsApp campaign sent successfully",
-                    "campaign_id": campaign_id,
-                    "status": "sent",
-                    "total_sent": result['successful'],
-                    "failed": result['failed'],
-                    "details": result['details']
-                }
+#                 return {
+#                     "success": True,
+#                     "message": "WhatsApp campaign sent successfully",
+#                     "campaign_id": campaign_id,
+#                     "status": "sent",
+#                     "total_sent": result['successful'],
+#                     "failed": result['failed'],
+#                     "details": result['details']
+#                 }
                 
-            except Exception as api_error:
-                # Update status to draft on failure (since 'failed' is not in ENUM)
-                cursor.execute("""
-                    UPDATE whatsapp_campaigns 
-                    SET status = 'draft'
-                    WHERE campaign_id = %s
-                """, (campaign_id,))
-                connection.commit()
+#             except Exception as api_error:
+#                 # Update status to draft on failure (since 'failed' is not in ENUM)
+#                 cursor.execute("""
+#                     UPDATE whatsapp_campaigns 
+#                     SET status = 'draft'
+#                     WHERE campaign_id = %s
+#                 """, (campaign_id,))
+#                 connection.commit()
                 
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"WhatsApp API Error: {str(api_error)}"
-                )
+#                 raise HTTPException(
+#                     status_code=500,
+#                     detail=f"WhatsApp API Error: {str(api_error)}"
+#                 )
         
-        # Scheduled campaign
-        return {
-            "success": True,
-            "message": "WhatsApp campaign scheduled successfully",
-            "campaign_id": campaign_id,
-            "status": "scheduled",
-            "scheduled_at": campaign.scheduled_at.isoformat() if campaign.scheduled_at else None
-        }
+#         # Scheduled campaign
+#         return {
+#             "success": True,
+#             "message": "WhatsApp campaign scheduled successfully",
+#             "campaign_id": campaign_id,
+#             "status": "scheduled",
+#             "scheduled_at": campaign.scheduled_at.isoformat() if campaign.scheduled_at else None
+#         }
     
-    except HTTPException:
-        raise
-    except Exception as e:
-        if connection:
-            connection.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if cursor:
-            cursor.close()
-        if connection:
-            connection.close()
-
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         if connection:
+#             connection.rollback()
+#         raise HTTPException(status_code=500, detail=str(e))
+#     finally:
+#         if cursor:
+#             cursor.close()
+#         if connection:
+#             connection.close()
 
 @router.get("/whatsapp/campaigns/list")
 async def list_whatsapp_campaigns(
     client_id: Optional[int] = None,
     current_user: dict = Depends(require_admin_or_employee)
 ):
-    """Get all WhatsApp campaigns"""
+    """List all WhatsApp campaigns with attachments"""
     connection = None
     cursor = None
-    
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
@@ -233,6 +240,7 @@ async def list_whatsapp_campaigns(
         query = """
             SELECT 
                 wc.campaign_id, wc.campaign_name, wc.template_name, 
+                wc.message_content, wc.attachment_url,
                 wc.schedule_type, wc.scheduled_at, wc.status,
                 wc.total_recipients, wc.delivered_count, wc.created_at,
                 u.full_name as client_name,
@@ -271,67 +279,60 @@ async def list_whatsapp_campaigns(
         if connection:
             connection.close()
 
-@router.put("/whatsapp/campaigns/{campaign_id}")
-async def update_whatsapp_campaign(
+
+@router.get("/whatsapp/campaigns/{campaign_id}")
+async def get_whatsapp_campaign(
     campaign_id: int,
-    campaign: WhatsAppCampaignCreate,
     current_user: dict = Depends(require_admin_or_employee)
 ):
-    """Update existing WhatsApp campaign"""
+    """Get single WhatsApp campaign details with attachment"""
     connection = None
     cursor = None
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
         
-        # Check if campaign exists
-        cursor.execute("SELECT campaign_id FROM whatsapp_campaigns WHERE campaign_id = %s", (campaign_id,))
-        if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Campaign not found")
-        
-        # Update campaign
-        update_query = """
-            UPDATE whatsapp_campaigns
-            SET campaign_name = %s,
-                template_name = %s,
-                message_content = %s,
-                recipient_list = %s,
-                schedule_type = %s,
-                scheduled_at = %s,
-                updated_at = NOW()
-            WHERE campaign_id = %s
+        query = """
+            SELECT 
+                wc.campaign_id, wc.client_id, wc.campaign_name, 
+                wc.template_name, wc.message_content, wc.attachment_url,
+                wc.schedule_type, wc.scheduled_at, wc.status,
+                wc.total_recipients, wc.delivered_count, wc.created_at,
+                u.full_name as client_name,
+                creator.full_name as created_by_name
+            FROM whatsapp_campaigns wc
+            JOIN users u ON wc.client_id = u.user_id
+            JOIN users creator ON wc.created_by = creator.user_id
+            WHERE wc.campaign_id = %s
         """
         
-        cursor.execute(update_query, (
-            campaign.campaign_name,
-            campaign.template_name,
-            campaign.message_content,
-            json.dumps(campaign.recipient_list),
-            campaign.schedule_type,
-            campaign.scheduled_at,
-            campaign_id
-        ))
+        cursor.execute(query, (campaign_id,))
+        campaign = cursor.fetchone()
         
-        connection.commit()
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        
+        # Convert datetime to ISO format
+        if campaign.get('scheduled_at'):
+            campaign['scheduled_at'] = campaign['scheduled_at'].isoformat()
+        if campaign.get('created_at'):
+            campaign['created_at'] = campaign['created_at'].isoformat()
         
         return {
             "success": True,
-            "message": "Campaign updated successfully",
-            "campaign_id": campaign_id
+            "campaign": campaign
         }
-        
+    
     except HTTPException:
         raise
     except Exception as e:
-        if connection:
-            connection.rollback()
-        print(f"❌ Error updating campaign: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if cursor:
             cursor.close()
         if connection:
             connection.close()
+
 
 @router.get("/whatsapp/campaigns/{campaign_id}")
 async def get_whatsapp_campaign(
@@ -1770,6 +1771,303 @@ async def delete_email_campaign(
         if connection:
             connection.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+@router.post("/whatsapp/campaigns/create")
+async def create_whatsapp_campaign(
+    client_id: int = Form(...),
+    campaign_name: str = Form(...),
+    template_name: str = Form(""),
+    message_content: str = Form(...),
+    recipient_list: str = Form(...),
+    schedule_type: str = Form(...),
+    scheduled_at: str = Form(None),
+    attachment: UploadFile = File(None),
+    current_user: dict = Depends(require_admin_or_employee)
+):
+    """Create WhatsApp campaign with optional file attachment"""
+    connection = None
+    cursor = None
+    attachment_url = None
+    
+    try:
+        # Parse recipient_list JSON string
+        try:
+            recipient_list_data = json.loads(recipient_list)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="Invalid recipient list format")
+        
+        # Handle file upload if present
+        if attachment:
+            # Validate file type
+            allowed_extensions = ['.pdf', '.jpg', '.jpeg']
+            file_extension = os.path.splitext(attachment.filename)[1].lower()
+            
+            if file_extension not in allowed_extensions:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Only PDF and JPG files are allowed"
+                )
+            
+            # Read file content
+            file_content = await attachment.read()
+            
+            # Validate file size (10MB = 10 * 1024 * 1024 bytes)
+            max_size = 10 * 1024 * 1024
+            if len(file_content) > max_size:
+                raise HTTPException(
+                    status_code=400,
+                    detail="File size must not exceed 10MB"
+                )
+            
+            # Create upload directory if not exists
+            upload_dir = Path("static/uploads/whatsapp_attachments")
+            upload_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Generate unique filename
+            unique_filename = f"{uuid.uuid4()}{file_extension}"
+            file_path = upload_dir / unique_filename
+            
+            # Save file
+            with open(file_path, "wb") as f:
+                f.write(file_content)
+            
+            attachment_url = f"/static/uploads/whatsapp_attachments/{unique_filename}"
+            print(f"✅ File saved: {attachment_url}")
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # Determine campaign status
+        campaign_status = 'scheduled' if schedule_type == 'scheduled' else 'draft'
+        
+        # Prepare scheduled_at value
+        scheduled_at_value = scheduled_at if scheduled_at and scheduled_at.strip() else None
+        
+        # Insert campaign
+        query = """
+            INSERT INTO whatsapp_campaigns 
+            (client_id, created_by, campaign_name, template_name, message_content, 
+             attachment_url, schedule_type, scheduled_at, status, total_recipients, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+        """
+        
+        cursor.execute(query, (
+            client_id,
+            current_user['user_id'],
+            campaign_name,
+            template_name if template_name else None,
+            message_content,
+            attachment_url,
+            schedule_type,
+            scheduled_at_value,
+            campaign_status,
+            len(recipient_list_data)
+        ))
+        
+        connection.commit()
+        campaign_id = cursor.lastrowid
+        
+        # Send WhatsApp messages if immediate
+        if schedule_type == 'immediate':
+            try:
+                from app.services.whatsapp_service import WhatsAppService
+                whatsapp = WhatsAppService()
+                
+                # Validate phone numbers
+                valid_recipients = [
+                    phone for phone in recipient_list_data 
+                    if whatsapp.validate_phone_number(phone)
+                ]
+                
+                if not valid_recipients:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="No valid phone numbers provided"
+                    )
+                
+                # Send bulk messages with attachment
+                result = await whatsapp.send_bulk_messages(
+                    recipients=valid_recipients,
+                    message=message_content,
+                    template_name=template_name if template_name else None,
+                    attachment_url=attachment_url
+                )
+                
+                # Update campaign with delivery results
+                cursor.execute("""
+                    UPDATE whatsapp_campaigns 
+                    SET delivered_count = %s, 
+                        status = %s,
+                        total_recipients = %s
+                    WHERE campaign_id = %s
+                """, (
+                    result.get('successful', 0),
+                    'sent',
+                    len(valid_recipients),
+                    campaign_id
+                ))
+                connection.commit()
+                
+                print(f"✅ WhatsApp campaign sent: {result.get('successful', 0)}/{len(valid_recipients)}")
+                
+            except Exception as whatsapp_error:
+                print(f"⚠️ WhatsApp API error: {str(whatsapp_error)}")
+                # Keep campaign as draft if sending fails
+                cursor.execute("""
+                    UPDATE whatsapp_campaigns 
+                    SET status = 'draft' 
+                    WHERE campaign_id = %s
+                """, (campaign_id,))
+                connection.commit()
+        
+        return {
+            "success": True,
+            "message": "WhatsApp campaign created successfully",
+            "campaign_id": campaign_id,
+            "attachment_url": attachment_url,
+            "status": campaign_status
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error creating WhatsApp campaign: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error creating campaign: {str(e)}")
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+
+@router.delete("/segments/{segment_id}")
+async def delete_audience_segment(
+    segment_id: int,
+    current_user: dict = Depends(require_admin_or_employee)
+):
+    """Delete audience segment"""
+    connection = None
+    cursor = None
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # Check if segment exists
+        cursor.execute("""
+            SELECT segment_id, segment_name 
+            FROM audience_segments 
+            WHERE segment_id = %s
+        """, (segment_id,))
+        
+        segment = cursor.fetchone()
+        
+        if not segment:
+            raise HTTPException(
+                status_code=404, 
+                detail="Segment not found"
+            )
+        
+        # Delete the segment
+        cursor.execute("""
+            DELETE FROM audience_segments 
+            WHERE segment_id = %s
+        """, (segment_id,))
+        
+        connection.commit()
+        
+        print(f"✅ Deleted segment {segment_id}: {segment.get('segment_name', 'Unknown')}")
+        
+        return {
+            "success": True,
+            "message": f"Segment '{segment.get('segment_name', 'Unknown')}' deleted successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        print(f"❌ Error deleting segment: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Failed to delete segment: {str(e)}"
+        )
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+@router.get("/segments/{segment_id}")
+async def get_audience_segment(
+    segment_id: int,
+    current_user: dict = Depends(require_admin_or_employee)
+):
+    """Get single audience segment details"""
+    connection = None
+    cursor = None
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        query = """
+            SELECT 
+                s.segment_id, s.segment_name, s.description, s.platform,
+                s.segment_criteria, s.estimated_size, s.contacts_data,
+                s.created_at, s.updated_at,
+                u.full_name as client_name,
+                creator.full_name as created_by_name
+            FROM audience_segments s
+            JOIN users u ON s.client_id = u.user_id
+            JOIN users creator ON s.created_by = creator.user_id
+            WHERE s.segment_id = %s
+        """
+        
+        cursor.execute(query, (segment_id,))
+        segment = cursor.fetchone()
+        
+        if not segment:
+            raise HTTPException(
+                status_code=404,
+                detail="Segment not found"
+            )
+        
+        # Parse JSON fields
+        if segment.get('segment_criteria'):
+            segment['segment_criteria'] = json.loads(segment['segment_criteria'])
+        
+        if segment.get('contacts_data'):
+            segment['contacts_data'] = json.loads(segment['contacts_data'])
+        
+        # Convert datetime to ISO format
+        if segment.get('created_at'):
+            segment['created_at'] = segment['created_at'].isoformat()
+        if segment.get('updated_at'):
+            segment['updated_at'] = segment['updated_at'].isoformat()
+        
+        return {
+            "success": True,
+            "segment": segment
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error getting segment: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get segment: {str(e)}"
+        )
     finally:
         if cursor:
             cursor.close()

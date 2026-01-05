@@ -849,65 +849,141 @@ function setupFormHandlers() {
     }
 }
 
-
 async function submitWhatsAppCampaign() {
+    // Get submit button
+    const submitBtn = document.querySelector('#whatsappForm button[type="submit"]');
+    const originalBtnText = submitBtn.innerHTML;
+    
     try {
-        const recipients = window.waRecipients || [];
-
-        if (recipients.length === 0) {
+        // Show loading state
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="ti ti-loader-2 rotating"></i> Creating Campaign...';
+        
+        const token = localStorage.getItem('access_token');
+        console.log('🔄 Starting WhatsApp campaign submission...');
+        
+        // Get segment ID
+        const segmentId = document.getElementById('wa_audience_segment').value;
+        
+        if (!segmentId) {
             showNotification('Please select an audience segment', 'error');
             return;
         }
-
+        
+        console.log('📊 Selected segment ID:', segmentId);
+        
+        // Get segment data to extract recipient list
+        const segmentResponse = await fetch(`${API_BASE}/segments/${segmentId}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        const segmentData = await segmentResponse.json();
+        console.log('📦 Segment data:', segmentData);
+        
+        let recipientList = [];
+        
+        if (segmentData.success && segmentData.segment) {
+            const contacts = segmentData.segment.contacts_data;
+            console.log('👥 Contacts from segment:', contacts);
+            
+            if (contacts && Array.isArray(contacts)) {
+                recipientList = contacts.map(contact => {
+                    let phone = null;
+                    
+                    if (contact.phone) {
+                        phone = contact.phone;
+                    } else if (contact.Phone) {
+                        phone = contact.Phone;
+                    } else if (contact.mobile) {
+                        phone = contact.mobile;
+                    } else if (contact.Mobile) {
+                        phone = contact.Mobile;
+                    } else if (typeof contact === 'string' && !contact.includes('@')) {
+                        phone = contact;
+                    }
+                    
+                    return phone;
+                }).filter(phone => phone && phone.trim());
+            }
+        }
+        
+        console.log('✅ FINAL recipient_list:', recipientList);
+        
+        if (recipientList.length === 0) {
+            showNotification('No phone numbers found in selected segment', 'error');
+            return;
+        }
+        
         const form = document.getElementById('whatsappForm');
         const isEditMode = form.dataset.editMode === 'true';
         const campaignId = form.dataset.campaignId;
-
-        const data = {
-            client_id: parseInt(document.getElementById('wa_client_id').value),
-            campaign_name: document.getElementById('wa_campaign_name').value,
-            template_name: document.getElementById('wa_template_name').value,
-            message_content: document.getElementById('wa_message_content').value,
-            recipient_list: recipients,
-            schedule_type: document.getElementById('wa_schedule_type').value,
-            scheduled_at: document.getElementById('wa_scheduled_at').value || null
-        };
-
-        const token = localStorage.getItem('access_token');
+        
+        // Create FormData for file upload support
+        const formData = new FormData();
+        formData.append('client_id', document.getElementById('wa_client_id').value);
+        formData.append('campaign_name', document.getElementById('wa_campaign_name').value);
+        formData.append('template_name', document.getElementById('wa_template_name').value || "");
+        formData.append('message_content', document.getElementById('wa_message_content').value);
+        formData.append('recipient_list', JSON.stringify(recipientList));
+        formData.append('schedule_type', document.getElementById('wa_schedule_type').value);
+        formData.append('scheduled_at', document.getElementById('wa_scheduled_at').value || "");
+        
+        // Add attachment if present
+        if (waAttachmentFile) {
+            formData.append('attachment', waAttachmentFile);
+            console.log('📎 Attachment added:', waAttachmentFile.name);
+        }
+        
         const url = isEditMode
             ? `${API_BASE}/whatsapp/campaigns/${campaignId}`
             : `${API_BASE}/whatsapp/campaigns/create`;
         const method = isEditMode ? 'PUT' : 'POST';
-
+        
+        console.log('📤 Sending request to:', url);
+        
         const response = await fetch(url, {
             method: method,
             headers: {
-                'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
+                // Don't set Content-Type - browser will set it with boundary for FormData
             },
-            body: JSON.stringify(data)
+            body: formData
         });
-
+        
         const result = await response.json();
-
+        console.log('📥 Backend response:', result);
+        
         if (result.success) {
             showNotification(`WhatsApp campaign ${isEditMode ? 'updated' : 'created'} successfully!`, 'success');
             closeModal('whatsappModal');
-
+            
+            // Reset attachment
+            removeWhatsAppAttachment();
+            
             // Reset edit mode
             delete form.dataset.editMode;
             delete form.dataset.campaignId;
-
+            
+            // Reset form
+            form.reset();
+            
             loadWhatsAppCampaigns();
             loadAnalytics();
         } else {
             showNotification(result.detail || `Failed to ${isEditMode ? 'update' : 'create'} campaign`, 'error');
         }
     } catch (error) {
-        console.error('Error with WhatsApp campaign:', error);
-        showNotification('An error occurred', 'error');
+        console.error('❌ Error:', error);
+        showNotification('An error occurred while creating campaign', 'error');
+    } finally {
+        // Restore button state
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalBtnText;
     }
 }
+
 
 
 async function submitEmailCampaign() {
@@ -1711,3 +1787,5 @@ async function loadAudienceSegments() {
         container.innerHTML = '<div class="error-state">Failed to load segments</div>';
     }
 }
+
+

@@ -502,8 +502,30 @@ function openAccountConnectionModal() {
 }
 
 function closeAccountConnectionModal() {
-    document.getElementById('accountConnectionModal').style.display = 'none';
-    document.getElementById('accountConnectForm').reset();
+    const modal = document.getElementById('accountConnectionModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    
+    // Reset form only if it exists
+    const form = document.getElementById('accountConnectForm');
+    if (form) {
+        form.reset();
+    }
+    
+    // Reset OAuth client selector if it exists
+    const oauthClientSelect = document.getElementById('oauthClientId');
+    if (oauthClientSelect) {
+        oauthClientSelect.value = '';
+    }
+    
+    // Clear instructions content if it exists
+    const instructionsContent = document.getElementById('instructionsContent');
+    if (instructionsContent) {
+        instructionsContent.innerHTML = '';
+    }
+    
+    console.log('✅ Account connection modal closed');
 }
 
 function backToPlatformSelection() {
@@ -779,13 +801,12 @@ async function connectAccountOAuth(event, platform) {
         return;
     }
     
-    console.log(' Token acquired, first 30 chars:', token.substring(0, 30) + '...');
+    console.log('✅ Token acquired, first 30 chars:', token.substring(0, 30) + '...');
     
     // Build OAuth URL
     const oauthUrl = `/api/v1/social-media/oauth/connect/${platform}?client_id=${clientId}&token=${encodeURIComponent(token)}`;
     
-    console.log('OAuth URL (first 150 chars):', oauthUrl.substring(0, 150) + '...');
-    console.log('Full URL length:', oauthUrl.length);
+    console.log('📍 OAuth URL (first 150 chars):', oauthUrl.substring(0, 150) + '...');
     
     // Open popup
     const width = 600;
@@ -793,7 +814,7 @@ async function connectAccountOAuth(event, platform) {
     const left = (screen.width / 2) - (width / 2);
     const top = (screen.height / 2) - (height / 2);
     
-    console.log('Opening popup window...');
+    console.log('🪟 Opening popup window...');
     
     const popup = window.open(
         oauthUrl,
@@ -807,7 +828,7 @@ async function connectAccountOAuth(event, platform) {
         return;
     }
     
-    console.log(' Popup opened successfully');
+    console.log('✅ Popup opened successfully');
     
     // Monitor popup
     let messageReceived = false;
@@ -816,37 +837,116 @@ async function connectAccountOAuth(event, platform) {
         if (popup.closed) {
             clearInterval(checkInterval);
             if (!messageReceived) {
-                console.log('Popup closed without completing OAuth');
+                console.log('⚠️ Popup closed without completing OAuth');
             }
         }
     }, 500);
     
-    // Listen for success
-    const messageHandler = function(event) {
-        console.log('📨 Message received:', event.data);
+    // ✅ IMPROVED: Retry function with exponential backoff
+    async function reloadAccountsWithRetry(expectedAccountId, maxRetries = 5) {
+        console.log('🔄 Starting account reload with retry logic...');
+        
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            console.log(`🔄 Reload attempt ${attempt}/${maxRetries}...`);
+            
+            try {
+                const token = localStorage.getItem('access_token') || getCookie('access_token');
+                const response = await fetch('/api/v1/social-media/connected-accounts', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const accounts = data.accounts || [];
+                    
+                    console.log(`📊 Attempt ${attempt}: Found ${accounts.length} accounts`);
+                    
+                    // Check if the new account is in the list
+                    const newAccountFound = accounts.some(acc => 
+                        acc.platform_account_id === expectedAccountId || 
+                        acc.platform === platform
+                    );
+                    
+                    if (accounts.length > 0 && (newAccountFound || attempt === maxRetries)) {
+                        console.log('✅ Accounts loaded successfully!');
+                        displayConnectedAccounts(accounts);
+                        return true; // Success!
+                    } else {
+                        console.log(`⏳ New account not found yet, waiting before retry ${attempt}...`);
+                    }
+                }
+            } catch (error) {
+                console.error(`❌ Attempt ${attempt} failed:`, error);
+            }
+            
+            // Don't wait after the last attempt
+            if (attempt < maxRetries) {
+                // Exponential backoff: 1s, 2s, 3s, 4s, 5s
+                const delay = attempt * 1000;
+                console.log(`⏳ Waiting ${delay}ms before next attempt...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+        }
+        
+        console.log('⚠️ Max retries reached, forcing final reload...');
+        loadConnectedAccounts(); // Final attempt
+        return false;
+    }
+    
+    // Listen for success message from OAuth popup
+    const messageHandler = async function(event) {
+        console.log('📨 Message received from popup:', event.data);
         
         if (event.data && event.data.type === 'oauth_success') {
             messageReceived = true;
             clearInterval(checkInterval);
             
-            const platformName = platform.charAt(0).toUpperCase() + platform.slice(1);
-            showNotification(` ${platformName} connected successfully!`, 'success');
+            console.log('🎉 OAuth Success! Platform:', event.data.platform);
+            console.log('👤 Connected account:', event.data.account);
             
+            const platformName = platform.charAt(0).toUpperCase() + platform.slice(1);
+            const accountId = event.data.account?.id;
+            
+            showNotification(`✅ ${platformName} connected successfully! Refreshing accounts...`, 'success');
+            
+            // Close the connection modal
             closeAccountConnectionModal();
-            loadConnectedAccounts();
+            
+            // ✅ USE RETRY LOGIC - Wait 1 second, then start retrying
+            setTimeout(async () => {
+                await reloadAccountsWithRetry(accountId);
+            }, 1000);
+            
+            // Remove listener
+            window.removeEventListener('message', messageHandler);
+            
+        } else if (event.data && event.data.type === 'oauth_error') {
+            messageReceived = true;
+            clearInterval(checkInterval);
+            
+            console.error('❌ OAuth Error:', event.data.error);
+            showNotification(`❌ Failed to connect ${platform}: ${event.data.error}`, 'error');
             
             window.removeEventListener('message', messageHandler);
         }
     };
     
+    // Add message listener
+    console.log('👂 Adding message listener...');
     window.addEventListener('message', messageHandler);
     
-    // Cleanup
+    // Cleanup after 10 minutes
     setTimeout(() => {
+        console.log('⏰ OAuth timeout - cleaning up listeners');
         clearInterval(checkInterval);
         window.removeEventListener('message', messageHandler);
     }, 600000);
 }
+
+
 
 window.testOAuth = function() {
     const token = localStorage.getItem('access_token');
@@ -2302,11 +2402,18 @@ async function handleMediaUpload(event) {
 // =====================================================
 // ACCOUNT CONNECTION MANAGEMENT
 // =====================================================
-
 async function loadConnectedAccounts() {
+    console.log('🔄 Loading connected accounts...');
+    
     try {
         const token = localStorage.getItem('access_token') || getCookie('access_token');
         
+        if (!token) {
+            console.error('❌ No token found for loading accounts');
+            return;
+        }
+        
+        console.log('📡 Fetching connected accounts from API...');
         const response = await fetch('/api/v1/social-media/connected-accounts', {
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -2315,107 +2422,129 @@ async function loadConnectedAccounts() {
         });
 
         if (!response.ok) {
+            console.error('❌ Failed to load connected accounts:', response.status);
             throw new Error('Failed to load connected accounts');
         }
 
         const data = await response.json();
         const accounts = data.accounts || [];
         
-        console.log('Connected accounts:', accounts);
+        console.log(`✅ Loaded ${accounts.length} connected accounts:`, accounts);
         
+        // Display the accounts
         displayConnectedAccounts(accounts);
         
+        // Show success message if accounts were loaded
+        if (accounts.length > 0) {
+            console.log('✅ Accounts displayed successfully');
+        } else {
+            console.log('ℹ️ No connected accounts found');
+        }
+        
     } catch (error) {
-        console.error('Error loading connected accounts:', error);
-        document.getElementById('connectedAccountsDisplay').innerHTML = `
-            <p style="color: #ef4444;">Failed to load connected accounts</p>
-        `;
+        console.error('❌ Error loading connected accounts:', error);
+        const container = document.getElementById('connectedAccountsDisplay');
+        if (container) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 30px; color: #64748b;">
+                    <i class="ti ti-alert-circle" style="font-size: 3rem; color: #ef4444;"></i>
+                    <p style="margin-top: 1rem;">Failed to load connected accounts</p>
+                    <button onclick="loadConnectedAccounts()" style="margin-top: 1rem; padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                        <i class="ti ti-refresh"></i> Retry
+                    </button>
+                </div>
+            `;
+        }
     }
 }
 
 
 function displayConnectedAccounts(accounts) {
-    const container = document.getElementById('connectedAccountsDisplay');
+    console.log(`🎨 Displaying ${accounts.length} accounts`);
     
+    const container = document.getElementById('connectedAccountsDisplay');
     if (!container) {
-        console.error('❌ connectedAccountsDisplay element not found');
+        console.error('❌ Container #connectedAccountsDisplay not found');
         return;
     }
     
-    console.log(`Displaying ${accounts.length} connected accounts`);
+    // ✅ Add header with refresh button
+    const headerHtml = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid #e2e8f0;">
+            <div>
+                <h3 style="margin: 0; color: #1e293b; font-size: 1.25rem;">Connected Social Media Accounts</h3>
+                <p style="margin: 0.5rem 0 0 0; color: #64748b; font-size: 0.9rem;">Manage your connected platform accounts</p>
+            </div>
+            <button onclick="loadConnectedAccounts(); this.disabled=true; this.innerHTML='<i class=\\'ti ti-loader ti-spin\\'></i> Refreshing...'; setTimeout(() => { this.disabled=false; this.innerHTML='<i class=\\'ti ti-refresh\\'></i> Refresh'; }, 2000);" 
+                style="padding: 10px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 500; transition: transform 0.2s;"
+                onmouseover="this.style.transform='scale(1.05)'"
+                onmouseout="this.style.transform='scale(1)'">
+                <i class="ti ti-refresh"></i> Refresh
+            </button>
+        </div>
+    `;
     
-    if (accounts.length === 0) {
-        container.innerHTML = `
-            <div style="text-align: center; padding: 2rem; color: #64748b;">
-                <i class="ti ti-unlink" style="font-size: 3rem; opacity: 0.5;"></i>
-                <p style="margin-top: 1rem;">No social media accounts connected yet.</p>
-                <p style="font-size: 0.9rem;">Click "Connect New Account" to get started.</p>
+    if (!accounts || accounts.length === 0) {
+        container.innerHTML = headerHtml + `
+            <div style="text-align: center; padding: 60px 20px; background: linear-gradient(135deg, #f8fafc 0%, #e0e7ff 100%); border-radius: 16px; border: 2px dashed #cbd5e1;">
+                <i class="ti ti-unlink" style="font-size: 4rem; opacity: 0.3; color: #64748b;"></i>
+                <h4 style="margin-top: 1.5rem; color: #1e293b; font-size: 1.25rem;">No Connected Accounts</h4>
+                <p style="color: #64748b; margin-top: 0.5rem; font-size: 1rem;">Get started by connecting your social media accounts</p>
+                
             </div>
         `;
         return;
     }
     
+    // Rest of your existing display code...
     const platformIcons = {
-        'instagram': 'ti-brand-instagram',
-        'facebook': 'ti-brand-facebook',
-        'linkedin': 'ti-brand-linkedin',
-        'twitter': 'ti-brand-twitter',
-        'pinterest': 'ti-brand-pinterest'
+        'instagram': { icon: 'ti-brand-instagram', color: '#E4405F' },
+        'facebook': { icon: 'ti-brand-facebook', color: '#1877F2' },
+        'linkedin': { icon: 'ti-brand-linkedin', color: '#0A66C2' },
+        'twitter': { icon: 'ti-brand-twitter', color: '#1DA1F2' },
+        'pinterest': { icon: 'ti-brand-pinterest', color: '#E60023' }
     };
     
-    const platformColors = {
-        'instagram': '#E1306C',
-        'facebook': '#1877F2',
-        'linkedin': '#0A66C2',
-        'twitter': '#1DA1F2',
-        'pinterest': '#E60023'
-    };
-    
-    let html = '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem;">';
+    let html = headerHtml + '<div style="display: grid; gap: 1rem;">';
     
     accounts.forEach(account => {
-        const icon = platformIcons[account.platform] || 'ti-link';
-        const color = platformColors[account.platform] || '#64748b';
+        console.log(`🔍 Rendering: ${account.platform} (ID: ${account.credential_id}) - ${account.platform_account_name}`);
         
-        // Handle both 'credential_id' and 'id' column names
-        const accountId = account.credential_id || account.id;
-        const accountName = account.platform_account_name || account.platform;
-        const clientName = account.client_name || 'Client';
+        const platformInfo = platformIcons[account.platform] || { icon: 'ti-link', color: '#6366f1' };
+        const accountName = account.platform_account_name || account.client_name || 'Unknown Account';
+        const clientName = account.client_name || account.client_email || 'Unknown Client';
+        const credentialId = account.credential_id;
         
-        console.log(`Rendering: ${account.platform} (ID: ${accountId}) - ${accountName}`);
+        const isExpired = account.token_expires_at && new Date(account.token_expires_at) < new Date();
+        const expiryStatus = isExpired 
+            ? '<span style="color: #ef4444; font-size: 0.85rem;">⚠️ Token Expired</span>'
+            : account.token_expires_at 
+                ? `<span style="color: #64748b; font-size: 0.85rem;">Expires: ${new Date(account.token_expires_at).toLocaleDateString()}</span>`
+                : '<span style="color: #10b981; font-size: 0.85rem;">✓ Active</span>';
         
         html += `
-            <div style="background: white; border: 2px solid #e2e8f0; border-radius: 12px; padding: 1.25rem; transition: all 0.2s;"
-                onmouseover="this.style.borderColor='${color}'; this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px ${color}33';" 
-                onmouseout="this.style.borderColor='#e2e8f0'; this.style.transform='translateY(0)'; this.style.boxShadow='none';">
-                
-                <div style="display: flex; align-items: start; gap: 1rem;">
-                    <div style="width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, ${color}22, ${color}44); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                        <i class="ti ${icon}" style="font-size: 1.5rem; color: ${color};"></i>
+            <div style="background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; display: flex; align-items: center; justify-content: space-between; transition: all 0.3s; box-shadow: 0 1px 3px rgba(0,0,0,0.05);"
+                onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'; this.style.transform='translateY(-2px)'"
+                onmouseout="this.style.boxShadow='0 1px 3px rgba(0,0,0,0.05)'; this.style.transform='translateY(0)'">
+                <div style="display: flex; align-items: center; gap: 15px; flex: 1;">
+                    <div style="width: 52px; height: 52px; background: ${platformInfo.color}15; border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+                        <i class="ti ${platformInfo.icon}" style="font-size: 26px; color: ${platformInfo.color};"></i>
                     </div>
-                    
-                    <div style="flex: 1; min-width: 0;">
-                        <div style="font-weight: 600; color: #1e293b; margin-bottom: 0.25rem; font-size: 1rem;">
+                    <div>
+                        <div style="font-weight: 600; font-size: 1.05rem; color: #1e293b; margin-bottom: 4px;">
                             ${accountName}
                         </div>
-                        <div style="font-size: 0.85rem; color: #64748b; text-transform: capitalize; margin-bottom: 0.25rem;">
-                            <i class="ti ti-brand-${account.platform}"></i> ${account.platform}
+                        <div style="font-size: 0.9rem; color: #64748b;">
+                            ${account.platform.charAt(0).toUpperCase() + account.platform.slice(1)} • ${clientName}
                         </div>
-                        <div style="font-size: 0.8rem; color: #94a3b8;">
-                            <i class="ti ti-user"></i> ${clientName}
+                        <div style="margin-top: 6px;">
+                            ${expiryStatus}
                         </div>
-                        ${account.token_expires_at ? `
-                            <div style="font-size: 0.75rem; color: #f59e0b; margin-top: 0.5rem;">
-                                <i class="ti ti-clock"></i> Expires: ${new Date(account.token_expires_at).toLocaleDateString()}
-                            </div>
-                        ` : ''}
                     </div>
                 </div>
-                
-                <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end;">
-                    <button 
-                        onclick="disconnectAccount(${accountId}, '${account.platform}')" 
-                        style="padding: 0.5rem 1rem; border-radius: 8px; border: 1px solid #fca5a5; background: #fef2f2; color: #ef4444; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; font-weight: 500; transition: all 0.2s;"
+                <div>
+                    <button onclick="disconnectAccount(${credentialId}, '${account.platform}')" 
+                        style="padding: 10px 18px; background: #fef2f2; color: #ef4444; border: 1px solid #fca5a5; border-radius: 8px; cursor: pointer; font-size: 0.9rem; display: flex; align-items: center; gap: 6px; transition: all 0.2s; font-weight: 500;"
                         onmouseover="this.style.background='#ef4444'; this.style.color='white'; this.style.borderColor='#ef4444';"
                         onmouseout="this.style.background='#fef2f2'; this.style.color='#ef4444'; this.style.borderColor='#fca5a5';"
                         title="Disconnect ${accountName}">
@@ -2430,7 +2559,7 @@ function displayConnectedAccounts(accounts) {
     html += '</div>';
     container.innerHTML = html;
     
-    console.log('✅ Accounts displayed successfully');
+    console.log(`✅ Displayed ${accounts.length} account(s) successfully`);
 }
 
 

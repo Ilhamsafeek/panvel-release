@@ -627,6 +627,67 @@
         font-size: 1rem;
         margin: 0;
     }
+
+
+    .platform-badge i {
+        font-size: 1rem;
+        margin: 0;
+    }
+
+    /* Performance Analysis Animations */
+    @keyframes scoreReveal {
+        from {
+            opacity: 0;
+            transform: scale(0.8);
+        }
+
+        to {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+
+    #performanceScoreSection {
+        animation: scoreReveal 0.5s ease;
+    }
+
+    #sentimentAnalysisSection,
+    #improvementTipsSection {
+        animation: fadeInUp 0.6s ease;
+    }
+
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* Tooltip for priority badges */
+    .priority-tooltip {
+        position: relative;
+        cursor: help;
+    }
+
+    .priority-tooltip:hover::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 0.5rem;
+        background: #1e293b;
+        color: white;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        white-space: nowrap;
+        z-index: 1000;
+    }
 </style>
 {% endblock %}
 
@@ -744,62 +805,69 @@
 
 
             <!-- Section 1: AI Audience Insights -->
-<div class="content-panel" style="grid-column: span 2; margin-top: 2rem;">
-    <div class="panel-header">
-        <i class="ti ti-users"></i>
-        <h2>AI Audience Insights & Keywords Generator</h2>
-    </div>
-    
-    <p style="color: #64748b; font-size: 0.9rem; margin-bottom: 1rem; line-height: 1.6;">
-        Generate AI-powered target audience insights and keyword recommendations based on client profile and content topic. 
-        Analyzes client industry, business type, and provides demographics, interests, behaviors, pain points, and optimized keywords.
-    </p>
-    
-    <button class="btn-primary" id="generateAudienceBtn" onclick="generateAudienceInsights()">
-        <i class="ti ti-users"></i> Generate Audience Insights
-    </button>
-    
-    <div id="audienceInsightsDisplay" style="display: none; margin-top: 1.5rem;">
-        <!-- Results populated by JavaScript -->
-    </div>
-</div>
+            <div class="content-panel" style="grid-column: span 2; margin-top: 2rem;">
+                <div class="panel-header">
+                    <i class="ti ti-users"></i>
+                    <h2>AI Audience Insights & Keywords Generator</h2>
+                </div>
 
-<!-- Section 2: Visual Analysis with Google Cloud Vision -->
-<div class="content-panel" style="grid-column: span 2; margin-top: 2rem;">
-    <div class="panel-header">
-        <i class="ti ti-scan"></i>
-        <h2>Visual Content Analysis (Google Cloud Vision)</h2>
-    </div>
-    
-    <p style="color: #64748b; font-size: 0.9rem; margin-bottom: 1rem; line-height: 1.6;">
-        Analyze images for composition, face detection with emotions, dominant colors, object detection, and text recognition. 
-        Get actionable recommendations to improve visual engagement with performance scores.
-    </p>
-    
-    <div style="margin-bottom: 1rem;">
-        <label for="visualAnalysisImage" style="display: flex; flex-direction: column; align-items: center; padding: 2rem; border: 2px dashed #cbd5e1; border-radius: 12px; cursor: pointer; background: #f8fafc; transition: all 0.2s;">
-            <i class="ti ti-upload" style="font-size: 2.5rem; background: linear-gradient(135deg, #9926F3, #1DD8FC); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 0.75rem;"></i>
-            <span style="font-size: 0.95rem; font-weight: 500; color: #334155;">Upload Image for Analysis</span>
-            <span style="font-size: 0.8rem; color: #64748b; margin-top: 0.25rem;">Supports JPG, PNG (max 10MB)</span>
-            <input type="file" id="visualAnalysisImage" accept="image/*" style="display: none;">
-        </label>
-    </div>
-    
-    <div id="imagePreview" style="display: none; margin-top: 1rem; text-align: center;">
-        <!-- Image preview populated by JavaScript -->
-    </div>
-    
-    <div id="visualAnalysisResults" style="display: none; margin-top: 1.5rem;">
-        <!-- Analysis results populated by JavaScript -->
-    </div>
-</div>
+                <p style="color: #64748b; font-size: 0.9rem; margin-bottom: 1rem; line-height: 1.6;">
+                    Generate AI-powered target audience insights and keyword recommendations based on client profile and
+                    content topic.
+                    Analyzes client industry, business type, and provides demographics, interests, behaviors, pain
+                    points, and optimized keywords.
+                </p>
+
+                <button class="btn-primary" id="generateAudienceBtn" onclick="generateAudienceInsights()">
+                    <i class="ti ti-users"></i> Generate Audience Insights
+                </button>
+
+                <div id="audienceInsightsDisplay" style="display: none; margin-top: 1.5rem;">
+                    <!-- Results populated by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Section 2: Visual Analysis with Google Cloud Vision -->
+            <div class="content-panel" style="grid-column: span 2; margin-top: 2rem;">
+                <div class="panel-header">
+                    <i class="ti ti-scan"></i>
+                    <h2>Visual Content Analysis (Google Cloud Vision)</h2>
+                </div>
+
+                <p style="color: #64748b; font-size: 0.9rem; margin-bottom: 1rem; line-height: 1.6;">
+                    Analyze images for composition, face detection with emotions, dominant colors, object detection, and
+                    text recognition.
+                    Get actionable recommendations to improve visual engagement with performance scores.
+                </p>
+
+                <div style="margin-bottom: 1rem;">
+                    <label for="visualAnalysisImage"
+                        style="display: flex; flex-direction: column; align-items: center; padding: 2rem; border: 2px dashed #cbd5e1; border-radius: 12px; cursor: pointer; background: #f8fafc; transition: all 0.2s;">
+                        <i class="ti ti-upload"
+                            style="font-size: 2.5rem; background: linear-gradient(135deg, #9926F3, #1DD8FC); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 0.75rem;"></i>
+                        <span style="font-size: 0.95rem; font-weight: 500; color: #334155;">Upload Image for
+                            Analysis</span>
+                        <span style="font-size: 0.8rem; color: #64748b; margin-top: 0.25rem;">Supports JPG, PNG (max
+                            10MB)</span>
+                        <input type="file" id="visualAnalysisImage" accept="image/*" style="display: none;">
+                    </label>
+                </div>
+
+                <div id="imagePreview" style="display: none; margin-top: 1rem; text-align: center;">
+                    <!-- Image preview populated by JavaScript -->
+                </div>
+
+                <div id="visualAnalysisResults" style="display: none; margin-top: 1.5rem;">
+                    <!-- Analysis results populated by JavaScript -->
+                </div>
+            </div>
         </div>
 
         <!-- Right Panel: Preview & Results -->
         <div class="content-panel">
             <div class="panel-header">
                 <i class="ti ti-eye"></i>
-                <h2>Content Preview</h2>
+                <h2>Content Preview & Analysis</h2>
             </div>
 
             <div id="previewContainer">
@@ -808,6 +876,72 @@
                     <h3>No Content Generated Yet</h3>
                     <p>Fill in the form and click "Generate Content" to get AI-powered suggestions</p>
                 </div>
+            </div>
+
+            <!-- UC017: Performance Score Section (1-100 scale) -->
+            <div id="performanceScoreSection"
+                style="display: none; margin-top: 2rem; padding: 1.5rem; background: linear-gradient(135deg, rgba(153, 38, 243, 0.05), rgba(29, 216, 252, 0.05)); border-radius: 12px; border: 2px solid #e2e8f0;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+                    <h3
+                        style="font-size: 1.1rem; font-weight: 600; color: #1e293b; display: flex; align-items: center; gap: 0.5rem;">
+                        <i class="ti ti-chart-bar"
+                            style="background: linear-gradient(135deg, #9926F3, #1DD8FC); -webkit-background-clip: text; -webkit-text-fill-color: transparent;"></i>
+                        Performance Score
+                    </h3>
+                    <div id="optimizationBadge"
+                        style="padding: 0.375rem 0.875rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600;">
+                    </div>
+                </div>
+
+                <!-- Performance Meter (Radial Gauge) -->
+                <div style="text-align: center; margin: 1.5rem 0;">
+                    <div style="position: relative; width: 150px; height: 150px; margin: 0 auto;">
+                        <svg viewBox="0 0 100 100" style="transform: rotate(-90deg);">
+                            <!-- Background Circle -->
+                            <circle cx="50" cy="50" r="40" fill="none" stroke="#e2e8f0" stroke-width="10" />
+                            <!-- Performance Arc -->
+                            <circle id="performanceArc" cx="50" cy="50" r="40" fill="none" stroke-width="10"
+                                stroke-linecap="round"
+                                style="stroke-dasharray: 251.2; stroke-dashoffset: 251.2; transition: all 0.8s ease;" />
+                        </svg>
+                        <div
+                            style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;">
+                            <div id="scoreValue" style="font-size: 2rem; font-weight: 700; line-height: 1;"></div>
+                            <div id="scoreLabel" style="font-size: 0.75rem; color: #64748b; margin-top: 0.25rem;">out of
+                                100</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- UC017: Sentiment Analysis Section -->
+            <div id="sentimentAnalysisSection"
+                style="display: none; margin-top: 1.5rem; padding: 1.25rem; background: white; border-radius: 12px; border: 1px solid #e2e8f0;">
+                <h3
+                    style="font-size: 1rem; font-weight: 600; color: #1e293b; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="ti ti-mood-smile"
+                        style="background: linear-gradient(135deg, #9926F3, #1DD8FC); -webkit-background-clip: text; -webkit-text-fill-color: transparent;"></i>
+                    Sentiment Analysis (NLP)
+                </h3>
+                <div style="display: grid; grid-template-columns: auto 1fr; gap: 0.75rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <i id="sentimentIcon" style="font-size: 1.5rem;"></i>
+                        <span id="sentimentType" style="font-weight: 600; font-size: 0.95rem;"></span>
+                    </div>
+                    <div id="sentimentDetails" style="font-size: 0.875rem; color: #64748b;"></div>
+                </div>
+            </div>
+
+            <!-- UC017: Improvement Tips Section (with % increases) -->
+            <div id="improvementTipsSection"
+                style="display: none; margin-top: 1.5rem; padding: 1.25rem; background: white; border-radius: 12px; border: 1px solid #e2e8f0;">
+                <h3
+                    style="font-size: 1rem; font-weight: 600; color: #1e293b; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="ti ti-bulb"
+                        style="background: linear-gradient(135deg, #9926F3, #1DD8FC); -webkit-background-clip: text; -webkit-text-fill-color: transparent;"></i>
+                    AI Improvement Tips
+                </h3>
+                <div id="tipsContainer"></div>
             </div>
         </div>
     </div>
@@ -843,130 +977,132 @@
 {% block extra_js %}
 
 <script>
-// CONTENT INTELLIGENCE - MULTIPLE PLATFORM SELECTION
-// This runs immediately, no waiting
+    // CONTENT INTELLIGENCE - MULTIPLE PLATFORM SELECTION
+    // This runs immediately, no waiting
 
-(function() {
-    'use strict';
-    
-    console.log('🚀 Initializing Platform Selector...');
-    
-    // Global state for selected platforms
-    window.selectedPlatforms = [];
-    
-    // Platform name mappings
-    const platformNames = {
-        instagram: { name: 'Instagram', icon: 'ti-brand-instagram' },
-        facebook: { name: 'Facebook', icon: 'ti-brand-facebook' },
-        linkedin: { name: 'LinkedIn', icon: 'ti-brand-linkedin' },
-        twitter: { name: 'Twitter', icon: 'ti-brand-twitter' },
-        pinterest: { name: 'Pinterest', icon: 'ti-brand-pinterest' },
-        youtube: { name: 'YouTube', icon: 'ti-brand-youtube' }
-    };
-    
-    // Initialize platform selector
-    function initPlatformSelector() {
-        const platformOptions = document.querySelectorAll('.platform-option');
-        
-        console.log('Found', platformOptions.length, 'platform options');
-        
-        if (platformOptions.length === 0) {
-            console.error('❌ No platform options found!');
-            return;
-        }
-        
-        platformOptions.forEach(function(option) {
-            // Remove any existing listeners
-            const newOption = option.cloneNode(true);
-            option.parentNode.replaceChild(newOption, option);
-            
-            // Add new listener
-            newOption.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                const platform = this.getAttribute('data-platform');
-                console.log('🔘 Platform clicked:', platform);
-                
-                // Toggle active class
-                this.classList.toggle('active');
-                
-                // Update selected platforms array
-                const index = window.selectedPlatforms.indexOf(platform);
-                
-                if (this.classList.contains('active')) {
-                    // Add platform
-                    if (index === -1) {
-                        window.selectedPlatforms.push(platform);
-                        console.log('✅ Added:', platform);
+    (function () {
+        'use strict';
+
+        console.log('🚀 Initializing Platform Selector...');
+
+        // Global state for selected platforms
+        window.selectedPlatforms = [];
+
+        // Platform name mappings
+        const platformNames = {
+            instagram: { name: 'Instagram', icon: 'ti-brand-instagram' },
+            facebook: { name: 'Facebook', icon: 'ti-brand-facebook' },
+            linkedin: { name: 'LinkedIn', icon: 'ti-brand-linkedin' },
+            twitter: { name: 'Twitter', icon: 'ti-brand-twitter' },
+            pinterest: { name: 'Pinterest', icon: 'ti-brand-pinterest' },
+            youtube: { name: 'YouTube', icon: 'ti-brand-youtube' }
+        };
+
+        // Initialize platform selector
+        function initPlatformSelector() {
+            const platformOptions = document.querySelectorAll('.platform-option');
+
+            console.log('Found', platformOptions.length, 'platform options');
+
+            if (platformOptions.length === 0) {
+                console.error('❌ No platform options found!');
+                return;
+            }
+
+            platformOptions.forEach(function (option) {
+                // Remove any existing listeners
+                const newOption = option.cloneNode(true);
+                option.parentNode.replaceChild(newOption, option);
+
+                // Add new listener
+                newOption.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    const platform = this.getAttribute('data-platform');
+                    console.log('🔘 Platform clicked:', platform);
+
+                    // Toggle active class
+                    this.classList.toggle('active');
+
+                    // Update selected platforms array
+                    const index = window.selectedPlatforms.indexOf(platform);
+
+                    if (this.classList.contains('active')) {
+                        // Add platform
+                        if (index === -1) {
+                            window.selectedPlatforms.push(platform);
+                            console.log('✅ Added:', platform);
+                        }
+                    } else {
+                        // Remove platform
+                        if (index > -1) {
+                            window.selectedPlatforms.splice(index, 1);
+                            console.log('❌ Removed:', platform);
+                        }
                     }
-                } else {
-                    // Remove platform
-                    if (index > -1) {
-                        window.selectedPlatforms.splice(index, 1);
-                        console.log('❌ Removed:', platform);
-                    }
-                }
-                
-                console.log('📋 Selected platforms:', window.selectedPlatforms);
-                
-                // Update display
-                updateSelectedDisplay();
+
+                    console.log('📋 Selected platforms:', window.selectedPlatforms);
+
+                    // Update display
+                    updateSelectedDisplay();
+                });
             });
-        });
-        
-        console.log('✅ Platform selector initialized');
-    }
-    
-    // Update selected platforms display
-    function updateSelectedDisplay() {
-        const infoDiv = document.getElementById('selectedPlatformsInfo');
-        const listSpan = document.getElementById('selectedPlatformsList');
-        
-        if (!infoDiv || !listSpan) {
-            console.error('❌ Info elements not found');
-            return;
+
+            console.log('✅ Platform selector initialized');
         }
-        
-        if (window.selectedPlatforms.length === 0) {
-            infoDiv.classList.remove('show');
-            listSpan.textContent = 'None';
+
+        // Update selected platforms display
+        function updateSelectedDisplay() {
+            const infoDiv = document.getElementById('selectedPlatformsInfo');
+            const listSpan = document.getElementById('selectedPlatformsList');
+
+            if (!infoDiv || !listSpan) {
+                console.error('❌ Info elements not found');
+                return;
+            }
+
+            if (window.selectedPlatforms.length === 0) {
+                infoDiv.classList.remove('show');
+                listSpan.textContent = 'None';
+            } else {
+                infoDiv.classList.add('show');
+
+                // Create badges
+                const badges = window.selectedPlatforms.map(function (platform) {
+                    const info = platformNames[platform];
+                    return '<span class="platform-badge">' +
+                        '<i class="' + info.icon + '"></i>' +
+                        info.name +
+                        '</span>';
+                }).join('');
+
+                listSpan.innerHTML = badges;
+            }
+        }
+
+        // Initialize when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initPlatformSelector);
         } else {
-            infoDiv.classList.add('show');
-            
-            // Create badges
-            const badges = window.selectedPlatforms.map(function(platform) {
-                const info = platformNames[platform];
-                return '<span class="platform-badge">' +
-                       '<i class="' + info.icon + '"></i>' +
-                       info.name +
-                       '</span>';
-            }).join('');
-            
-            listSpan.innerHTML = badges;
+            initPlatformSelector();
         }
-    }
-    
-    // Initialize when DOM is ready
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initPlatformSelector);
-    } else {
-        initPlatformSelector();
-    }
-    
-    // Also try after a small delay to ensure everything is loaded
-    setTimeout(initPlatformSelector, 100);
-    
-})();
 
-// Make function available globally for generateContent()
-function getSelectedPlatforms() {
-    return window.selectedPlatforms || [];
-}
+        // Also try after a small delay to ensure everything is loaded
+        setTimeout(initPlatformSelector, 100);
 
-console.log('✅ Platform selection script loaded');
+    })();
+
+    // Make function available globally for generateContent()
+    function getSelectedPlatforms() {
+        return window.selectedPlatforms || [];
+    }
+
+    console.log('✅ Platform selection script loaded');
+
+
 </script>
 
 
-<script src="/static/js/content.js?v=7"></script>
+<script src="/static/js/content.js?v=10"></script>
 {% endblock %}

@@ -2195,8 +2195,8 @@ OAUTH_CONFIGS = {
     'linkedin': {
         'authorize_url': 'https://www.linkedin.com/oauth/v2/authorization',
         'token_url': 'https://www.linkedin.com/oauth/v2/accessToken',
-        #  UPDATED: Remove r_emailaddress, keep only posting scopes
-        'scopes': ['openid', 'profile', 'w_member_social'],  # Changed from r_liteprofile, r_emailaddress
+        # ✅ FIXED: Add openid scope for userinfo endpoint
+        'scopes': ['openid', 'profile', 'email', 'w_member_social'],
         'client_id': getattr(settings, 'LINKEDIN_CLIENT_ID', ''),
         'client_secret': getattr(settings, 'LINKEDIN_CLIENT_SECRET', ''),
     },
@@ -2215,6 +2215,7 @@ OAUTH_CONFIGS = {
         'client_secret': getattr(settings, 'PINTEREST_APP_SECRET', ''),
     }
 }
+
 
 
 @router.get("/oauth/connect/{platform}", summary="Initiate OAuth flow")
@@ -2382,7 +2383,7 @@ async def initiate_oauth(
     return RedirectResponse(url=auth_url)
 
 
-
+# Update the oauth_callback function's error handling:
 @router.get("/oauth/callback/{platform}", summary="OAuth callback handler")
 async def oauth_callback(
     platform: str,
@@ -2394,22 +2395,174 @@ async def oauth_callback(
 ):
     """Handle OAuth callback from platform"""
     
-    # Handle OAuth errors
+    # Handle OAuth errors with specific LinkedIn instructions
     if error:
         error_msg = error_description or error
         print(f"❌ OAuth error from {platform}: {error_msg}")
-        return HTMLResponse(f"""[... error HTML ...]""", status_code=400)
+        
+        # Special handling for LinkedIn scope errors
+        if platform == 'linkedin' and 'scope' in error.lower():
+            return HTMLResponse(f"""
+                <html>
+                    <head>
+                        <title>LinkedIn Setup Required</title>
+                        <style>
+                            body {{ font-family: 'Segoe UI', Arial; padding: 20px; background: #f8fafc; }}
+                            .error-box {{ background: white; padding: 30px; border-radius: 12px; max-width: 700px; margin: 30px auto; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }}
+                            h2 {{ color: #0077b5; margin-bottom: 1rem; display: flex; align-items: center; gap: 10px; }}
+                            .steps {{ background: #f1f5f9; padding: 20px; border-radius: 8px; margin: 20px 0; }}
+                            .steps ol {{ margin: 10px 0; padding-left: 25px; }}
+                            .steps li {{ margin: 10px 0; line-height: 1.6; }}
+                            .code {{ background: #1e293b; color: #10b981; padding: 2px 8px; border-radius: 4px; font-family: 'Courier New', monospace; font-size: 0.9rem; }}
+                            .btn {{ padding: 12px 24px; background: #0077b5; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; margin-top: 20px; }}
+                            .btn:hover {{ background: #005885; }}
+                            .warning {{ background: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 15px 0; border-radius: 4px; }}
+                        </style>
+                    </head>
+                    <body>
+                        <div class="error-box">
+                            <h2>
+                                <svg width="32" height="32" viewBox="0 0 24 24" fill="#0077b5"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H6.5v-7H9v7zM7.7 8.7c-.8 0-1.4-.6-1.4-1.4s.6-1.4 1.4-1.4 1.4.6 1.4 1.4-.6 1.4-1.4 1.4zM18 17h-2.5v-3.4c0-.9 0-2.1-1.3-2.1s-1.5 1-1.5 2v3.5h-2.5v-7h2.4v1h.03c.3-.6 1.1-1.3 2.2-1.3 2.4 0 2.8 1.6 2.8 3.6V17z"/></svg>
+                                LinkedIn App Configuration Required
+                            </h2>
+                            
+                            <div class="warning">
+                                <strong>⚠️ Error:</strong> {error_msg}
+                            </div>
+                            
+                            <p>Your LinkedIn app needs additional products enabled before OAuth will work. Follow these steps:</p>
+                            
+                            <div class="steps">
+                                <h3>📋 Setup Instructions:</h3>
+                                <ol>
+                                    <li>Go to <a href="https://www.linkedin.com/developers/apps" target="_blank">LinkedIn Developer Portal</a></li>
+                                    <li>Select your app: <span class="code">{getattr(settings, 'LINKEDIN_CLIENT_ID', 'YOUR_APP')}</span></li>
+                                    <li>Click the <strong>"Products"</strong> tab</li>
+                                    <li>Request access to these products:
+                                        <ul style="margin-top: 8px;">
+                                            <li>✅ <strong>Share on LinkedIn</strong> (Required for posting)</li>
+                                            <li>✅ <strong>Sign In with LinkedIn using OpenID Connect</strong> (Required for auth)</li>
+                                            <li>🔵 <strong>Marketing Developer Platform</strong> (Optional - for company pages)</li>
+                                        </ul>
+                                    </li>
+                                    <li>Wait for approval (usually instant for "Share on LinkedIn")</li>
+                                    <li>Once approved, verify <strong>OAuth 2.0 scopes</strong> under the "Auth" tab shows:
+                                        <ul style="margin-top: 8px;">
+                                            <li><span class="code">profile</span></li>
+                                            <li><span class="code">email</span></li>
+                                            <li><span class="code">w_member_social</span></li>
+                                        </ul>
+                                    </li>
+                                    <li>Add redirect URI: <span class="code">{str(request.base_url).rstrip('/')}/api/v1/social-media/oauth/callback/linkedin</span></li>
+                                </ol>
+                            </div>
+                            
+                            <p style="color: #64748b; font-size: 0.95rem; margin-top: 20px;">
+                                <strong>Note:</strong> If you need to post to LinkedIn Company Pages, you'll need the "Marketing Developer Platform" product, which may require LinkedIn review.
+                            </p>
+                            
+                            <button class="btn" onclick="window.close()">Close & Try Again After Setup</button>
+                        </div>
+                        
+                        <script>
+                            setTimeout(() => {{
+                                if (window.opener) {{
+                                    window.opener.postMessage({{
+                                        type: 'oauth_error',
+                                        platform: 'linkedin',
+                                        error: '{error_msg}'
+                                    }}, '*');
+                                }}
+                            }}, 500);
+                        </script>
+                    </body>
+                </html>
+            """, status_code=400)
+        
+        # Generic error for other platforms
+        return HTMLResponse(f"""
+            <html>
+                <head>
+                    <title>OAuth Error</title>
+                    <style>
+                        body {{ font-family: 'Segoe UI', Arial; padding: 40px; text-align: center; background: #f8fafc; }}
+                        .error-box {{ background: white; padding: 40px; border-radius: 16px; max-width: 500px; margin: 50px auto; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }}
+                        h2 {{ color: #ef4444; margin-bottom: 1rem; }}
+                        .error-details {{ background: #fef2f2; padding: 15px; border-radius: 8px; margin: 20px 0; color: #991b1b; font-family: monospace; font-size: 0.9rem; }}
+                        button {{ padding: 12px 24px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; margin-top: 20px; }}
+                    </style>
+                </head>
+                <body>
+                    <div class="error-box">
+                        <h2>❌ Connection Failed</h2>
+                        <p>{platform.title()} authorization was not completed.</p>
+                        <div class="error-details">{error_msg}</div>
+                        <button onclick="window.close()">Close Window</button>
+                    </div>
+                    <script>
+                        if (window.opener) {{
+                            window.opener.postMessage({{
+                                type: 'oauth_error',
+                                platform: '{platform}',
+                                error: '{error_msg}'
+                            }}, '*');
+                        }}
+                    </script>
+                </body>
+            </html>
+        """, status_code=400)
     
+    # Validate required parameters
     if not code or not state:
-        return HTMLResponse("""[... error HTML ...]""", status_code=400)
+        return HTMLResponse("""
+            <html>
+                <head>
+                    <title>Invalid Request</title>
+                    <style>
+                        body { font-family: 'Segoe UI', Arial; padding: 40px; text-align: center; background: #f8fafc; }
+                        .error-box { background: white; padding: 40px; border-radius: 16px; max-width: 500px; margin: 50px auto; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+                        h2 { color: #ef4444; margin-bottom: 1rem; }
+                        button { padding: 12px 24px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="error-box">
+                        <h2>❌ Invalid Request</h2>
+                        <p>Missing required authorization parameters.</p>
+                        <button onclick="window.close()">Close Window</button>
+                    </div>
+                </body>
+            </html>
+        """, status_code=400)
     
+    # Validate state token
     if state not in oauth_states:
-        return HTMLResponse("""[... error HTML ...]""")
+        return HTMLResponse("""
+            <html>
+                <head>
+                    <title>Security Error</title>
+                    <style>
+                        body { font-family: 'Segoe UI', Arial; padding: 40px; text-align: center; background: #f8fafc; }
+                        .error-box { background: white; padding: 40px; border-radius: 16px; max-width: 500px; margin: 50px auto; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+                        h2 { color: #ef4444; margin-bottom: 1rem; }
+                        button { padding: 12px 24px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="error-box">
+                        <h2>❌ Security Validation Failed</h2>
+                        <p>Invalid or expired state token. Please try connecting again.</p>
+                        <button onclick="window.close()">Close Window</button>
+                    </div>
+                </body>
+            </html>
+        """, status_code=400)
     
     oauth_data = oauth_states[state]
     config = OAUTH_CONFIGS[platform]
     
     print(f"✅ Valid OAuth callback - Platform: {platform}, Code: {code[:20]}...")
+    print(f"📦 OAuth data - Client ID: {oauth_data['client_id']}, User ID: {oauth_data['user_id']}")
     
     base_url = str(request.base_url).rstrip('/')
     redirect_uri = f"{base_url}/api/v1/social-media/oauth/callback/{platform}"
@@ -2425,9 +2578,13 @@ async def oauth_callback(
         }
         
         print(f"🔄 Exchanging code for token with {platform}...")
+        print(f"   Token URL: {config['token_url']}")
+        print(f"   Redirect URI: {redirect_uri}")
         
         import requests
         response = requests.post(config['token_url'], data=token_data, timeout=30)
+        
+        print(f"📡 Token exchange response status: {response.status_code}")
         
         if not response.ok:
             print(f"❌ Token exchange failed: {response.text}")
@@ -2438,21 +2595,31 @@ async def oauth_callback(
         refresh_token = token_response.get('refresh_token')
         expires_in = token_response.get('expires_in')
         
+        print(f"✅ Access token received (length: {len(access_token) if access_token else 0})")
+        print(f"   Refresh token: {'Yes' if refresh_token else 'No'}")
+        print(f"   Expires in: {expires_in} seconds")
+        
         if not access_token:
             raise Exception("No access token in response")
-        
-        print(f"✅ Access token received from {platform}")
         
         # Get account info
         print(f"📋 Fetching account info from {platform}...")
         account_info = get_platform_account_info(platform, access_token)
-        print(f"✅ Account info: {account_info['name']}")
+        print(f"✅ Account info retrieved:")
+        print(f"   ID: {account_info['id']}")
+        print(f"   Name: {account_info['name']}")
         
-        # ✅ SAVE CREDENTIALS DIRECTLY (FIXED TABLE NAME)
+        # Save credentials to database
         connection = get_db_connection()
         cursor = connection.cursor()
         
         token_expires_at = datetime.now() + timedelta(seconds=expires_in) if expires_in else None
+        
+        print(f"💾 Saving credentials to database...")
+        print(f"   Client ID: {oauth_data['client_id']}")
+        print(f"   Platform: {platform}")
+        print(f"   Account ID: {account_info['id']}")
+        print(f"   Account Name: {account_info['name']}")
         
         cursor.execute("""
             INSERT INTO social_media_credentials 
@@ -2478,59 +2645,273 @@ async def oauth_callback(
             json.dumps(account_info.get('metadata')) if account_info.get('metadata') else None
         ))
         
+        affected_rows = cursor.rowcount
         connection.commit()
         cursor.close()
         connection.close()
         
+        print(f"✅ Database updated - Affected rows: {affected_rows}")
+        
         # Clean up state
         del oauth_states[state]
         
-        print(f"✅ {platform} account connected successfully for client {oauth_data['client_id']}")
+        print(f"🎉 {platform} account connected successfully for client {oauth_data['client_id']}")
         
+        # Return beautiful success page with postMessage
         return HTMLResponse(f"""
             <html>
                 <head>
+                    <title>Connected Successfully</title>
                     <style>
-                        body {{ font-family: 'Segoe UI', Arial; padding: 40px; text-align: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; min-height: 100vh; display: flex; align-items: center; justify-content: center; }}
-                        .success-box {{ background: white; color: #1e293b; padding: 50px 40px; border-radius: 20px; max-width: 500px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }}
-                        h2 {{ margin: 0 0 20px 0; color: #10b981; font-size: 2rem; }}
-                        .checkmark {{ font-size: 4rem; margin-bottom: 1rem; }}
-                        .account-name {{ background: #f0fdf4; color: #166534; padding: 0.75rem 1.5rem; border-radius: 10px; margin: 1.5rem 0; font-weight: 600; }}
-                        .countdown {{ color: #9926F3; font-weight: 600; margin-top: 1rem; }}
+                        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+                        body {{ 
+                            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                            color: white; 
+                            min-height: 100vh; 
+                            display: flex; 
+                            align-items: center; 
+                            justify-content: center;
+                            padding: 20px;
+                        }}
+                        .success-box {{
+                            background: white;
+                            color: #1e293b;
+                            padding: 50px;
+                            border-radius: 20px;
+                            text-align: center;
+                            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                            max-width: 500px;
+                            width: 100%;
+                            animation: slideIn 0.5s ease-out;
+                        }}
+                        @keyframes slideIn {{
+                            from {{ transform: translateY(-50px); opacity: 0; }}
+                            to {{ transform: translateY(0); opacity: 1; }}
+                        }}
+                        .checkmark {{
+                            width: 80px;
+                            height: 80px;
+                            border-radius: 50%;
+                            display: block;
+                            margin: 0 auto 30px;
+                            stroke-width: 3;
+                            stroke: #10b981;
+                            stroke-miterlimit: 10;
+                            animation: fill .4s ease-in-out .4s forwards, scale .3s ease-in-out .9s both;
+                        }}
+                        .checkmark__circle {{
+                            stroke-dasharray: 166;
+                            stroke-dashoffset: 166;
+                            stroke-width: 3;
+                            stroke-miterlimit: 10;
+                            stroke: #10b981;
+                            fill: none;
+                            animation: stroke 0.6s cubic-bezier(0.65, 0, 0.45, 1) forwards;
+                        }}
+                        .checkmark__check {{
+                            transform-origin: 50% 50%;
+                            stroke-dasharray: 48;
+                            stroke-dashoffset: 48;
+                            animation: stroke 0.3s cubic-bezier(0.65, 0, 0.45, 1) 0.8s forwards;
+                        }}
+                        @keyframes stroke {{
+                            100% {{ stroke-dashoffset: 0; }}
+                        }}
+                        @keyframes scale {{
+                            0%, 100% {{ transform: none; }}
+                            50% {{ transform: scale3d(1.1, 1.1, 1); }}
+                        }}
+                        h2 {{
+                            color: #1e293b;
+                            margin-bottom: 15px;
+                            font-size: 2rem;
+                            font-weight: 700;
+                        }}
+                        p {{
+                            color: #64748b;
+                            font-size: 1.1rem;
+                            margin-bottom: 30px;
+                            line-height: 1.6;
+                        }}
+                        .platform-badge {{
+                            display: inline-block;
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            color: white;
+                            padding: 8px 20px;
+                            border-radius: 20px;
+                            font-weight: 600;
+                            margin-bottom: 20px;
+                            font-size: 0.9rem;
+                            letter-spacing: 0.5px;
+                        }}
+                        .account-info {{
+                            background: #f1f5f9;
+                            padding: 20px;
+                            border-radius: 12px;
+                            margin: 25px 0;
+                        }}
+                        .account-name {{
+                            font-size: 1.2rem;
+                            font-weight: 600;
+                            color: #0f172a;
+                            margin-top: 8px;
+                        }}
+                        .account-id {{
+                            font-family: 'Courier New', monospace;
+                            font-size: 0.85rem;
+                            color: #64748b;
+                            margin-top: 5px;
+                        }}
+                        .auto-close {{
+                            color: #94a3b8;
+                            font-size: 0.9rem;
+                            margin-top: 25px;
+                            font-style: italic;
+                        }}
+                        .countdown {{
+                            display: inline-block;
+                            font-weight: 700;
+                            color: #667eea;
+                        }}
                     </style>
                 </head>
                 <body>
                     <div class="success-box">
-                        <div class="checkmark">✅</div>
-                        <h2>Connected!</h2>
-                        <div class="account-name">{account_info['name']}</div>
-                        <p>Your {platform.title()} account has been successfully connected.</p>
-                        <p style="font-size: 0.9rem;">You can now publish posts directly to {platform.title()}.</p>
-                        <p class="countdown">Closing in <span id="countdown">3</span> seconds...</p>
+                        <svg class="checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
+                            <circle class="checkmark__circle" cx="26" cy="26" r="25" fill="none"/>
+                            <path class="checkmark__check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
+                        </svg>
+                        
+                        <div class="platform-badge">{platform.upper()}</div>
+                        <h2>Successfully Connected!</h2>
+                        <p>Your {platform.title()} account has been securely linked to PanvelIQ.</p>
+                        
+                        <div class="account-info">
+                            <div style="color: #64748b; font-size: 0.9rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Connected Account</div>
+                            <div class="account-name">{account_info['name']}</div>
+                            <div class="account-id">ID: {account_info['id']}</div>
+                        </div>
+                        
+                        <p class="auto-close">
+                            Closing in <span class="countdown" id="countdown">3</span> seconds...
+                        </p>
                     </div>
+                    
                     <script>
+                        // Send success message to parent window
+                        console.log('✅ Sending success message to parent window');
+                        if (window.opener) {{
+                            window.opener.postMessage({{
+                                type: 'oauth_success',
+                                platform: '{platform}',
+                                account: {{
+                                    id: '{account_info["id"]}',
+                                    name: '{account_info["name"]}'
+                                }}
+                            }}, '*');
+                            console.log('📤 Message sent to parent');
+                        }} else {{
+                            console.log('⚠️ No window.opener found');
+                        }}
+                        
+                        // Countdown timer
                         let seconds = 3;
                         const countdownEl = document.getElementById('countdown');
                         
-                        const interval = setInterval(() => {{
+                        const countdown = setInterval(() => {{
                             seconds--;
                             countdownEl.textContent = seconds;
+                            
                             if (seconds <= 0) {{
-                                clearInterval(interval);
-                                window.opener?.postMessage({{type: 'oauth_success', platform: '{platform}'}}, '*');
-                                setTimeout(() => window.close(), 500);
+                                clearInterval(countdown);
+                                window.close();
                             }}
                         }}, 1000);
                     </script>
                 </body>
             </html>
         """)
-            
-    except Exception as e:
-        error_msg = str(e)
-        print(f"❌ OAuth callback error: {error_msg}")
         
-        return HTMLResponse(f"""[... error HTML ...]""")
+    except Exception as e:
+        print(f"❌ OAuth callback error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        return HTMLResponse(f"""
+            <html>
+                <head>
+                    <title>Connection Error</title>
+                    <style>
+                        body {{ 
+                            font-family: 'Segoe UI', Arial; 
+                            padding: 40px; 
+                            text-align: center; 
+                            background: #fef2f2; 
+                        }}
+                        .error-box {{ 
+                            background: white; 
+                            padding: 40px; 
+                            border-radius: 16px; 
+                            max-width: 500px; 
+                            margin: 50px auto; 
+                            box-shadow: 0 4px 20px rgba(0,0,0,0.1); 
+                        }}
+                        h2 {{ 
+                            color: #ef4444; 
+                            margin-bottom: 1rem; 
+                        }}
+                        .error-details {{ 
+                            background: #fee2e2; 
+                            padding: 15px; 
+                            border-radius: 8px; 
+                            margin: 20px 0; 
+                            color: #991b1b; 
+                            font-family: monospace; 
+                            font-size: 0.9rem; 
+                            word-break: break-all;
+                            text-align: left;
+                            max-height: 200px;
+                            overflow-y: auto;
+                        }}
+                        button {{ 
+                            padding: 12px 24px; 
+                            background: #3b82f6; 
+                            color: white; 
+                            border: none; 
+                            border-radius: 8px; 
+                            cursor: pointer; 
+                            font-size: 16px; 
+                        }}
+                        button:hover {{
+                            background: #2563eb;
+                        }}
+                    </style>
+                </head>
+                <body>
+                    <div class="error-box">
+                        <h2>❌ Connection Failed</h2>
+                        <p>We encountered an error while connecting your {platform.title()} account.</p>
+                        <div class="error-details">{str(e)}</div>
+                        <p style="color: #64748b; font-size: 0.9rem; margin-top: 20px;">
+                            Please try again or contact support if the problem persists.
+                        </p>
+                        <button onclick="window.close()">Close Window</button>
+                    </div>
+                    <script>
+                        console.log('❌ OAuth error:', '{str(e)}');
+                        if (window.opener) {{
+                            window.opener.postMessage({{
+                                type: 'oauth_error',
+                                platform: '{platform}',
+                                error: '{str(e)}'
+                            }}, '*');
+                        }}
+                    </script>
+                </body>
+            </html>
+        """, status_code=500)
+
 
 
 def get_platform_account_info(platform: str, access_token: str) -> dict:

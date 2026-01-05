@@ -23,12 +23,12 @@ let currentClientId = null;
 // INITIALIZATION
 // =====================================================
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     // Platform selector initialized by inline script in content.html
     initializeContentTypeSelector();
     loadClients();
     loadContentLibrary();
-    
+
     // Visual analysis initialization
     const imageInput = document.getElementById('visualAnalysisImage');
     if (imageInput) {
@@ -43,16 +43,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function initializeContentTypeSelector() {
     const types = document.querySelectorAll('.type-chip');
-    
+
     types.forEach(type => {
-        type.addEventListener('click', function() {
+        type.addEventListener('click', function () {
             // Remove active from all
             types.forEach(t => t.classList.remove('active'));
-            
+
             // Add active to clicked
             this.classList.add('active');
             selectedContentType = this.dataset.type;
-            
+
             console.log('Selected content type:', selectedContentType);
         });
     });
@@ -64,7 +64,7 @@ function initializeContentTypeSelector() {
 
 async function loadClients() {
     const clientSelect = document.getElementById('clientSelect');
-    
+
     try {
         const token = localStorage.getItem('access_token'); // FIXED: Standardized token storage
         const response = await fetch('/api/v1/clients/list', {
@@ -72,15 +72,15 @@ async function loadClients() {
                 'Authorization': `Bearer ${token}`
             }
         });
-        
+
         if (!response.ok) {
             throw new Error('Failed to fetch clients');
         }
-        
+
         const data = await response.json();
-        
+
         clientSelect.innerHTML = '<option value="">Select a client...</option>';
-        
+
         if (data.clients && data.clients.length > 0) {
             data.clients.forEach(client => {
                 const option = document.createElement('option');
@@ -89,7 +89,7 @@ async function loadClients() {
                 clientSelect.appendChild(option);
             });
         }
-        
+
     } catch (error) {
         console.error('Error loading clients:', error);
         clientSelect.innerHTML = '<option value="">Error loading clients</option>';
@@ -104,39 +104,39 @@ async function generateContent() {
     const clientId = document.getElementById('clientSelect')?.value;
     const topic = document.getElementById('topicInput')?.value; // FIXED: Changed from 'contentTopic' to 'topicInput'
     const tone = document.getElementById('toneSelect')?.value || 'professional';
-    
+
     console.log('Generate clicked. Platforms:', window.selectedPlatforms); // Use window.selectedPlatforms
-    
+
     // Validation
     if (!clientId) {
         alert('Please select a client');
         return;
     }
-    
+
     if (!topic || topic.trim() === '') {
         alert('Please enter a content topic');
         return;
     }
-    
+
     if (!window.selectedPlatforms || window.selectedPlatforms.length === 0) {
         alert('Please select at least one platform');
         return;
     }
-    
+
     if (!selectedContentType) {
         alert('Please select a content type');
         return;
     }
-    
+
     const generateBtn = document.getElementById('generateBtn');
     if (generateBtn) {
         generateBtn.disabled = true;
         generateBtn.innerHTML = '<i class="ti ti-loader"></i> Generating Content...';
     }
-    
+
     try {
         const token = localStorage.getItem('access_token'); // FIXED: Standardized token
-        
+
         const response = await fetch(`/api/v1/content/intelligence/generate`, {
             method: 'POST',
             headers: {
@@ -152,11 +152,17 @@ async function generateContent() {
                 generate_audience_insights: true
             })
         });
-        
+
         const result = await response.json();
-        
+
         if (result.success && result.data) {
             displayMultiPlatformContent(result.data);
+
+            if (result.data.variants && result.data.variants.length > 0) {
+                console.log('Calling displayPerformanceAnalysis with:', result.data.variants[0]);
+                displayPerformanceAnalysis(result.data.variants[0]);
+            }
+
             showNotification('Content generated successfully!', 'success');
         } else {
             throw new Error(result.detail || 'Content generation failed');
@@ -172,13 +178,172 @@ async function generateContent() {
     }
 }
 
+
+// =====================================================
+// DISPLAY PERFORMANCE ANALYSIS (UC017 REQUIREMENTS)
+// =====================================================
+function displayPerformanceAnalysis(data) {
+    // 1. PERFORMANCE SCORE (1-100 scale, ≥70 = Optimized)
+    if (data.performance_score !== undefined) {
+        const scoreSection = document.getElementById('performanceScoreSection');
+        const scoreValue = document.getElementById('scoreValue');
+        const scoreLabel = document.getElementById('scoreLabel');
+        const optimizationBadge = document.getElementById('optimizationBadge');
+        const performanceArc = document.getElementById('performanceArc');
+
+        if (scoreSection && scoreValue && optimizationBadge && performanceArc) {
+            scoreSection.style.display = 'block';
+
+            const score = Math.round(data.performance_score);
+            const isOptimized = score >= 70;
+
+            // Determine color zone
+            let scoreColor, badgeColor, badgeText, badgeBg;
+            if (score >= 80) {
+                scoreColor = '#16a34a'; // Green
+                badgeText = 'Excellent';
+                badgeBg = '#dcfce7';
+                badgeColor = '#16a34a';
+            } else if (score >= 70) {
+                scoreColor = '#eab308'; // Yellow
+                badgeText = 'Optimized';
+                badgeBg = '#fef9c3';
+                badgeColor = '#ca8a04';
+            } else if (score >= 50) {
+                scoreColor = '#f97316'; // Orange
+                badgeText = 'Needs Improvement';
+                badgeBg = '#ffedd5';
+                badgeColor = '#ea580c';
+            } else {
+                scoreColor = '#dc2626'; // Red
+                badgeText = 'Poor';
+                badgeBg = '#fee2e2';
+                badgeColor = '#dc2626';
+            }
+
+            // Update score display
+            scoreValue.textContent = score;
+            scoreValue.style.color = scoreColor;
+
+            // Update badge
+            optimizationBadge.textContent = badgeText;
+            optimizationBadge.style.background = badgeBg;
+            optimizationBadge.style.color = badgeColor;
+            optimizationBadge.style.border = `1px solid ${badgeColor}`;
+
+            // Animate performance arc (radial gauge)
+            const circumference = 2 * Math.PI * 40; // radius = 40
+            const offset = circumference - (score / 100) * circumference;
+            performanceArc.style.stroke = scoreColor;
+            performanceArc.style.strokeDashoffset = offset;
+        }
+    }
+
+    // 2. SENTIMENT ANALYSIS (NLP: positive/neutral/negative)
+    if (data.sentiment_analysis) {
+        const sentimentSection = document.getElementById('sentimentAnalysisSection');
+        const sentimentIcon = document.getElementById('sentimentIcon');
+        const sentimentType = document.getElementById('sentimentType');
+        const sentimentDetails = document.getElementById('sentimentDetails');
+
+        if (sentimentSection && sentimentIcon && sentimentType && sentimentDetails) {
+            sentimentSection.style.display = 'block';
+
+            const sentiment = data.sentiment_analysis.sentiment || 'neutral';
+            const emotion = data.sentiment_analysis.emotion || '';
+            const confidence = data.sentiment_analysis.confidence || 0;
+            const reasoning = data.sentiment_analysis.reasoning || '';
+
+            // Set icon and color based on sentiment
+            let icon, color, text;
+            if (sentiment === 'positive') {
+                icon = 'ti-mood-happy';
+                color = '#16a34a';
+                text = 'Positive';
+            } else if (sentiment === 'negative') {
+                icon = 'ti-mood-sad';
+                color = '#dc2626';
+                text = 'Negative';
+            } else {
+                icon = 'ti-mood-neutral';
+                color = '#64748b';
+                text = 'Neutral';
+            }
+
+            sentimentIcon.className = `ti ${icon}`;
+            sentimentIcon.style.color = color;
+            sentimentType.textContent = text;
+            sentimentType.style.color = color;
+
+            sentimentDetails.innerHTML = `
+                <div style="margin-bottom: 0.5rem;">
+                    <strong style="color: #334155;">Emotion:</strong> ${emotion}
+                    <span style="margin-left: 1rem;"><strong style="color: #334155;">Confidence:</strong> ${Math.round(confidence * 100)}%</span>
+                </div>
+                ${reasoning ? `<div style="font-style: italic;">"${reasoning}"</div>` : ''}
+            `;
+        }
+    }
+
+    // 3. IMPROVEMENT TIPS (with percentage increases)
+    if (data.improvement_tips && data.improvement_tips.length > 0) {
+        const tipsSection = document.getElementById('improvementTipsSection');
+        const tipsContainer = document.getElementById('tipsContainer');
+
+        if (tipsSection && tipsContainer) {
+            tipsSection.style.display = 'block';
+
+            tipsContainer.innerHTML = data.improvement_tips.map((tip, index) => {
+                let priorityColor, priorityBg;
+                if (tip.priority === 'high') {
+                    priorityColor = '#dc2626';
+                    priorityBg = '#fee2e2';
+                } else if (tip.priority === 'medium') {
+                    priorityColor = '#f97316';
+                    priorityBg = '#ffedd5';
+                } else {
+                    priorityColor = '#64748b';
+                    priorityBg = '#f1f5f9';
+                }
+
+                return `
+                    <div style="padding: 1rem; background: #f8fafc; border-radius: 8px; border-left: 3px solid ${priorityColor}; margin-bottom: ${index < data.improvement_tips.length - 1 ? '0.75rem' : '0'};">
+                        <div style="display: flex; align-items: start; justify-content: space-between; margin-bottom: 0.5rem;">
+                            <div style="flex: 1;">
+                                <div style="font-weight: 600; color: #1e293b; margin-bottom: 0.25rem;">
+                                    ${tip.tip}
+                                </div>
+                                <div style="font-size: 0.8rem; color: #64748b;">
+                                    ${tip.reasoning || ''}
+                                </div>
+                            </div>
+                            <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem; margin-left: 1rem;">
+                                <span style="background: linear-gradient(135deg, rgba(153, 38, 243, 0.1), rgba(29, 216, 252, 0.1)); color: #9926F3; padding: 0.25rem 0.75rem; border-radius: 12px; font-weight: 600; font-size: 0.875rem; border: 1px solid rgba(153, 38, 243, 0.3);">
+                                    ${tip.impact}
+                                </span>
+                                <span style="background: ${priorityBg}; color: ${priorityColor}; padding: 0.25rem 0.5rem; border-radius: 10px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase;">
+                                    ${tip.priority}
+                                </span>
+                            </div>
+                        </div>
+                        ${tip.category ? `<div style="display: inline-block; background: #e0f2fe; color: #0369a1; padding: 0.25rem 0.625rem; border-radius: 10px; font-size: 0.75rem; font-weight: 500; margin-top: 0.5rem;">
+                            <i class="ti ti-tag" style="font-size: 0.75rem; margin-right: 0.25rem;"></i>${tip.category}
+                        </div>` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+    }
+}
+
+
 // =====================================================
 // DISPLAY MULTI-PLATFORM CONTENT
 // =====================================================
 
 function displayMultiPlatformContent(data) {
     const previewContainer = document.getElementById('previewContainer');
-    
+
     if (!data.variants || data.variants.length === 0) {
         previewContainer.innerHTML = `
             <div class="empty-state">
@@ -189,12 +354,12 @@ function displayMultiPlatformContent(data) {
         `;
         return;
     }
-    
+
     // Display variants for each platform
     previewContainer.innerHTML = data.variants.map(variant => {
-        const scoreColor = variant.performance_score >= 80 ? '#16a34a' : 
-                          variant.performance_score >= 60 ? '#eab308' : '#ef4444';
-        
+        const scoreColor = variant.performance_score >= 80 ? '#16a34a' :
+            variant.performance_score >= 60 ? '#eab308' : '#ef4444';
+
         return `
             <div class="platform-variant" style="background: white; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; border: 2px solid ${variant.is_optimized ? '#16a34a' : '#e2e8f0'};">
                 <!-- Platform Header -->
@@ -244,9 +409,9 @@ function displayMultiPlatformContent(data) {
                             <i class="ti ti-hash"></i> Suggested Hashtags (${variant.hashtags.length})
                         </label>
                         <div class="hashtag-container">
-                            ${variant.hashtags.map(tag => 
-                                `<span class="hashtag-tag" style="display: inline-block; padding: 0.375rem 0.75rem; background: linear-gradient(135deg, rgba(153, 38, 243, 0.1), rgba(29, 216, 252, 0.1)); border: 1px solid #9926F3; border-radius: 4px; margin: 0.25rem; font-size: 0.85rem; color: #9926F3;">#${tag}</span>`
-                            ).join('')}
+                            ${variant.hashtags.map(tag =>
+            `<span class="hashtag-tag" style="display: inline-block; padding: 0.375rem 0.75rem; background: linear-gradient(135deg, rgba(153, 38, 243, 0.1), rgba(29, 216, 252, 0.1)); border: 1px solid #9926F3; border-radius: 4px; margin: 0.25rem; font-size: 0.85rem; color: #9926F3;">#${tag}</span>`
+        ).join('')}
                         </div>
                     </div>
                 ` : ''}
@@ -265,7 +430,7 @@ function displayMultiPlatformContent(data) {
             </div>
         `;
     }).join('');
-    
+
     // Store current data for saving
     currentClientId = document.getElementById('clientSelect')?.value;
     generatedContent = data;
@@ -280,10 +445,10 @@ async function savePlatformContent(variant) {
         showNotification('Client ID not found', 'error');
         return;
     }
-    
+
     try {
         const token = localStorage.getItem('access_token');
-        
+
         const response = await fetch(`${API_BASE}/save`, {
             method: 'POST',
             headers: {
@@ -302,19 +467,19 @@ async function savePlatformContent(variant) {
                 status: 'draft'
             })
         });
-        
+
         if (!response.ok) {
             const error = await response.json();
             throw new Error(error.detail || 'Failed to save content');
         }
-        
+
         const result = await response.json();
-        
+
         if (result.success) {
             showNotification('Content saved to library!', 'success');
             loadContentLibrary();
         }
-        
+
     } catch (error) {
         console.error('Error saving content:', error);
         showNotification(error.message || 'Failed to save content', 'error');
@@ -323,21 +488,21 @@ async function savePlatformContent(variant) {
 
 function copyPlatformContent(variant) {
     let textToCopy = '';
-    
+
     if (variant.headline) {
         textToCopy += variant.headline + '\n\n';
     }
-    
+
     textToCopy += variant.content + '\n\n';
-    
+
     if (variant.cta) {
         textToCopy += variant.cta + '\n\n';
     }
-    
+
     if (variant.hashtags && variant.hashtags.length > 0) {
         textToCopy += variant.hashtags.map(tag => `#${tag}`).join(' ');
     }
-    
+
     navigator.clipboard.writeText(textToCopy).then(() => {
         showNotification('Content copied to clipboard!', 'success');
     }).catch(err => {
@@ -353,18 +518,18 @@ function copyPlatformContent(variant) {
 async function generateAudienceInsights() {
     const clientId = document.getElementById('clientSelect')?.value;
     const topic = document.getElementById('topicInput')?.value; // FIXED: Changed ID
-    
+
     if (!clientId || !topic) {
         alert('Please select a client and enter a topic');
         return;
     }
-    
+
     const generateBtn = document.getElementById('generateAudienceBtn');
     if (generateBtn) {
         generateBtn.disabled = true;
         generateBtn.innerHTML = '<i class="ti ti-loader"></i> Generating Insights...';
     }
-    
+
     try {
         const token = localStorage.getItem('access_token'); // FIXED: Standardized token
         const response = await fetch(`/api/v1/content/audience-insights`, {
@@ -379,9 +544,9 @@ async function generateAudienceInsights() {
                 platform: window.selectedPlatforms[0] || 'instagram' // Use window.selectedPlatforms
             })
         });
-        
+
         const result = await response.json();
-        
+
         if (result.success && result.data) {
             displayAudienceInsights(result.data);
             showNotification('Audience insights generated successfully!', 'success');
@@ -402,10 +567,10 @@ async function generateAudienceInsights() {
 function displayAudienceInsights(data) {
     const container = document.getElementById('audienceInsightsDisplay');
     if (!container) return;
-    
+
     const audience = data.target_audience || {};
     const keywords = data.keywords || {};
-    
+
     container.innerHTML = `
         <div style="background: linear-gradient(135deg, rgba(153, 38, 243, 0.05), rgba(29, 216, 252, 0.05)); padding: 1.5rem; border-radius: 12px; margin-bottom: 1rem; border: 2px solid #9926F3;">
             <h4 style="color: #1e293b; margin-bottom: 1rem;"><i class="ti ti-target"></i> Target Audience</h4>
@@ -452,7 +617,7 @@ function displayAudienceInsights(data) {
             ` : ''}
         </div>
     `;
-    
+
     container.style.display = 'block';
 }
 
@@ -462,20 +627,20 @@ function displayAudienceInsights(data) {
 async function analyzeImageUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
-    
+
     if (!file.type.startsWith('image/')) {
         alert('Please upload an image file');
         return;
     }
-    
+
     if (file.size > 10 * 1024 * 1024) {
         alert('Image size must be less than 10MB');
         return;
     }
-    
+
     // Show preview
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = function (e) {
         const preview = document.getElementById('imagePreview');
         if (preview) {
             preview.innerHTML = `<img src="${e.target.result}" style="max-width: 100%; max-height: 400px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">`;
@@ -483,26 +648,26 @@ async function analyzeImageUpload(event) {
         }
     };
     reader.readAsDataURL(file);
-    
+
     // Convert to base64 for analysis
     const base64Reader = new FileReader();
-    base64Reader.onload = async function(e) {
+    base64Reader.onload = async function (e) {
         try {
             // FIXED: Clean base64 extraction
             const base64String = e.target.result;
-            
+
             // Remove the data URL prefix (e.g., "data:image/jpeg;base64,")
             const base64Data = base64String.split(',')[1];
-            
+
             // Remove any whitespace or newlines
             const cleanBase64 = base64Data.replace(/\s/g, '').replace(/\n/g, '').replace(/\r/g, '');
-            
+
             if (!cleanBase64 || cleanBase64.length === 0) {
                 throw new Error('Failed to encode image');
             }
-            
+
             console.log('Base64 length:', cleanBase64.length);
-            
+
             await analyzeVisualContent(cleanBase64);
         } catch (error) {
             console.error('Error processing image:', error);
@@ -519,7 +684,7 @@ async function analyzeVisualContent(base64Image) {
         analyzeBtn.disabled = true;
         analyzeBtn.innerHTML = '<i class="ti ti-loader"></i> Analyzing...';
     }
-    
+
     try {
         const token = localStorage.getItem('access_token'); // FIXED: Standardized token
         const response = await fetch(`/api/v1/content/analyze-visual`, {
@@ -533,9 +698,9 @@ async function analyzeVisualContent(base64Image) {
                 platform: window.selectedPlatforms[0] || 'instagram' // Use window.selectedPlatforms
             })
         });
-        
+
         const result = await response.json();
-        
+
         if (result.success && result.data) {
             displayVisualAnalysis(result.data);
             showNotification('Visual analysis complete!', 'success');
@@ -556,11 +721,11 @@ async function analyzeVisualContent(base64Image) {
 function displayVisualAnalysis(analysis) {
     const container = document.getElementById('visualAnalysisResults');
     if (!container) return;
-    
+
     const score = analysis.composition_score || 0;
     const scoreColor = score >= 70 ? '#10b981' : score >= 50 ? '#f59e0b' : '#ef4444';
     const scoreText = score >= 70 ? 'Optimized' : score >= 50 ? 'Good' : 'Needs Improvement';
-    
+
     container.innerHTML = `
         <div style="background: white; border-radius: 12px; padding: 2rem; border: 2px solid ${scoreColor};">
             <!-- Score Header -->
@@ -650,7 +815,7 @@ function displayVisualAnalysis(analysis) {
             ` : ''}
         </div>
     `;
-    
+
     container.style.display = 'block';
 }
 
@@ -660,7 +825,7 @@ function displayVisualAnalysis(analysis) {
 
 async function loadContentLibrary() {
     const libraryContainer = document.getElementById('contentLibrary');
-    
+
     try {
         const token = localStorage.getItem('access_token'); // FIXED: Standardized token
         const response = await fetch(`${API_BASE}/list?limit=10`, {
@@ -668,13 +833,13 @@ async function loadContentLibrary() {
                 'Authorization': `Bearer ${token}`
             }
         });
-        
+
         if (!response.ok) {
             throw new Error('Failed to fetch content library');
         }
-        
+
         const result = await response.json();
-        
+
         if (result.success && result.data.length > 0) {
             libraryContainer.innerHTML = result.data.map(content => `
                 <div class="content-card" style="background: white; border-radius: 12px; padding: 1.5rem; border: 1px solid #e2e8f0; transition: all 0.2s;">
@@ -706,11 +871,11 @@ async function loadContentLibrary() {
                     
                     ${content.hashtags && content.hashtags.length > 0 ? `
                         <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
-                            ${content.hashtags.slice(0, 5).map(tag => 
-                                `<span style="display: inline-block; padding: 0.25rem 0.625rem; background: linear-gradient(135deg, rgba(153, 38, 243, 0.1), rgba(29, 216, 252, 0.1)); border: 1px solid #9926F3; border-radius: 4px; font-size: 0.8rem; color: #9926F3;">#${tag}</span>`
-                            ).join('')}
-                            ${content.hashtags.length > 5 ? 
-                                `<span style="padding: 0.25rem 0.625rem; background: #f1f5f9; border-radius: 4px; font-size: 0.8rem; color: #64748b;">+${content.hashtags.length - 5} more</span>` : ''}
+                            ${content.hashtags.slice(0, 5).map(tag =>
+                `<span style="display: inline-block; padding: 0.25rem 0.625rem; background: linear-gradient(135deg, rgba(153, 38, 243, 0.1), rgba(29, 216, 252, 0.1)); border: 1px solid #9926F3; border-radius: 4px; font-size: 0.8rem; color: #9926F3;">#${tag}</span>`
+            ).join('')}
+                            ${content.hashtags.length > 5 ?
+                        `<span style="padding: 0.25rem 0.625rem; background: #f1f5f9; border-radius: 4px; font-size: 0.8rem; color: #64748b;">+${content.hashtags.length - 5} more</span>` : ''}
                         </div>
                     ` : ''}
                     
@@ -738,7 +903,7 @@ async function loadContentLibrary() {
                 </div>
             `;
         }
-        
+
     } catch (error) {
         console.error('Error loading content library:', error);
         libraryContainer.innerHTML = `
@@ -762,23 +927,23 @@ async function viewContent(contentId) {
                 'Authorization': `Bearer ${token}`
             }
         });
-        
+
         if (!response.ok) {
             throw new Error('Failed to fetch content');
         }
-        
+
         const result = await response.json();
-        
+
         if (result.success && result.data) {
             displayContentPreview(result.data);
-            
+
             // Scroll to preview area
-            document.getElementById('previewContainer').scrollIntoView({ 
-                behavior: 'smooth', 
-                block: 'nearest' 
+            document.getElementById('previewContainer').scrollIntoView({
+                behavior: 'smooth',
+                block: 'nearest'
             });
         }
-        
+
     } catch (error) {
         console.error('Error viewing content:', error);
         showNotification('Failed to load content', 'error');
@@ -788,15 +953,15 @@ async function viewContent(contentId) {
 function displayContentPreview(content) {
     const previewContainer = document.getElementById('previewContainer');
     if (!previewContainer) return;
-    
-    const hashtags = Array.isArray(content.hashtags) ? content.hashtags : 
-                     (typeof content.hashtags === 'string' ? JSON.parse(content.hashtags || '[]') : []);
-    
-    const scoreColor = content.optimization_score >= 80 ? '#16a34a' : 
-                      content.optimization_score >= 60 ? '#eab308' : '#ef4444';
-    
+
+    const hashtags = Array.isArray(content.hashtags) ? content.hashtags :
+        (typeof content.hashtags === 'string' ? JSON.parse(content.hashtags || '[]') : []);
+
+    const scoreColor = content.optimization_score >= 80 ? '#16a34a' :
+        content.optimization_score >= 60 ? '#eab308' : '#ef4444';
+
     const isOptimized = content.optimization_score >= 70;
-    
+
     previewContainer.innerHTML = `
         <div class="platform-variant" style="background: white; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; border: 2px solid ${isOptimized ? '#16a34a' : '#e2e8f0'};">
             <!-- Platform Header -->
@@ -841,9 +1006,9 @@ function displayContentPreview(content) {
                         <i class="ti ti-hash"></i> Suggested Hashtags (${hashtags.length})
                     </label>
                     <div class="hashtag-container">
-                        ${hashtags.map(tag => 
-                            `<span class="hashtag-tag" style="display: inline-block; padding: 0.375rem 0.75rem; background: linear-gradient(135deg, rgba(153, 38, 243, 0.1), rgba(29, 216, 252, 0.1)); border: 1px solid #9926F3; border-radius: 4px; margin: 0.25rem; font-size: 0.85rem; color: #9926F3;">#${tag}</span>`
-                        ).join('')}
+                        ${hashtags.map(tag =>
+        `<span class="hashtag-tag" style="display: inline-block; padding: 0.375rem 0.75rem; background: linear-gradient(135deg, rgba(153, 38, 243, 0.1), rgba(29, 216, 252, 0.1)); border: 1px solid #9926F3; border-radius: 4px; margin: 0.25rem; font-size: 0.85rem; color: #9926F3;">#${tag}</span>`
+    ).join('')}
                     </div>
                 </div>
             ` : ''}
@@ -910,17 +1075,17 @@ function copyContentText(contentId, contentText, hashtagsStr, ctaText) {
     try {
         const hashtags = JSON.parse(decodeURIComponent(hashtagsStr));
         const cta = decodeURIComponent(ctaText);
-        
+
         let textToCopy = decodeURIComponent(contentText) + '\n\n';
-        
+
         if (cta && cta !== 'undefined' && cta !== '') {
             textToCopy += cta + '\n\n';
         }
-        
+
         if (hashtags && hashtags.length > 0) {
             textToCopy += hashtags.map(tag => `#${tag}`).join(' ');
         }
-        
+
         navigator.clipboard.writeText(textToCopy).then(() => {
             showNotification('Content copied to clipboard!', 'success');
         }).catch(err => {
@@ -936,7 +1101,7 @@ async function deleteContent(contentId) {
     if (!confirm('Are you sure you want to delete this content?')) {
         return;
     }
-    
+
     try {
         const token = localStorage.getItem('access_token');
         const response = await fetch(`${API_BASE}/${contentId}`, {
@@ -945,14 +1110,14 @@ async function deleteContent(contentId) {
                 'Authorization': `Bearer ${token}`
             }
         });
-        
+
         if (!response.ok) {
             throw new Error('Failed to delete content');
         }
-        
+
         showNotification('Content deleted successfully', 'success');
         loadContentLibrary();
-        
+
     } catch (error) {
         console.error('Error deleting content:', error);
         showNotification('Failed to delete content', 'error');
@@ -991,9 +1156,9 @@ function showNotification(message, type = 'info') {
         animation: slideIn 0.3s ease;
         font-weight: 500;
     `;
-    
+
     document.body.appendChild(notification);
-    
+
     setTimeout(() => {
         notification.style.animation = 'slideOut 0.3s ease';
         setTimeout(() => notification.remove(), 300);
