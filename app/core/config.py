@@ -157,8 +157,10 @@ class Settings(BaseSettings):
 
     FACEBOOK_APP_ID: str = ""
     FACEBOOK_APP_SECRET: str = ""
+
     LINKEDIN_CLIENT_ID: str = ""
     LINKEDIN_CLIENT_SECRET: str = ""
+    
     TWITTER_CLIENT_ID: str = ""
     TWITTER_CLIENT_SECRET: str = ""
     PINTEREST_APP_ID: str = ""

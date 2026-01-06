@@ -76,7 +76,7 @@ function setupEventListeners() {
     if (platformSelect) {
         platformSelect.addEventListener('change', handlePlatformChange);
     }
-    
+
     // Objective change handler
     const objectiveSelect = document.getElementById('campaignObjective');
     if (objectiveSelect) {
@@ -88,16 +88,16 @@ function setupEventListeners() {
 
 async function handlePlatformChange(event) {
     const platform = event.target.value;
-    
+
     if (!platform) {
         document.getElementById('campaignObjective').innerHTML = '<option value="">Select objective...</option>';
         hideObjectiveGuidance();
         return;
     }
-    
+
     // Load platform-specific objectives
     await loadPlatformObjectives(platform);
-    
+
     // Show platform info
     showPlatformInfo(platform);
 }
@@ -108,14 +108,14 @@ async function loadPlatformObjectives(platform) {
         const response = await fetch(`${API_BASE}/platforms/${platform}/objectives`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        
+
         if (!response.ok) throw new Error('Failed to load objectives');
-        
+
         const data = await response.json();
         const objectiveSelect = document.getElementById('campaignObjective');
-        
+
         objectiveSelect.innerHTML = '<option value="">Select objective...</option>';
-        
+
         data.objectives.forEach(obj => {
             const option = document.createElement('option');
             option.value = obj.value;
@@ -123,7 +123,7 @@ async function loadPlatformObjectives(platform) {
             option.title = obj.description;
             objectiveSelect.appendChild(option);
         });
-        
+
     } catch (error) {
         console.error('Error loading objectives:', error);
         showNotification('Failed to load platform objectives', 'error');
@@ -133,7 +133,7 @@ async function loadPlatformObjectives(platform) {
 function showPlatformInfo(platform) {
     const platformInfo = PLATFORM_DATA[platform];
     if (!platformInfo) return;
-    
+
     // Show format options
     const formatContainer = document.getElementById('platformFormatsContainer');
     if (formatContainer) {
@@ -142,14 +142,14 @@ function showPlatformInfo(platform) {
                 <label>Ad Format</label>
                 <select class="form-control" id="adFormat">
                     <option value="">Select format...</option>
-                    ${platformInfo.formats.map(f => 
-                        `<option value="${f.value}">${f.label}</option>`
-                    ).join('')}
+                    ${platformInfo.formats.map(f =>
+            `<option value="${f.value}">${f.label}</option>`
+        ).join('')}
                 </select>
             </div>
         `;
     }
-    
+
     // Show placement info
     const placementContainer = document.getElementById('platformPlacementsInfo');
     if (placementContainer) {
@@ -157,9 +157,9 @@ function showPlatformInfo(platform) {
             <div style="margin-top: 1rem; padding: 1rem; background: #f8fafc; border-radius: 8px;">
                 <div style="font-weight: 600; margin-bottom: 0.5rem;">Available Placements:</div>
                 <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
-                    ${platformInfo.placements.map(p => 
-                        `<span style="padding: 0.25rem 0.75rem; background: white; border-radius: 20px; font-size: 0.875rem;">${p}</span>`
-                    ).join('')}
+                    ${platformInfo.placements.map(p =>
+            `<span style="padding: 0.25rem 0.75rem; background: white; border-radius: 20px; font-size: 0.875rem;">${p}</span>`
+        ).join('')}
                 </div>
             </div>
         `;
@@ -174,15 +174,15 @@ async function handleObjectiveChange(event) {
     const objective = event.target.value;
     const platform = document.getElementById('campaignPlatform').value;
     const budget = parseFloat(document.getElementById('campaignBudget').value) || 0;
-    
+
     if (!objective || !platform || budget < 100) {
         hideObjectiveGuidance();
         return;
     }
-    
+
     // Show loading
     showGuidanceLoading();
-    
+
     // Get AI guidance
     await getObjectiveGuidance(platform, objective, budget);
 }
@@ -207,14 +207,14 @@ async function getObjectiveGuidance(platform, objective, budget) {
                 industry: document.getElementById('clientIndustry')?.value || null
             })
         });
-        
+
         if (!response.ok) throw new Error('Failed to get guidance');
-        
+
         const data = await response.json();
         currentObjectiveGuidance = data.guidance;
-        
+
         displayObjectiveGuidance(data.guidance);
-        
+
     } catch (error) {
         console.error('Error getting objective guidance:', error);
         hideObjectiveGuidance();
@@ -225,7 +225,7 @@ async function getObjectiveGuidance(platform, objective, budget) {
 function showGuidanceLoading() {
     const container = document.getElementById('objectiveGuidanceContainer');
     if (!container) return;
-    
+
     container.style.display = 'block';
     container.innerHTML = `
         <div style="padding: 2rem; text-align: center;">
@@ -238,12 +238,12 @@ function showGuidanceLoading() {
 function displayObjectiveGuidance(guidance) {
     const container = document.getElementById('objectiveGuidanceContainer');
     if (!container) return;
-    
+
     const settings = guidance.platform_specific_settings;
     const targeting = guidance.targeting_refinements;
     const creative = guidance.creative_guidelines;
     const performance = guidance.performance_expectations;
-    
+
     container.innerHTML = `
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 1.5rem; border-radius: 8px 8px 0 0;">
             <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">
@@ -330,7 +330,7 @@ function displayObjectiveGuidance(guidance) {
             </div>
         </div>
     `;
-    
+
     container.style.display = 'block';
 }
 
@@ -344,58 +344,95 @@ function hideObjectiveGuidance() {
 }
 
 
-
 function initializeMediaUpload(campaignId) {
-    const dropZone = document.getElementById('mediaDropZone');
+    const dropZone = document.getElementById('dropZone');
     const fileInput = document.getElementById('mediaFileInput');
-    
-    if (!dropZone || !fileInput) return;
-    
-    // Click to upload
-    dropZone.addEventListener('click', () => fileInput.click());
-    
-    // File input change
-    fileInput.addEventListener('change', (e) => {
+    const uploadBtn = document.getElementById('uploadMediaBtn');
+
+    if (!dropZone || !fileInput) {
+        console.error('Media upload elements not found');
+        return;
+    }
+
+    console.log('✅ Initializing media upload for campaign:', campaignId);
+
+    // ✅ Click button to trigger file input
+    if (uploadBtn) {
+        uploadBtn.addEventListener('click', () => {
+            fileInput.click();
+        });
+    } else {
+        // Fallback: click dropzone to upload
+        dropZone.addEventListener('click', (e) => {
+            // Don't trigger if clicking the button inside
+            if (e.target.id !== 'uploadMediaBtn') {
+                fileInput.click();
+            }
+        });
+    }
+
+    // ✅ File input change - pass campaignId
+    fileInput.addEventListener('change', async (e) => {
         if (e.target.files.length > 0) {
-            handleMediaFiles(e.target.files, campaignId);
+            console.log('📁 Files selected:', e.target.files.length);
+            await handleMediaFiles(e.target.files, campaignId);
         }
     });
-    
-    // Drag and drop
+
+    // ✅ Drag and drop - pass campaignId
     dropZone.addEventListener('dragover', (e) => {
         e.preventDefault();
-        dropZone.style.borderColor = '#6366f1';
+        e.stopPropagation();
+        dropZone.style.borderColor = 'var(--primary-color)';
+        dropZone.style.background = 'linear-gradient(135deg, rgba(153, 38, 243, 0.05) 0%, rgba(29, 216, 252, 0.05) 100%)';
+    });
+
+    dropZone.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.style.borderColor = '#cbd5e1';
         dropZone.style.background = '#f8fafc';
     });
-    
-    dropZone.addEventListener('dragleave', () => {
-        dropZone.style.borderColor = '#e2e8f0';
-        dropZone.style.background = 'white';
-    });
-    
-    dropZone.addEventListener('drop', (e) => {
+
+    dropZone.addEventListener('drop', async (e) => {
         e.preventDefault();
-        dropZone.style.borderColor = '#e2e8f0';
-        dropZone.style.background = 'white';
+        e.stopPropagation();
         
+        dropZone.style.borderColor = '#cbd5e1';
+        dropZone.style.background = '#f8fafc';
+
         if (e.dataTransfer.files.length > 0) {
-            handleMediaFiles(e.dataTransfer.files, campaignId);
+            console.log('📁 Files dropped:', e.dataTransfer.files.length);
+            await handleMediaFiles(e.dataTransfer.files, campaignId);
         }
     });
 }
 
+
+
+
 async function handleMediaFiles(files, campaignId) {
-    const platform = document.getElementById('campaignPlatform').value;
-    
+    const platform = currentSelectedPlatform;
+
     if (!platform) {
-        showNotification('Please select a platform first', 'error');
+        showNotification('Unable to determine platform. Please close and reopen the modal.', 'error');
         return;
     }
-    
+
+    if (!campaignId) {
+        showNotification('Campaign ID not found. Please close and reopen the modal.', 'error');
+        return;
+    }
+
+    console.log('📤 Uploading', files.length, 'files for campaign:', campaignId, 'platform:', platform);
+
     for (let file of files) {
         await uploadMediaFile(file, platform, campaignId);
     }
 }
+
+
+
 
 
 function removeMedia(assetId) {
@@ -412,13 +449,13 @@ function switchTab(tabName) {
     // Remove active class from all tabs
     document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
     event.target.closest('.tab').classList.add('active');
-    
+
     // Hide all tab contents
     document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-    
+
     // Show selected tab
     document.getElementById(`${tabName}-tab`).classList.add('active');
-    
+
     // Load data based on tab
     if (tabName === 'campaigns') {
         loadCampaigns();
@@ -704,11 +741,11 @@ async function submitCampaign() {
     try {
         const platform = document.getElementById('campaignPlatform').value;
         const objective = document.getElementById('campaignObjective').value;
-        
+
         if (!platform || !objective) {
             throw new Error('Please select platform and objective');
         }
-        
+
         const formData = {
             client_id: parseInt(document.getElementById('campaignClient').value),
             campaign_name: document.getElementById('campaignName').value,
@@ -739,9 +776,9 @@ async function submitCampaign() {
 
         const data = await response.json();
         currentCampaignData = { campaign_id: data.campaign_id, ...formData };
-        
+
         showNotification('Campaign created successfully!', 'success');
-        
+
         // Show next step: Create Ads
         showCreateAdsStep(data.campaign_id, platform, objective);
 
@@ -759,7 +796,7 @@ async function submitCampaign() {
 function showCreateAdsStep(campaignId, platform, objective) {
     const modal = document.getElementById('campaignModal');
     const modalBody = modal.querySelector('.modal-body');
-    
+
     modalBody.innerHTML = `
         <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 1.5rem; border-radius: 8px; margin-bottom: 2rem;">
             <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">
@@ -770,21 +807,8 @@ function showCreateAdsStep(campaignId, platform, objective) {
         </div>
         
         <form id="createAdForm" onsubmit="event.preventDefault(); submitPlatformSpecificAd(${campaignId}, '${platform}', '${objective}');">
-            <!-- Platform-Specific Fields -->
+            <!-- Platform-Specific Fields (including media upload) -->
             <div id="platformSpecificFields"></div>
-            
-            <!-- Media Upload -->
-            <div class="form-group">
-                <label>Media Assets</label>
-                <div id="mediaDropZone" style="border: 2px dashed #e2e8f0; border-radius: 8px; padding: 2rem; text-align: center; cursor: pointer; transition: all 0.3s;">
-                    <i class="ti ti-upload" style="font-size: 2rem; color: #94a3b8;"></i>
-                    <div style="margin-top: 0.5rem; color: #64748b;">Click or drag files to upload</div>
-                    <div style="font-size: 0.875rem; color: #94a3b8; margin-top: 0.25rem;">Images (JPG, PNG) or Videos (MP4)</div>
-                </div>
-                <input type="file" id="mediaFileInput" accept="image/*,video/*" multiple style="display: none;">
-                <div id="uploadProgressContainer" style="margin-top: 1rem;"></div>
-                <div id="mediaGallery" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1rem; margin-top: 1rem;"></div>
-            </div>
             
             <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 2rem;">
                 <button type="button" class="btn btn-secondary" onclick="skipToPublish(${campaignId})">
@@ -796,10 +820,10 @@ function showCreateAdsStep(campaignId, platform, objective) {
             </div>
         </form>
     `;
-    
-    // Render platform-specific fields
+
+    // Render platform-specific fields (this includes media upload section)
     renderPlatformSpecificAdFields(platform, objective);
-    
+
     // Initialize media upload
     initializeMediaUpload(campaignId);
 }
@@ -808,17 +832,20 @@ function showCreateAdsStep(campaignId, platform, objective) {
 async function renderPlatformSpecificAdFields(platform, objective) {
     const container = document.getElementById('platformSpecificFields');
     const platformData = PLATFORM_DATA[platform];
-    
+
     // Get AI-powered objective guidance
     await fetchObjectiveGuidance(platform, objective);
-    
+
+    // ✅ ADD THIS: Start with hidden campaign ID field
     let fieldsHTML = `
+        <input type="hidden" id="adCampaignId" name="campaign_id">
+        
         <div class="form-group">
             <label>Ad Name *</label>
             <input type="text" class="form-control" id="adName" required placeholder="e.g., Summer Sale Ad 1">
         </div>
     `;
-    
+
     // ========== META (FACEBOOK & INSTAGRAM) ==========
     if (platform === 'meta') {
         fieldsHTML += `
@@ -911,7 +938,7 @@ async function renderPlatformSpecificAdFields(platform, objective) {
             </div>
         `;
     }
-    
+
     // ========== GOOGLE ADS ==========
     else if (platform === 'google') {
         fieldsHTML += `
@@ -988,7 +1015,7 @@ async function renderPlatformSpecificAdFields(platform, objective) {
             </div>
         `;
     }
-    
+
     // ========== LINKEDIN ==========
     else if (platform === 'linkedin') {
         fieldsHTML += `
@@ -1075,9 +1102,9 @@ async function renderPlatformSpecificAdFields(platform, objective) {
             </div>
         `;
     }
-  
+
     // ========== UNIVERSAL MEDIA UPLOAD SECTION (Single Unified Section) ==========
-fieldsHTML += `
+    fieldsHTML += `
     <hr style="margin: 2rem 0; border: none; border-top: 1px solid #e2e8f0;">
     
     <div class="form-group">
@@ -1089,21 +1116,18 @@ fieldsHTML += `
         </p>
         
         <!-- Combined Upload Area -->
-        <div style="background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 2rem; margin-bottom: 1.5rem;" 
-             id="dropZone"
-             ondragover="handleDragOver(event)"
-             ondragleave="handleDragLeave(event)"
-             ondrop="handleDrop(event)">
+      <div style="background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 2rem; margin-bottom: 1.5rem;" 
+     id="dropZone">
             
-            <input type="file" 
-                   id="mediaFileInput" 
-                   accept="image/jpeg,image/jpg,image/png,video/mp4,video/quicktime" 
-                   multiple 
-                   style="display: none;" 
-                   onchange="handleFileSelection(event)">
+           <input type="file" 
+       id="mediaFileInput" 
+       accept="image/jpeg,image/jpg,image/png,video/mp4,video/quicktime" 
+       multiple 
+       style="display: none;"> 
+
+<button type="button" class="btn btn-primary" style="margin-bottom: 1rem;" id="uploadMediaBtn">
             
             <div style="text-align: center;">
-                <i class="ti ti-upload" style="font-size: 3rem; color: var(--primary-color); margin-bottom: 1rem; display: block;"></i>
                 
                 <button type="button" class="btn btn-primary" style="margin-bottom: 1rem;" onclick="document.getElementById('mediaFileInput').click()">
                     <i class="ti ti-upload"></i> Upload Files
@@ -1149,10 +1173,10 @@ fieldsHTML += `
 
 
     container.innerHTML = fieldsHTML;
-    
+
     // Initialize character counters
     initializeCharacterCounters();
-    
+
     // Show platform-specific fields based on selection
     if (platform === 'google') {
         updateGoogleFields('SEARCH'); // Default to search
@@ -1170,8 +1194,8 @@ fieldsHTML += `
 function updateMetaCharLimits(format) {
     const help = document.getElementById('metaFormatHelp');
     const primaryText = document.getElementById('adPrimaryText');
-    
-    switch(format) {
+
+    switch (format) {
         case 'FEED':
             primaryText.maxLength = 125;
             help.textContent = '📱 Feed ads: Perfect for detailed storytelling (125 chars)';
@@ -1208,38 +1232,38 @@ function updateLinkedInFields(format) {
 function addGoogleHeadline() {
     const container = document.getElementById('googleHeadlinesContainer');
     const currentCount = container.querySelectorAll('.google-headline').length;
-    
+
     if (currentCount >= 15) {
         showNotification('Maximum 15 headlines allowed', 'warning');
         return;
     }
-    
+
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'form-control google-headline';
     input.style.marginBottom = '0.5rem';
     input.maxLength = 30;
     input.placeholder = `Headline ${currentCount + 1} (max 30 characters)`;
-    
+
     container.appendChild(input);
 }
 
 function addGoogleDescription() {
     const container = document.getElementById('googleDescriptionsContainer');
     const currentCount = container.querySelectorAll('.google-description').length;
-    
+
     if (currentCount >= 4) {
         showNotification('Maximum 4 descriptions allowed', 'warning');
         return;
     }
-    
+
     const textarea = document.createElement('textarea');
     textarea.className = 'form-control google-description';
     textarea.style.marginBottom = '0.5rem';
     textarea.maxLength = 90;
     textarea.rows = 2;
     textarea.placeholder = `Description ${currentCount + 1} (max 90 characters)`;
-    
+
     container.appendChild(textarea);
 }
 
@@ -1248,35 +1272,35 @@ function initializeCharacterCounters() {
     const primaryText = document.getElementById('adPrimaryText');
     const headline = document.getElementById('adHeadline');
     const description = document.getElementById('adDescription');
-    
+
     if (primaryText) {
         primaryText.addEventListener('input', (e) => {
             document.getElementById('primaryTextCount').textContent = e.target.value.length;
         });
     }
-    
+
     if (headline) {
         headline.addEventListener('input', (e) => {
             document.getElementById('headlineCount').textContent = e.target.value.length;
         });
     }
-    
+
     if (description) {
         description.addEventListener('input', (e) => {
             document.getElementById('descriptionCount').textContent = e.target.value.length;
         });
     }
-    
+
     // LinkedIn counters
     const linkedinIntro = document.getElementById('linkedinIntroText');
     const linkedinHeadline = document.getElementById('linkedinHeadline');
-    
+
     if (linkedinIntro) {
         linkedinIntro.addEventListener('input', (e) => {
             document.getElementById('linkedinIntroCount').textContent = e.target.value.length;
         });
     }
-    
+
     if (linkedinHeadline) {
         linkedinHeadline.addEventListener('input', (e) => {
             document.getElementById('linkedinHeadlineCount').textContent = e.target.value.length;
@@ -1286,75 +1310,19 @@ function initializeCharacterCounters() {
 
 
 
-// ========== DRAG AND DROP HANDLERS ==========
-
-function handleDragOver(event) {
-    event.preventDefault();
-    event.stopPropagation();
-    
-    const dropZone = document.getElementById('dropZone');
-    dropZone.style.borderColor = 'var(--primary-color)';
-    dropZone.style.background = 'linear-gradient(135deg, rgba(153, 38, 243, 0.05) 0%, rgba(29, 216, 252, 0.05) 100%)';
-}
-
-function handleDragLeave(event) {
-    event.preventDefault();
-    event.stopPropagation();
-    
-    const dropZone = document.getElementById('dropZone');
-    dropZone.style.borderColor = '#cbd5e1';
-    dropZone.style.background = '#f8fafc';
-}
-
-function handleDrop(event) {
-    event.preventDefault();
-    event.stopPropagation();
-    
-    const dropZone = document.getElementById('dropZone');
-    dropZone.style.borderColor = '#cbd5e1';
-    dropZone.style.background = '#f8fafc';
-    
-    const files = event.dataTransfer.files;
-    if (files.length > 0) {
-        processFiles(files);
-    }
-}
-
 // ========== FILE SELECTION AND UPLOAD ==========
 
-async function handleFileSelection(event) {
-    const files = event.target.files;
-    if (files.length > 0) {
-        await processFiles(files);
-    }
-}
-
-
-
-async function processFiles(files) {
-    const campaignId = document.getElementById('adCampaignId').value;
-    const platform = currentSelectedPlatform;
-    
-    if (!campaignId || !platform) {
-        showNotification('Campaign information missing. Please close and reopen the modal.', 'error');
-        return;
-    }
-    
-    for (let file of files) {
-        await uploadMediaFile(file, platform, campaignId);
-    }
-}
 
 async function uploadMediaFile(file, platform, campaignId) {
     const token = localStorage.getItem('token');
-    
+
     // Validate file type
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'video/mp4', 'video/quicktime'];
     if (!validTypes.includes(file.type)) {
         showNotification(`Invalid file type: ${file.type}. Please use JPG, PNG, MP4, or MOV.`, 'error');
         return;
     }
-    
+
     // Validate file size
     const maxSize = file.type.startsWith('video') ? 4 * 1024 * 1024 * 1024 : 30 * 1024 * 1024;
     if (file.size > maxSize) {
@@ -1362,16 +1330,16 @@ async function uploadMediaFile(file, platform, campaignId) {
         showNotification(`File too large. Max size: ${maxSizeMB}MB`, 'error');
         return;
     }
-    
+
     // Show upload progress
     const uploadId = showUploadProgress(file.name);
-    
+
     try {
         const formData = new FormData();
         formData.append('file', file);
         formData.append('platform', platform);
         formData.append('campaign_id', campaignId);
-        
+
         const response = await fetch(`${API_BASE}/ads/media/upload`, {
             method: 'POST',
             headers: {
@@ -1379,14 +1347,14 @@ async function uploadMediaFile(file, platform, campaignId) {
             },
             body: formData
         });
-        
+
         if (!response.ok) {
             const error = await response.json();
             throw new Error(error.detail || 'Upload failed');
         }
-        
+
         const data = await response.json();
-        
+
         // Add to uploaded assets
         uploadedMediaAssets.push({
             asset_id: data.asset_id,
@@ -1396,12 +1364,12 @@ async function uploadMediaFile(file, platform, campaignId) {
             file_type: file.type,
             platform: platform
         });
-        
+
         updateUploadProgress(uploadId, 'success', file.name);
         updateMediaGallery();
-        
+
         showNotification(`✅ ${file.name} uploaded successfully`, 'success');
-        
+
     } catch (error) {
         console.error('Upload error:', error);
         updateUploadProgress(uploadId, 'error', file.name);
@@ -1413,7 +1381,7 @@ async function uploadMediaFile(file, platform, campaignId) {
 function showUploadProgress(fileName) {
     const container = document.getElementById('uploadProgressContainer');
     if (!container) return null;
-    
+
     const uploadId = `upload_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const progressHTML = `
         <div id="${uploadId}" style="padding: 0.75rem; background: white; border-radius: 8px; margin-bottom: 0.5rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
@@ -1428,7 +1396,7 @@ function showUploadProgress(fileName) {
             </div>
         </div>
     `;
-    
+
     container.insertAdjacentHTML('beforeend', progressHTML);
     return uploadId;
 }
@@ -1436,13 +1404,13 @@ function showUploadProgress(fileName) {
 function updateUploadProgress(uploadId, status, fileName) {
     const element = document.getElementById(uploadId);
     if (!element) return;
-    
-    const icon = status === 'success' ? 
-        '<i class="ti ti-circle-check" style="color: #22c55e; font-size: 1.25rem;"></i>' : 
+
+    const icon = status === 'success' ?
+        '<i class="ti ti-circle-check" style="color: #22c55e; font-size: 1.25rem;"></i>' :
         '<i class="ti ti-circle-x" style="color: #ef4444; font-size: 1.25rem;"></i>';
-    
+
     const bgColor = status === 'success' ? '#f0fdf4' : '#fef2f2';
-    
+
     element.style.background = bgColor;
     element.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -1452,7 +1420,7 @@ function updateUploadProgress(uploadId, status, fileName) {
             ${icon}
         </div>
     `;
-    
+
     // Remove after 3 seconds if success
     if (status === 'success') {
         setTimeout(() => {
@@ -1468,15 +1436,15 @@ function updateUploadProgress(uploadId, status, fileName) {
 function updateMediaGallery() {
     const gallery = document.getElementById('uploadedMediaGallery');
     if (!gallery) return;
-    
+
     if (uploadedMediaAssets.length === 0) {
         gallery.innerHTML = '';
         return;
     }
-    
+
     gallery.innerHTML = uploadedMediaAssets.map((asset, index) => {
         const isVideo = asset.file_type && asset.file_type.startsWith('video');
-        
+
         return `
             <div style="position: relative; aspect-ratio: 1; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border: 2px solid var(--primary-color);">
                 ${isVideo ? `
@@ -1516,7 +1484,7 @@ function addMoreMediaUrl() {
     input.className = 'form-control';
     input.style.fontSize = '0.875rem';
     input.placeholder = 'https://example.com/image.jpg';
-    
+
     container.appendChild(input);
 }
 
@@ -1526,9 +1494,9 @@ function addMoreMediaUrl() {
 async function fetchObjectiveGuidance(platform, objective) {
     const token = localStorage.getItem('token');
     const guidanceDisplay = document.getElementById('objectiveGuidanceDisplay');
-    
+
     if (!guidanceDisplay) return;
-    
+
     // Show loading
     guidanceDisplay.innerHTML = `
         <div style="background: #f8fafc; padding: 1.5rem; border-radius: 12px; text-align: center;">
@@ -1536,7 +1504,7 @@ async function fetchObjectiveGuidance(platform, objective) {
             <p style="margin-top: 1rem; color: #64748b;">Generating AI recommendations...</p>
         </div>
     `;
-    
+
     try {
         const response = await fetch(`${API_BASE}/ads/objective-guidance`, {
             method: 'POST',
@@ -1552,14 +1520,14 @@ async function fetchObjectiveGuidance(platform, objective) {
                 industry: null
             })
         });
-        
+
         if (!response.ok) throw new Error('Failed to fetch guidance');
-        
+
         const data = await response.json();
-        
+
         // Display guidance
         displayObjectiveGuidance(data.guidance);
-        
+
     } catch (error) {
         console.error('Guidance error:', error);
         guidanceDisplay.innerHTML = '';
@@ -1569,12 +1537,12 @@ async function fetchObjectiveGuidance(platform, objective) {
 function displayObjectiveGuidance(guidance) {
     const guidanceDisplay = document.getElementById('objectiveGuidanceDisplay');
     if (!guidanceDisplay) return;
-    
+
     const settings = guidance.platform_specific_settings || {};
     const creative = guidance.creative_guidelines || {};
     const performance = guidance.performance_expectations || {};
     const tips = guidance.optimization_tips || [];
-    
+
     guidanceDisplay.innerHTML = `
         <div style="background: linear-gradient(135deg, rgba(153, 38, 243, 0.1) 0%, rgba(29, 216, 252, 0.1) 100%); padding: 1.5rem; border-radius: 12px; border: 1px solid rgba(153, 38, 243, 0.2);">
             <h3 style="margin: 0 0 1rem 0; display: flex; align-items: center; gap: 0.5rem;">
@@ -1642,16 +1610,30 @@ async function submitPlatformSpecificAd(campaignId, platform, objective) {
     const btn = document.getElementById('submitAdBtn');
     btn.disabled = true;
     btn.innerHTML = '<i class="ti ti-loader"></i> Creating Ad...';
-    
+
     try {
-        // Collect media IDs
-        const mediaIds = uploadedMediaAssets.map(a => a.media_id);
-        const mediaUrls = uploadedMediaAssets.map(a => a.url);
-        
-        if (mediaIds.length === 0 && platform !== 'google') {
-            throw new Error('Please upload at least one media file');
+        // ✅ Collect media IDs from uploads
+        const mediaIds = uploadedMediaAssets.map(a => a.media_id || a.asset_id);
+        const mediaUrls = [];
+
+        // ✅ Collect URLs from uploaded assets
+        uploadedMediaAssets.forEach(a => {
+            if (a.url) mediaUrls.push(a.url);
+        });
+
+        // ✅ Collect URLs from input fields
+        const urlInputs = document.querySelectorAll('#mediaUrlsContainer input[type="url"]');
+        urlInputs.forEach(input => {
+            if (input.value && input.value.trim()) {
+                mediaUrls.push(input.value.trim());
+            }
+        });
+
+        // ✅ Validation: Allow EITHER uploads OR URLs
+        if (uploadedMediaAssets.length === 0 && mediaUrls.length === 0 && platform !== 'google') {
+            throw new Error('Please upload at least one media file OR provide media URLs');
         }
-        
+
         // Collect platform-specific data
         let adData = {
             campaign_id: campaignId,
@@ -1661,7 +1643,7 @@ async function submitPlatformSpecificAd(campaignId, platform, objective) {
             media_ids: mediaIds,
             media_urls: mediaUrls
         };
-        
+
         // Platform-specific fields
         if (platform === 'meta') {
             adData = {
@@ -1679,22 +1661,22 @@ async function submitPlatformSpecificAd(campaignId, platform, objective) {
             const headlines = Array.from(document.querySelectorAll('[data-headline]'))
                 .map(el => el.value)
                 .filter(v => v.trim());
-            
+
             const descriptions = Array.from(document.querySelectorAll('[data-description]'))
                 .map(el => el.value)
                 .filter(v => v.trim());
-            
+
             const keywords = document.getElementById('googleKeywords').value
                 .split('\n')
                 .filter(k => k.trim());
-            
+
             if (headlines.length < 3) {
                 throw new Error('At least 3 headlines required for Google Ads');
             }
             if (descriptions.length < 2) {
                 throw new Error('At least 2 descriptions required for Google Ads');
             }
-            
+
             adData = {
                 ...adData,
                 primary_text: headlines[0],
@@ -1720,7 +1702,7 @@ async function submitPlatformSpecificAd(campaignId, platform, objective) {
                 }
             };
         }
-        
+
         // Create ad via API
         const response = await fetch(`${API_BASE}/ads/create-platform-specific`, {
             method: 'POST',
@@ -1730,19 +1712,19 @@ async function submitPlatformSpecificAd(campaignId, platform, objective) {
             },
             body: JSON.stringify(adData)
         });
-        
+
         if (!response.ok) {
             const error = await response.json();
             throw new Error(error.detail || 'Failed to create ad');
         }
-        
+
         const data = await response.json();
-        
+
         showNotification('Ad created successfully!', 'success');
-        
+
         // Show publish option
         showPublishOption(campaignId, platform);
-        
+
     } catch (error) {
         console.error('Error creating ad:', error);
         showNotification(error.message, 'error');
@@ -1759,7 +1741,7 @@ async function submitPlatformSpecificAd(campaignId, platform, objective) {
 function showPublishOption(campaignId, platform) {
     const modal = document.getElementById('campaignModal');
     const modalBody = modal.querySelector('.modal-body');
-    
+
     modalBody.innerHTML = `
         <div style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color: white; padding: 2rem; border-radius: 8px; text-align: center; margin-bottom: 2rem;">
             <i class="ti ti-confetti" style="font-size: 3rem;"></i>
@@ -1794,25 +1776,25 @@ async function publishCampaignNow(campaignId) {
     const btn = event.target;
     btn.disabled = true;
     btn.innerHTML = '<i class="ti ti-loader"></i> Publishing...';
-    
+
     try {
         const response = await fetch(`${API_BASE}/campaigns/${campaignId}/publish`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        
+
         if (!response.ok) {
             const error = await response.json();
             throw new Error(error.detail || 'Failed to publish campaign');
         }
-        
+
         const data = await response.json();
-        
+
         showNotification(data.message, 'success');
-        
+
         // Show success message
         showPublishSuccess(data);
-        
+
     } catch (error) {
         console.error('Error publishing campaign:', error);
         showNotification(error.message, 'error');
@@ -1826,7 +1808,7 @@ async function publishCampaignNow(campaignId) {
 function showPublishSuccess(data) {
     const modal = document.getElementById('campaignModal');
     const modalBody = modal.querySelector('.modal-body');
-    
+
     modalBody.innerHTML = `
         <div style="text-align: center; padding: 2rem;">
             <div style="width: 80px; height: 80px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem;">
@@ -1853,7 +1835,7 @@ function skipToPublish(campaignId) {
     if (!confirm('Skip creating ads and publish the campaign? You can add ads later.')) {
         return;
     }
-    
+
     publishCampaignNow(campaignId);
 }
 
@@ -2153,7 +2135,7 @@ async function controlCampaign(campaignId, action) {
     if (!confirm(`Are you sure you want to ${action} this campaign?`)) {
         return;
     }
-    
+
     try {
         const response = await fetch(`${API_BASE}/campaigns/${campaignId}/control`, {
             method: 'POST',
@@ -2163,16 +2145,16 @@ async function controlCampaign(campaignId, action) {
             },
             body: JSON.stringify({ action })
         });
-        
+
         if (!response.ok) {
             const error = await response.json();
             throw new Error(error.detail || `Failed to ${action} campaign`);
         }
-        
+
         const data = await response.json();
         showNotification(data.message, 'success');
         loadCampaigns();
-        
+
     } catch (error) {
         console.error(`Error ${action}ing campaign:`, error);
         showNotification(error.message, 'error');
@@ -2183,12 +2165,15 @@ async function controlCampaign(campaignId, action) {
 let currentSelectedPlatform = ''; // Global variable to store platform
 let currentSelectedObjective = ''; // Global variable to store objective
 
+
 async function openCreateAdModal(campaignId) {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('access_token');
     
     try {
-        // Fetch campaign details to get platform and objective
-        const response = await fetch(`${API_BASE}/ads/campaigns/${campaignId}`, {
+        console.log('🚀 Opening ad creation modal for campaign:', campaignId);
+        
+        // Fetch campaign details
+        const response = await fetch(`${API_BASE}/campaigns/${campaignId}`, {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -2200,23 +2185,24 @@ async function openCreateAdModal(campaignId) {
             throw new Error('Failed to fetch campaign details');
         }
         
-        const campaign = await response.json();
+        const data = await response.json();
+        const campaign = data.campaign || data;
         
         // Store platform and objective globally
         currentSelectedPlatform = campaign.platform.toLowerCase();
         currentSelectedObjective = campaign.objective || 'AWARENESS';
         
-        // Check if modal exists, if not create it
+        console.log('✅ Campaign loaded - Platform:', currentSelectedPlatform, 'Objective:', currentSelectedObjective);
+        
+        // Create modal if it doesn't exist
         let modal = document.getElementById('createAdModal');
         if (!modal) {
             createAdModal();
             modal = document.getElementById('createAdModal');
         }
         
-        // Reset form and uploaded assets
+        // Reset uploaded assets
         uploadedMediaAssets = [];
-        document.getElementById('createAdForm').reset();
-        document.getElementById('adCampaignId').value = campaignId;
         
         // Clear any previous uploads
         const uploadProgressContainer = document.getElementById('uploadProgressContainer');
@@ -2225,7 +2211,7 @@ async function openCreateAdModal(campaignId) {
         const uploadedGallery = document.getElementById('uploadedMediaGallery');
         if (uploadedGallery) uploadedGallery.innerHTML = '';
         
-        // Display campaign info in modal header
+        // Update modal header with campaign info
         const modalHeader = modal.querySelector('.modal-header h2');
         if (modalHeader) {
             modalHeader.innerHTML = `
@@ -2236,25 +2222,57 @@ async function openCreateAdModal(campaignId) {
             `;
         }
         
-        // Render platform-specific fields
+        // Render platform-specific fields (this includes the hidden campaign ID field and media upload section)
         await renderPlatformSpecificAdFields(currentSelectedPlatform, currentSelectedObjective);
+        
+        // ✅ Set campaign ID immediately after rendering fields
+        const campaignIdField = document.getElementById('adCampaignId');
+        if (campaignIdField) {
+            campaignIdField.value = campaignId;
+            console.log('✅ Campaign ID field set to:', campaignId);
+        } else {
+            console.error('❌ Campaign ID field not found after rendering fields!');
+            throw new Error('Failed to initialize form - campaign ID field missing');
+        }
+        
+        // ✅ Initialize media upload with campaign ID
+        console.log('📤 Initializing media upload for campaign:', campaignId);
+        initializeMediaUpload(campaignId);
         
         // Show modal
         modal.style.display = 'flex';
         
-        // Focus on first input
+        // Focus on first input (after a small delay to ensure rendering is complete)
         setTimeout(() => {
-            const firstInput = modal.querySelector('input:not([type="hidden"]), textarea, select');
-            if (firstInput) firstInput.focus();
-        }, 100);
+            const firstInput = modal.querySelector('input:not([type="hidden"]):not([type="file"]), textarea, select');
+            if (firstInput) {
+                firstInput.focus();
+            }
+        }, 150);
+        
+        console.log('✅ Ad creation modal opened successfully');
         
     } catch (error) {
-        console.error('Error opening ad creation modal:', error);
+        console.error('❌ Error opening ad creation modal:', error);
         showNotification('Failed to open ad creation form: ' + error.message, 'error');
+        
+        // Close modal if it was opened
+        const modal = document.getElementById('createAdModal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
     }
 }
 
+
+
 function createAdModal() {
+    // Check if modal already exists
+    if (document.getElementById('createAdModal')) {
+        console.log('Modal already exists');
+        return;
+    }
+
     const modal = document.createElement('div');
     modal.id = 'createAdModal';
     modal.className = 'modal';
@@ -2271,7 +2289,7 @@ function createAdModal() {
             </div>
             <div class="modal-body">
                 <form id="createAdForm" onsubmit="event.preventDefault(); submitCreateAd();">
-                    <input type="hidden" id="adCampaignId">
+                 
                     
                     <!-- Platform-specific fields will be injected here -->
                     <div id="platformSpecificFields"></div>
@@ -2292,23 +2310,25 @@ function createAdModal() {
     document.body.appendChild(modal);
 }
 
+
+
 function closeCreateAdModal() {
     const modal = document.getElementById('createAdModal');
     if (modal) {
         modal.style.display = 'none';
     }
-    
+
     // Reset uploaded assets
     uploadedMediaAssets = [];
-    
+
     // Clear form
     const form = document.getElementById('createAdForm');
     if (form) form.reset();
-    
+
     // Clear upload progress and gallery
     const uploadProgressContainer = document.getElementById('uploadProgressContainer');
     if (uploadProgressContainer) uploadProgressContainer.innerHTML = '';
-    
+
     const uploadedGallery = document.getElementById('uploadedMediaGallery');
     if (uploadedGallery) uploadedGallery.innerHTML = '';
 }
@@ -2323,7 +2343,7 @@ function showNotification(message, type = 'info') {
         container.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 10px;';
         document.body.appendChild(container);
     }
-    
+
     // Create notification element
     const notification = document.createElement('div');
     notification.style.cssText = `
@@ -2338,11 +2358,11 @@ function showNotification(message, type = 'info') {
         animation: slideInRight 0.3s ease-out;
         max-width: 350px;
     `;
-    
-    const icon = type === 'success' ? 'ti-circle-check' : 
-                 type === 'error' ? 'ti-alert-circle' : 
-                 type === 'warning' ? 'ti-alert-triangle' : 'ti-info-circle';
-    
+
+    const icon = type === 'success' ? 'ti-circle-check' :
+        type === 'error' ? 'ti-alert-circle' :
+            type === 'warning' ? 'ti-alert-triangle' : 'ti-info-circle';
+
     notification.innerHTML = `
         <i class="ti ${icon}" style="font-size: 1.25rem;"></i>
         <span style="flex: 1;">${message}</span>
@@ -2350,9 +2370,9 @@ function showNotification(message, type = 'info') {
             <i class="ti ti-x"></i>
         </button>
     `;
-    
+
     container.appendChild(notification);
-    
+
     // Auto remove after 5 seconds
     setTimeout(() => {
         notification.style.animation = 'slideOutRight 0.3s ease-out';
@@ -2401,138 +2421,190 @@ if (!document.getElementById('notificationStyles')) {
 
 
 
+
 async function submitCreateAd() {
     const token = localStorage.getItem('token');
-    const campaignId = document.getElementById('adCampaignId').value;
-    const platform = currentSelectedPlatform; // Store when modal opens
-    
+
+    // ✅ Get campaign ID with proper validation
+    const campaignIdField = document.getElementById('adCampaignId');
+    console.log('Campaign ID field:', campaignIdField);
+    console.log('Campaign ID value:', campaignIdField?.value);
+
+    if (!campaignIdField) {
+        console.error('❌ adCampaignId field not found in DOM');
+        showNotification('Modal error: Campaign ID field not found. Please close and reopen.', 'error');
+        return;
+    }
+
+    if (!campaignIdField.value) {
+        console.error('❌ adCampaignId field has no value');
+        showNotification('Modal error: Campaign ID not set. Please close and reopen.', 'error');
+        return;
+    }
+
+    const campaignId = parseInt(campaignIdField.value);
+    const platform = currentSelectedPlatform;
+
+    // Validate platform
+    if (!platform) {
+        showNotification('Platform not selected. Please close and reopen the modal.', 'error');
+        return;
+    }
+
     const submitBtn = document.getElementById('submitAdBtn');
+    if (!submitBtn) {
+        console.error('Submit button not found');
+        return;
+    }
+
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<i class="ti ti-loader"></i> Creating...';
-    
+
     try {
-        let adData = {
-            campaign_id: parseInt(campaignId),
-            ad_name: document.getElementById('adName').value,
-            platform: platform,
-            media_ids: uploadedMediaAssets.map(a => a.media_id)
-        };
-        
-        // Collect media URLs if any
+        // Get ad name
+        const adNameField = document.getElementById('adName');
+        if (!adNameField || !adNameField.value.trim()) {
+            throw new Error('Ad name is required');
+        }
+
+        // ✅ FIXED: Collect media URLs
         const mediaUrls = [];
-        document.querySelectorAll('#mediaUrlsContainer input[type="url"]').forEach(input => {
-            if (input.value.trim()) mediaUrls.push(input.value.trim());
+        const urlInputs = document.querySelectorAll('#mediaUrlsContainer input[type="url"]');
+        urlInputs.forEach(input => {
+            if (input.value && input.value.trim()) {
+                mediaUrls.push(input.value.trim());
+            }
         });
-        
+
+        // ✅ FIXED: Validate media - allow EITHER uploads OR URLs
+        if (uploadedMediaAssets.length === 0 && mediaUrls.length === 0) {
+            throw new Error('Please upload at least one media file OR provide media URLs');
+        }
+
+        let adData = {
+            campaign_id: campaignId,
+            ad_name: adNameField.value.trim(),
+            platform: platform,
+            media_ids: uploadedMediaAssets.map(a => a.media_id || a.asset_id)
+        };
+
+        // Add media URLs if provided
+        if (mediaUrls.length > 0) {
+            adData.media_urls = mediaUrls;
+        }
+
         // Platform-specific data collection
         if (platform === 'meta') {
+            const primaryText = document.getElementById('adPrimaryText');
+            const headline = document.getElementById('adHeadline');
+            const destinationUrl = document.getElementById('adDestinationUrl');
+            const cta = document.getElementById('adCTA');
+
+            if (!primaryText?.value || !headline?.value || !destinationUrl?.value || !cta?.value) {
+                throw new Error('Please fill all required Meta ad fields');
+            }
+
             adData = {
                 ...adData,
-                primary_text: document.getElementById('adPrimaryText').value,
-                headline: document.getElementById('adHeadline').value,
+                primary_text: primaryText.value,
+                headline: headline.value,
                 description: document.getElementById('adDescription')?.value || '',
-                destination_url: document.getElementById('adDestinationUrl').value,
-                call_to_action: document.getElementById('adCTA').value,
+                destination_url: destinationUrl.value,
+                call_to_action: cta.value,
                 platform_specific_data: {
-                    ad_format: document.getElementById('metaAdFormat').value,
-                    placements: Array.from(document.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value)
+                    ad_format: document.getElementById('metaAdFormat')?.value || 'feed',
+                    placements: Array.from(document.querySelectorAll('input[name="metaPlacement"]:checked')).map(cb => cb.value)
                 }
             };
-        } 
+        }
         else if (platform === 'google') {
-            const headlines = Array.from(document.querySelectorAll('.google-headline'))
-                .map(input => input.value.trim())
-                .filter(v => v);
-            
-            const descriptions = Array.from(document.querySelectorAll('.google-description'))
-                .map(textarea => textarea.value.trim())
-                .filter(v => v);
-            
-            if (headlines.length < 3) {
-                throw new Error('At least 3 headlines required for Google Ads');
+            const headline1 = document.getElementById('googleHeadline1');
+            const headline2 = document.getElementById('googleHeadline2');
+            const description1 = document.getElementById('googleDescription1');
+            const finalUrl = document.getElementById('googleFinalUrl');
+
+            if (!headline1?.value || !headline2?.value || !description1?.value || !finalUrl?.value) {
+                throw new Error('Please fill all required Google ad fields');
             }
-            if (descriptions.length < 2) {
-                throw new Error('At least 2 descriptions required for Google Ads');
-            }
-            
+
             adData = {
                 ...adData,
-                primary_text: headlines[0],
-                headline: headlines.join(' | '),
-                description: descriptions.join(' | '),
-                destination_url: document.getElementById('googleFinalUrl').value,
+                primary_text: description1.value,
+                headline: headline1.value,
+                description: document.getElementById('googleDescription2')?.value || '',
+                destination_url: finalUrl.value,
                 call_to_action: '',
                 platform_specific_data: {
-                    campaign_type: document.getElementById('googleCampaignType').value,
-                    headlines,
-                    descriptions,
-                    keywords: document.getElementById('googleKeywords')?.value.split(',').map(k => k.trim()).filter(k => k) || [],
+                    ad_format: document.getElementById('googleAdFormat')?.value || 'search',
+                    headline2: headline2.value,
                     path1: document.getElementById('googlePath1')?.value || '',
                     path2: document.getElementById('googlePath2')?.value || ''
                 }
             };
-        } 
+        }
         else if (platform === 'linkedin') {
+            const introText = document.getElementById('linkedinIntroText');
+            const headline = document.getElementById('linkedinHeadline');
+            const destinationUrl = document.getElementById('linkedinDestinationUrl');
+
+            if (!introText?.value || !headline?.value || !destinationUrl?.value) {
+                throw new Error('Please fill all required LinkedIn ad fields');
+            }
+
             adData = {
                 ...adData,
-                primary_text: document.getElementById('linkedinIntroText').value,
-                headline: document.getElementById('linkedinHeadline').value,
-                description: '',
-                destination_url: document.getElementById('linkedinDestinationUrl').value,
-                call_to_action: document.getElementById('linkedinCTA').value,
+                primary_text: introText.value,
+                headline: headline.value,
+                description: document.getElementById('linkedinDescription')?.value || '',
+                destination_url: destinationUrl.value,
+                call_to_action: document.getElementById('linkedinCTA')?.value || 'Learn More',
                 platform_specific_data: {
-                    ad_format: document.getElementById('linkedinAdFormat').value,
-                    targeting: {
-                        job_titles: document.getElementById('linkedinJobTitles')?.value.split(',').map(t => t.trim()).filter(t => t) || [],
-                        company_size: document.getElementById('linkedinCompanySize')?.value || '',
-                        industries: document.getElementById('linkedinIndustries')?.value.split(',').map(i => i.trim()).filter(i => i) || []
-                    }
+                    ad_format: document.getElementById('linkedinAdFormat')?.value || 'sponsored_content'
                 }
             };
         }
-        
-        // Add media URLs if no files uploaded
-        if (uploadedMediaAssets.length === 0 && mediaUrls.length > 0) {
-            adData.media_urls = mediaUrls;
-        }
-        
-        // Create ad via API
-        const response = await fetch(`${API_BASE}/ads/create-platform-specific`, {
+
+        console.log('Submitting ad data:', adData);
+
+        const response = await fetch(`${API_BASE}/ads/create`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify(adData)
         });
-        
+
         if (!response.ok) {
             const error = await response.json();
             throw new Error(error.detail || 'Failed to create ad');
         }
-        
+
         const data = await response.json();
-        
+
         showNotification('✅ Ad created successfully!', 'success');
         closeCreateAdModal();
-        
-        // Refresh campaign details
-        if (typeof loadCampaignAds === 'function') {
-            loadCampaignAds(campaignId);
+
+        // Reload campaigns
+        if (typeof loadCampaigns === 'function') {
+            loadCampaigns();
         }
-        
-        // Reset uploaded assets
-        uploadedMediaAssets = [];
-        
+
+        // Ask if user wants to create another ad
+        setTimeout(() => {
+            if (confirm('Ad created! Would you like to create another ad for this campaign?')) {
+                openCreateAdModal(campaignId);
+            }
+        }, 500);
+
     } catch (error) {
-        console.error('Create ad error:', error);
-        showNotification(error.message, 'error');
+        console.error('Error creating ad:', error);
+        showNotification(error.message || 'Failed to create ad', 'error');
     } finally {
         submitBtn.disabled = false;
         submitBtn.innerHTML = '<i class="ti ti-check"></i> Create Ad';
     }
 }
-
 
 
 
