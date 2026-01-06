@@ -941,7 +941,7 @@ async function submitWhatsAppCampaign() {
             : `${API_BASE}/whatsapp/campaigns/create`;
         const method = isEditMode ? 'PUT' : 'POST';
         
-        console.log('📤 Sending request to:', url);
+        console.log(' Sending request to:', url);
         
         const response = await fetch(url, {
             method: method,

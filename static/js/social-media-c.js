@@ -2460,7 +2460,7 @@ async function loadConnectedAccounts() {
 
 
 function displayConnectedAccounts(accounts) {
-    console.log(`🎨 Displaying ${accounts.length} accounts`);
+    console.log(` Displaying ${accounts.length} accounts`);
     
     const container = document.getElementById('connectedAccountsDisplay');
     if (!container) {

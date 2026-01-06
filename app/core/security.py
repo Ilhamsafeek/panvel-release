@@ -55,9 +55,9 @@ async def get_current_user(
     Get current authenticated user from token
     Checks both Authorization header and cookies
     """
-    print("\n" + "="*60)
-    print("[AUTH DEBUG] Starting authentication")
-    print("="*60)
+    # print("\n" + "="*60)
+    # print("[AUTH DEBUG] Starting authentication")
+    # print("="*60)
     
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -66,55 +66,55 @@ async def get_current_user(
     )
     
     # Debug: Print all headers
-    print("[AUTH DEBUG] Request headers:")
-    for key, value in request.headers.items():
-        if key.lower() == 'authorization':
-            print(f"  {key}: {value[:50]}..." if len(value) > 50 else f"  {key}: {value}")
-        else:
-            print(f"  {key}: {value}")
+    # print("[AUTH DEBUG] Request headers:")
+    # for key, value in request.headers.items():
+    #     if key.lower() == 'authorization':
+    #         print(f"  {key}: {value[:50]}..." if len(value) > 50 else f"  {key}: {value}")
+    #     else:
+    #         print(f"  {key}: {value}")
     
     # Debug: Print cookies
-    print("[AUTH DEBUG] Cookies:", dict(request.cookies))
+    # print("[AUTH DEBUG] Cookies:", dict(request.cookies))
     
     # Try to get token from different sources
     auth_token = token
-    print(f"[AUTH DEBUG] Token from OAuth2 dependency: {auth_token[:50] if auth_token else 'None'}")
+    # print(f"[AUTH DEBUG] Token from OAuth2 dependency: {auth_token[:50] if auth_token else 'None'}")
     
     # If no token from header, try cookies
     if not auth_token:
         auth_token = request.cookies.get("access_token")
-        print(f"[AUTH DEBUG] Token from cookies: {auth_token[:50] if auth_token else 'None'}")
+        # print(f"[AUTH DEBUG] Token from cookies: {auth_token[:50] if auth_token else 'None'}")
     
     # Also try to manually extract from Authorization header
     if not auth_token:
         auth_header = request.headers.get("authorization") or request.headers.get("Authorization")
-        print(f"[AUTH DEBUG] Raw Authorization header: {auth_header}")
+        # print(f"[AUTH DEBUG] Raw Authorization header: {auth_header}")
         if auth_header and auth_header.startswith("Bearer "):
             auth_token = auth_header[7:]
-            print(f"[AUTH DEBUG] Token extracted manually: {auth_token[:50] if auth_token else 'None'}")
+            # print(f"[AUTH DEBUG] Token extracted manually: {auth_token[:50] if auth_token else 'None'}")
     
     # If still no token, raise exception
     if not auth_token:
-        print("[AUTH DEBUG] ERROR: No token found anywhere!")
-        print("="*60 + "\n")
+        # print("[AUTH DEBUG] ERROR: No token found anywhere!")
+        # print("="*60 + "\n")
         raise credentials_exception
     
-    print(f"[AUTH DEBUG] Final token to validate (length={len(auth_token)})")
+    # print(f"[AUTH DEBUG] Final token to validate (length={len(auth_token)})")
     
     connection = None
     cursor = None
     
     try:
         # Decode token
-        print(f"[AUTH DEBUG] Decoding with SECRET_KEY: {settings.SECRET_KEY[:10]}...")
+        # print(f"[AUTH DEBUG] Decoding with SECRET_KEY: {settings.SECRET_KEY[:10]}...")
         
         payload = jwt.decode(auth_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        print(f"[AUTH DEBUG] Token payload: {payload}")
+        # print(f"[AUTH DEBUG] Token payload: {payload}")
         
         email = payload.get("sub")
         user_id = payload.get("user_id")
         
-        print(f"[AUTH DEBUG] Extracted - email: {email}, user_id: {user_id}")
+        # print(f"[AUTH DEBUG] Extracted - email: {email}, user_id: {user_id}")
         
         if email is None or user_id is None:
             print("[AUTH DEBUG] ERROR: Invalid payload")
@@ -136,7 +136,7 @@ async def get_current_user(
             print("="*60 + "\n")
             raise credentials_exception
         
-        print(f"[AUTH DEBUG] User found: {user}")
+        # print(f"[AUTH DEBUG] User found: {user}")
         
         if user['status'] == 'suspended':
             print("[AUTH DEBUG] ERROR: User suspended")
@@ -146,8 +146,8 @@ async def get_current_user(
                 detail="Account is suspended"
             )
         
-        print(f"[AUTH DEBUG] SUCCESS: {user['email']} ({user['role']})")
-        print("="*60 + "\n")
+        # print(f"[AUTH DEBUG] SUCCESS: {user['email']} ({user['role']})")
+        # print("="*60 + "\n")
         return user
     
     except JWTError as e:

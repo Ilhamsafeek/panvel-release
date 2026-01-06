@@ -424,7 +424,7 @@ async function handleMediaFiles(files, campaignId) {
         return;
     }
 
-    console.log('📤 Uploading', files.length, 'files for campaign:', campaignId, 'platform:', platform);
+    console.log(' Uploading', files.length, 'files for campaign:', campaignId, 'platform:', platform);
 
     for (let file of files) {
         await uploadMediaFile(file, platform, campaignId);
@@ -2236,7 +2236,7 @@ async function openCreateAdModal(campaignId) {
         }
         
         // ✅ Initialize media upload with campaign ID
-        console.log('📤 Initializing media upload for campaign:', campaignId);
+        console.log(' Initializing media upload for campaign:', campaignId);
         initializeMediaUpload(campaignId);
         
         // Show modal

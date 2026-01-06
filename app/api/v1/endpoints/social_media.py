@@ -515,7 +515,7 @@ async def publish_post(
         if not post:
             raise HTTPException(status_code=404, detail="Post not found")
         
-        print(f"📤 Publishing post {post_id} to {post['platform']} for client {post['client_id']}")
+        print(f" Publishing post {post_id} to {post['platform']} for client {post['client_id']}")
         
         # ✅ FIXED: Get credentials from correct table
         cursor.execute("""
@@ -612,7 +612,7 @@ async def publish_to_platform(
     import json
     
     try:
-        print(f"📤 Publishing to {platform}")
+        print(f" Publishing to {platform}")
         print(f"   Account ID: {platform_account_id}")
         print(f"   Caption length: {len(caption)}")
         print(f"   Media count: {len(media_urls)}")
@@ -679,7 +679,7 @@ async def publish_to_platform(
                     }
                 }
             
-            print(f"📤 LinkedIn payload (truncated): {json.dumps(payload, indent=2)[:300]}...")
+            print(f" LinkedIn payload (truncated): {json.dumps(payload, indent=2)[:300]}...")
             
             response = requests.post(
                 'https://api.linkedin.com/v2/ugcPosts',
@@ -700,7 +700,7 @@ async def publish_to_platform(
         
         # ==================== FACEBOOK ====================
         elif platform == 'facebook':
-            print(f"📤 Publishing to Facebook Page ID: {platform_account_id}")
+            print(f" Publishing to Facebook Page ID: {platform_account_id}")
             
             url = f"https://graph.facebook.com/v18.0/{platform_account_id}/feed"
             
@@ -734,7 +734,7 @@ async def publish_to_platform(
         
         # ==================== INSTAGRAM ====================
         elif platform == 'instagram':
-            print(f"📤 Publishing to Instagram Account: {platform_account_id}")
+            print(f" Publishing to Instagram Account: {platform_account_id}")
             
             # Instagram requires at least one image
             if not media_urls or len(media_urls) == 0:
@@ -780,7 +780,7 @@ async def publish_to_platform(
         
         # ==================== TWITTER/X ====================
         elif platform == 'twitter':
-            print(f"📤 Publishing to Twitter/X")
+            print(f" Publishing to Twitter/X")
             
             headers = {
                 'Authorization': f'Bearer {access_token}',
@@ -816,7 +816,7 @@ async def publish_to_platform(
         
         # ==================== PINTEREST ====================
         elif platform == 'pinterest':
-            print(f"📤 Publishing to Pinterest")
+            print(f" Publishing to Pinterest")
             
             # Pinterest requires at least one image
             if not media_urls or len(media_urls) == 0:
@@ -2810,7 +2810,7 @@ async def oauth_callback(
                                     name: '{account_info["name"]}'
                                 }}
                             }}, '*');
-                            console.log('📤 Message sent to parent');
+                            console.log(' Message sent to parent');
                         }} else {{
                             console.log('⚠️ No window.opener found');
                         }}

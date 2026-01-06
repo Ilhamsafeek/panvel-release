@@ -56,12 +56,30 @@ MAGIC_HOUR_API_BASE = "https://api.magichour.ai"
 
 
 # ========== MAGIC HOUR FILE UPLOAD ==========
-
 async def upload_file_to_magic_hour(file_path: str, file_type: str = "image") -> str:
-    """Upload file to Magic Hour and return the asset path"""
+    """
+    Upload file to Magic Hour and return the asset path
+    ✅ FIXED: Correct API payload format with "items" array
+    """
     
     try:
         print(f"[MAGIC HOUR] Uploading file: {file_path}")
+        
+        if not os.path.exists(file_path):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"File not found: {file_path}"
+            )
+        
+        # Check file size
+        file_size = os.path.getsize(file_path)
+        print(f"[MAGIC HOUR] File size: {file_size / 1024 / 1024:.2f} MB")
+        
+        if file_size > 10 * 1024 * 1024:  # 10 MB limit
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="File size exceeds 10MB limit"
+            )
         
         # Step 1: Get upload URL
         upload_url_api = f"{MAGIC_HOUR_API_BASE}/v1/files/upload-urls"
@@ -74,73 +92,106 @@ async def upload_file_to_magic_hour(file_path: str, file_type: str = "image") ->
         # Determine file extension
         file_ext = file_path.split('.')[-1].lower()
         
-        # ✅ Use "type" not "type_" - the API expects "type"
+        # ✅ CORRECT FORMAT: Magic Hour expects "items" array
         payload = {
             "items": [
                 {
-                    "extension": file_ext,
-                    "type": file_type  # ✅ Changed from "type_" to "type"
+                    "extension": file_ext,  # e.g., "png", "jpg"
+                    "type": file_type       # e.g., "image"
                 }
             ]
         }
         
-        print(f"[MAGIC HOUR] Upload URL request: {json.dumps(payload, indent=2)}")
+        print(f"[MAGIC HOUR] Upload URL request payload:")
+        print(json.dumps(payload, indent=2))
         
-        response = requests.post(upload_url_api, headers=headers, json=payload, timeout=30)
+        # Request upload URL with increased timeout
+        response = requests.post(
+            upload_url_api, 
+            headers=headers, 
+            json=payload, 
+            timeout=60
+        )
         
         print(f"[MAGIC HOUR] Upload URL response status: {response.status_code}")
-        print(f"[MAGIC HOUR] Upload URL response: {response.text}")
         
-        if response.status_code != 200:
+        if response.status_code not in [200, 201]:
+            print(f"[MAGIC HOUR] Upload URL response: {response.text}")
             error_data = response.json() if response.text else {}
-            error_msg = error_data.get("message") or "Unknown error"
+            error_msg = error_data.get("message", "Unknown error")
             raise HTTPException(
                 status_code=response.status_code,
-                detail=f"Failed to get upload URL from Magic Hour: {error_msg}"
+                detail=f"Failed to get upload URL: {error_msg}"
             )
         
         result = response.json()
-        upload_info = result["items"][0]
-        upload_url = upload_info["upload_url"]
-        file_path_magic = upload_info["file_path"]
+        print(f"[MAGIC HOUR] Upload URL response: {json.dumps(result, indent=2)}")
         
-        print(f"[MAGIC HOUR] Got upload URL: {upload_url}")
-        print(f"[MAGIC HOUR] Magic Hour path will be: {file_path_magic}")
+        # Extract upload info from items array
+        if "items" not in result or len(result["items"]) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Invalid response from Magic Hour: missing items"
+            )
+        
+        upload_info = result["items"][0]
+        upload_url = upload_info.get("upload_url")
+        file_path_magic = upload_info.get("file_path")
+        
+        if not upload_url or not file_path_magic:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Invalid response from Magic Hour: missing upload_url or file_path"
+            )
+        
+        print(f"[MAGIC HOUR] Got upload URL: {upload_url[:50]}...")
+        print(f"[MAGIC HOUR] Magic Hour path: {file_path_magic}")
         
         # Step 2: Upload file to the signed URL
+        print(f"[MAGIC HOUR] Reading file content...")
         with open(file_path, 'rb') as f:
             file_data = f.read()
         
-        # ✅ Use PUT request with file data
+        print(f"[MAGIC HOUR] Uploading to signed URL...")
         upload_response = requests.put(
             upload_url,
             data=file_data,
             headers={"Content-Type": f"{file_type}/{file_ext}"},
-            timeout=60
+            timeout=120  # 2 minutes for upload
         )
         
         print(f"[MAGIC HOUR] File upload response status: {upload_response.status_code}")
         
         if upload_response.status_code not in [200, 201, 204]:
+            print(f"[MAGIC HOUR] File upload error: {upload_response.text}")
             raise HTTPException(
                 status_code=upload_response.status_code,
-                detail=f"Failed to upload file to Magic Hour: {upload_response.text}"
+                detail=f"Failed to upload file to Magic Hour: {upload_response.status_code}"
             )
         
-        print(f"[MAGIC HOUR] File uploaded successfully: {file_path_magic}")
+        print(f"[MAGIC HOUR] ✅ File uploaded successfully!")
+        print(f"[MAGIC HOUR] Magic Hour file path: {file_path_magic}")
         
         return file_path_magic
         
     except HTTPException:
         raise
+    except requests.Timeout:
+        print(f"[MAGIC HOUR] Upload timeout error")
+        raise HTTPException(
+            status_code=status.HTTP_408_REQUEST_TIMEOUT,
+            detail="File upload to Magic Hour timed out. Please try again."
+        )
     except Exception as e:
         print(f"[MAGIC HOUR] Upload error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to upload file to Magic Hour: {str(e)}"
         )
 
-
+        
 def generate_code_verifier():
     """Generate a cryptographically random code verifier"""
     return base64.urlsafe_b64encode(secrets.token_bytes(32)).decode('utf-8').rstrip('=')
@@ -158,6 +209,8 @@ def download_and_save_file(url: str, asset_type: str, file_extension: str = None
     """
     Download file from URL and save to local storage.
     Returns local file path and URL.
+    
+    ✅ FIXED: Animations from Magic Hour are MP4, not GIF
     """
     try:
         # Generate unique filename
@@ -171,7 +224,7 @@ def download_and_save_file(url: str, asset_type: str, file_extension: str = None
             elif asset_type == 'video':
                 file_extension = 'mp4'
             elif asset_type == 'animation':
-                file_extension = 'gif'
+                file_extension = 'mp4'  # ✅ FIXED: Was 'gif', now 'mp4'
             else:
                 file_extension = 'bin'
         
@@ -184,6 +237,7 @@ def download_and_save_file(url: str, asset_type: str, file_extension: str = None
         file_path = os.path.join(type_dir, filename)
         
         # Download from URL
+        print(f"[STORAGE] Downloading file from: {url}")
         response = requests.get(url, stream=True, timeout=60)
         response.raise_for_status()
         
@@ -196,6 +250,7 @@ def download_and_save_file(url: str, asset_type: str, file_extension: str = None
         relative_path = f"/static/uploads/media_assets/{asset_type}s/{filename}"
         
         print(f"[STORAGE] File downloaded and saved: {file_path}")
+        print(f"[STORAGE] Accessible at: {relative_path}")
         
         return {
             "file_path": file_path,
@@ -907,31 +962,51 @@ async def generate_animation(
             connection.close()
 
 
+
 @router.post("/image-to-video")
 async def image_to_video(
     request: ImageToVideoRequest,
     current_user: dict = Depends(require_admin_or_employee)
 ):
-    """Convert image to video using Magic Hour"""
+    """
+    Convert image to video using Magic Hour
+    ✅ OPTIMIZED: Better timeout handling and error messages
+    """
     
     connection = None
     cursor = None
     
     try:
+        print(f"[IMAGE-TO-VIDEO] Starting conversion...")
+        
+        # Validate base64 data
+        if not request.image_data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Image data is required"
+            )
+        
         # Save the uploaded image locally
+        print(f"[IMAGE-TO-VIDEO] Saving image locally...")
         saved_image = save_base64_file(
             base64_data=request.image_data,
             asset_type='image',
             file_extension='png'
         )
         
-        # Generate video with Magic Hour
+        print(f"[IMAGE-TO-VIDEO] Image saved: {saved_image['file_path']}")
+        
+        # Generate video with Magic Hour (this includes upload)
+        print(f"[IMAGE-TO-VIDEO] Calling Magic Hour API...")
         result = await generate_magic_hour_image_to_video(
             image_path=saved_image["file_path"],
             duration=request.duration,
             title=f"Image-to-Video-{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         )
         
+        print(f"[IMAGE-TO-VIDEO] Magic Hour video_id: {result['video_id']}")
+        
+        # Save to database
         connection = get_db_connection()
         cursor = connection.cursor()
         
@@ -945,25 +1020,29 @@ async def image_to_video(
             current_user['user_id'],
             'video',
             "Image-to-Video",
-            "",
+            "",  # Empty until video is ready
             True,
             "magic-hour",
             json.dumps({
                 "motion_prompt": request.motion_prompt,
                 "video_id": result["video_id"],
                 "status": "processing",
-                "source_image": saved_image["file_url"]
+                "source_image": saved_image["file_url"],
+                "duration": request.duration
             })
         ))
         
         asset_id = cursor.lastrowid
         connection.commit()
         
+        print(f"[IMAGE-TO-VIDEO] Asset created: {asset_id}")
+        
         return {
             "success": True,
             "asset_id": asset_id,
             "video_id": result["video_id"],
-            "status": "processing"
+            "status": "processing",
+            "message": "Video generation started. This will take 5-15 minutes."
         }
         
     except HTTPException:
@@ -971,6 +1050,7 @@ async def image_to_video(
     except Exception as e:
         if connection:
             connection.rollback()
+        print(f"[IMAGE-TO-VIDEO] Error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to convert image to video: {str(e)}"
@@ -981,18 +1061,22 @@ async def image_to_video(
         if connection:
             connection.close()
 
-
 @router.post("/image-to-animation")
 async def image_to_animation(
     request: ImageToAnimationRequest,
     current_user: dict = Depends(require_admin_or_employee)
 ):
-    """Convert image to animation using Magic Hour"""
+    """
+    Convert image to animation using Magic Hour
+    ✅ OPTIMIZED: Better timeout handling
+    """
     
     connection = None
     cursor = None
     
     try:
+        print(f"[IMAGE-TO-ANIMATION] Starting conversion...")
+        
         # Save the uploaded image locally
         saved_image = save_base64_file(
             base64_data=request.image_data,
@@ -1000,7 +1084,10 @@ async def image_to_animation(
             file_extension='png'
         )
         
+        print(f"[IMAGE-TO-ANIMATION] Image saved: {saved_image['file_path']}")
+        
         # Generate animation with Magic Hour
+        print(f"[IMAGE-TO-ANIMATION] Calling Magic Hour API...")
         result = await generate_magic_hour_animation(
             prompt=request.animation_effect,
             style=request.animation_type,
@@ -1039,14 +1126,21 @@ async def image_to_animation(
             "success": True,
             "asset_id": asset_id,
             "video_id": result["video_id"],
-            "status": "processing"
+            "status": "processing",
+            "message": "Animation generation started. This will take 5-15 minutes."
         }
         
     except HTTPException:
         raise
+    except requests.Timeout:
+        raise HTTPException(
+            status_code=status.HTTP_408_REQUEST_TIMEOUT,
+            detail="Request timed out while uploading image. Please try with a smaller image."
+        )
     except Exception as e:
         if connection:
             connection.rollback()
+        print(f"[IMAGE-TO-ANIMATION] Error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to convert image to animation: {str(e)}"
@@ -1069,57 +1163,74 @@ async def get_video_status(
     cursor = None
     
     try:
+        print(f"[STATUS CHECK] Checking status for video_id: {video_id}")
+        
         status_result = await check_magic_hour_status(video_id)
         
         status_value = status_result["status"]
         downloads = status_result["downloads"]
+        
+        print(f"[STATUS CHECK] Status: {status_value}, Downloads available: {len(downloads) > 0}")
         
         # If video is complete, download and save locally
         if status_value == "complete" and downloads:
             download_url = downloads[0].get("url")
             
             if download_url:
-                # Download and save the video
-                saved_file = download_and_save_file(
-                    url=download_url,
-                    asset_type='video',
-                    file_extension='mp4'
-                )
+                print(f"[STATUS CHECK] Download URL found: {download_url}")
                 
-                # Update database with final URL
+                # Find the asset in database by video_id
                 connection = get_db_connection()
-                cursor = connection.cursor()
+                cursor = connection.cursor(pymysql.cursors.DictCursor)
                 
-                # ✅ Fixed: Use LIKE with JSON string matching instead of JSON_EXTRACT
                 cursor.execute("""
-                    UPDATE media_assets 
-                    SET file_url = %s
+                    SELECT asset_id, asset_type, asset_name, file_url
+                    FROM media_assets 
                     WHERE prompt_used LIKE %s
-                    AND file_url = ''
-                """, (saved_file["file_url"], f'%"video_id": "{video_id}"%'))
+                    AND (file_url IS NULL OR file_url = '')
+                    LIMIT 1
+                """, (f'%{video_id}%',))
                 
-                connection.commit()
+                asset = cursor.fetchone()
                 
-                print(f"[DATABASE] Updated asset with video URL: {saved_file['file_url']}")
-                
-                return {
-                    "status": "complete",
-                    "url": saved_file["file_url"],
-                    "video_id": video_id
-                }
+                if asset:
+                    print(f"[STATUS CHECK] Found asset: {asset['asset_id']}")
+                    
+                    # Download and save the file - will use MP4 extension
+                    saved_file = download_and_save_file(
+                        url=download_url,
+                        asset_type=asset['asset_type'],
+                        file_extension='mp4'  # ✅ Force MP4 for animations
+                    )
+                    
+                    # Update database with file info
+                    cursor.execute("""
+                        UPDATE media_assets 
+                        SET file_url = %s, file_path = %s
+                        WHERE asset_id = %s
+                    """, (saved_file['file_url'], saved_file['file_path'], asset['asset_id']))
+                    
+                    connection.commit()
+                    
+                    print(f"[STATUS CHECK] Asset updated: {asset['asset_id']}")
+                    
+                    return {
+                        "status": "complete",
+                        "file_url": saved_file['file_url'],
+                        "message": "Animation ready for download"
+                    }
         
         return {
             "status": status_value,
-            "video_id": video_id,
             "error": status_result.get("error")
         }
         
     except Exception as e:
-        print(f"[ERROR] Status check failed: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to check video status: {str(e)}"
-        )
+        print(f"[STATUS CHECK] Error: {str(e)}")
+        return {
+            "status": "error",
+            "error": str(e)
+        }
     finally:
         if cursor:
             cursor.close()
@@ -1725,13 +1836,12 @@ async def get_asset(
         if connection:
             connection.close()
 
-
 @router.get("/assets/{asset_id}/download")
 async def download_asset(
     asset_id: int,
     current_user: dict = Depends(get_current_user)
 ):
-    """Download asset file"""
+    """Download asset file - FIXED for MP4 animations"""
     
     connection = None
     cursor = None
@@ -1754,17 +1864,26 @@ async def download_asset(
                 detail="Asset not found"
             )
         
+        # Check if file is still processing
+        if not asset.get('file_url') or asset['file_url'] == '':
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Asset is still processing. Please wait."
+            )
+        
         # Check if local file exists
         file_path = asset.get('file_path')
         if file_path and os.path.exists(file_path):
-            # Determine media type
+            # Determine media type - FIXED for animations
             media_types = {
                 'image': 'image/png',
                 'video': 'video/mp4',
-                'animation': 'image/gif',
+                'animation': 'video/mp4',  # ✅ FIXED: Was 'image/gif', now 'video/mp4'
                 'presentation': 'application/pdf'
             }
             media_type = media_types.get(asset['asset_type'], 'application/octet-stream')
+            
+            print(f"[DOWNLOAD] Serving local file: {file_path}")
             
             return FileResponse(
                 path=file_path,
@@ -1775,6 +1894,7 @@ async def download_asset(
         # Fallback: redirect to file_url
         file_url = asset.get('file_url')
         if file_url:
+            print(f"[DOWNLOAD] Redirecting to URL: {file_url}")
             return {"redirect_url": file_url}
         
         raise HTTPException(
@@ -1785,6 +1905,7 @@ async def download_asset(
     except HTTPException:
         raise
     except Exception as e:
+        print(f"[DOWNLOAD] Error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to download asset: {str(e)}"

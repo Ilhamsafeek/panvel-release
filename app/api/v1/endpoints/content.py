@@ -537,7 +537,7 @@ Requirements:
 
 Respond with ONLY the JSON object, no additional text or markdown formatting."""
         
-        print(f"📤 [AUDIENCE INSIGHTS] Sending request to OpenAI GPT-4...")
+        print(f" [AUDIENCE INSIGHTS] Sending request to OpenAI GPT-4...")
         
         # Call OpenAI API
         response = openai_client.chat.completions.create(

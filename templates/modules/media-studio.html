@@ -38,12 +38,16 @@
     .tool-card {
         background: white;
         border-radius: 16px;
-        padding: 2rem;
+        padding: 1.5rem;
         border: 2px solid #e2e8f0;
         cursor: pointer;
         transition: all 0.3s;
         position: relative;
         overflow: hidden;
+        display: flex;
+        flex-direction: row;
+        align-items: flex-start;
+        gap: 1.25rem;
     }
 
     .tool-card:before {
@@ -64,6 +68,7 @@
         box-shadow: 0 8px 24px rgba(153, 38, 243, 0.2);
     }
 
+
     .tool-card:hover:before {
         transform: scaleX(1);
     }
@@ -76,7 +81,7 @@
         align-items: center;
         justify-content: center;
         background: linear-gradient(135deg, rgba(153, 38, 243, 0.1), rgba(29, 216, 252, 0.1));
-        margin-bottom: 1rem;
+        flex-shrink: 0;
     }
 
     .tool-icon i {
@@ -84,6 +89,13 @@
         background: linear-gradient(135deg, #9926F3, #1DD8FC);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
+    }
+
+    .tool-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
     }
 
     .tool-card h3 {
@@ -97,6 +109,7 @@
         color: #64748b;
         font-size: 0.9rem;
         line-height: 1.6;
+        margin: 0;
     }
 
     .content-panel {
@@ -471,275 +484,304 @@
    Replace the existing .asset-card styles
    ======================================== */
 
-.asset-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 1.5rem;
-}
-
-.asset-card {
-    background: white;
-    border-radius: 12px;
-    border: 1px solid #e2e8f0;
-    overflow: hidden;
-    transition: all 0.2s;
-    display: flex;
-    flex-direction: column;
-}
-
-.asset-card:hover {
-    border-color: #9926F3;
-    box-shadow: 0 4px 12px rgba(153, 38, 243, 0.1);
-    transform: translateY(-2px);
-}
-
-/* ✅ IMPROVED PREVIEW SECTION */
-.asset-preview {
-    width: 100%;
-    height: 180px;  /* ✅ Reduced from 200px */
-    background: #f8fafc;  /* ✅ Lighter background */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    overflow: hidden;
-}
-
-.asset-preview img {
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;  /* ✅ Changed from 'cover' to 'contain' */
-    object-position: center;
-}
-
-.asset-preview i {
-    font-size: 3rem;
-    color: #cbd5e1;
-}
-
-/* ✅ IMPROVED AI BADGE POSITIONING */
-.ai-badge {
-    position: absolute;
-    top: 0.5rem;
-    right: 0.5rem;
-    background: linear-gradient(135deg, #9926F3, #1DD8FC);
-    color: white;
-    padding: 0.35rem 0.75rem;
-    border-radius: 20px;
-    font-size: 0.7rem;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    box-shadow: 0 2px 8px rgba(153, 38, 243, 0.3);
-}
-
-.ai-badge i {
-    font-size: 0.9rem;
-    color: white;
-}
-
-/* ✅ IMPROVED INFO SECTION */
-.asset-info {
-    padding: 1rem;
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-}
-
-.asset-info h4 {
-    font-size: 0.95rem;
-    font-weight: 600;
-    color: #1e293b;
-    margin: 0;
-    line-height: 1.4;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-}
-
-.asset-type {
-    font-size: 0.8rem;
-    color: #64748b;
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    margin: 0;
-}
-
-.asset-type i {
-    font-size: 1rem;
-}
-
-.asset-date {
-    font-size: 0.75rem;
-    color: #94a3b8;
-    margin: 0;
-}
-
-.asset-creator {
-    font-size: 0.75rem;
-    color: #64748b;
-    margin: 0;
-}
-
-/* ✅ IMPROVED ACTIONS SECTION */
-.asset-actions {
-    display: flex;
-    gap: 0.5rem;
-    padding: 0.75rem 1rem;
-    border-top: 1px solid #f1f5f9;
-}
-
-.asset-actions button {
-    flex: 1;
-    height: 36px;
-    border-radius: 6px;
-    border: 1px solid #e2e8f0;
-    background: white;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.25rem;
-    font-size: 0.85rem;
-    color: #64748b;
-    transition: all 0.2s;
-}
-
-.asset-actions button:hover {
-    border-color: #9926F3;
-    color: #9926F3;
-    background: rgba(153, 38, 243, 0.05);
-}
-
-.asset-actions button.processing {
-    opacity: 0.6;
-    cursor: not-allowed;
-    background: #f8fafc;
-}
-
-.asset-actions button.processing:hover {
-    border-color: #e2e8f0;
-    color: #64748b;
-    background: #f8fafc;
-}
-
-.asset-actions button.delete-btn:hover {
-    border-color: #ef4444;
-    color: #ef4444;
-    background: rgba(239, 68, 68, 0.05);
-}
-
-.asset-actions button i {
-    font-size: 1.1rem;
-}
-
-/* ✅ PROCESSING STATE */
-.asset-card.processing {
-    opacity: 0.7;
-}
-
-.asset-card.processing .asset-preview {
-    background: linear-gradient(
-        90deg,
-        #f8fafc 0%,
-        #f1f5f9 50%,
-        #f8fafc 100%
-    );
-    background-size: 200% 100%;
-    animation: shimmer 2s infinite;
-}
-
-@keyframes shimmer {
-    0% {
-        background-position: -200% 0;
-    }
-    100% {
-        background-position: 200% 0;
-    }
-}
-
-/* ✅ EMPTY AND LOADING STATES */
-.empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 4rem 2rem;
-    text-align: center;
-    color: #64748b;
-}
-
-.empty-state i {
-    font-size: 4rem;
-    color: #cbd5e1;
-    margin-bottom: 1rem;
-}
-
-.empty-state h3 {
-    font-size: 1.25rem;
-    color: #334155;
-    margin-bottom: 0.5rem;
-}
-
-.empty-state p {
-    font-size: 0.95rem;
-    color: #64748b;
-}
-
-.loading-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 4rem 2rem;
-}
-
-.loader-spinner {
-    width: 48px;
-    height: 48px;
-    border: 4px solid #f1f5f9;
-    border-top-color: #9926F3;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin-bottom: 1rem;
-}
-
-@keyframes spin {
-    to {
-        transform: rotate(360deg);
-    }
-}
-
-/* ✅ RESPONSIVE DESIGN */
-@media (max-width: 768px) {
     .asset-grid {
-        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-        gap: 1rem;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 1.5rem;
     }
-    
+
+    .asset-card {
+        background: white;
+        border-radius: 12px;
+        border: 1px solid #e2e8f0;
+        overflow: hidden;
+        transition: all 0.2s;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .asset-card:hover {
+        border-color: #9926F3;
+        box-shadow: 0 4px 12px rgba(153, 38, 243, 0.1);
+        transform: translateY(-2px);
+    }
+
+    /* ✅ IMPROVED PREVIEW SECTION */
     .asset-preview {
-        height: 160px;
+        width: 100%;
+        height: 180px;
+        /* ✅ Reduced from 200px */
+        background: #f8fafc;
+        /* ✅ Lighter background */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        overflow: hidden;
     }
-    
-    .asset-info {
-        padding: 0.875rem;
-    }
-    
-    .asset-actions {
-        padding: 0.625rem 0.875rem;
-    }
-}
 
-@media (max-width: 480px) {
-    .asset-grid {
-        grid-template-columns: 1fr;
+    .asset-preview img {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+        /* ✅ Changed from 'cover' to 'contain' */
+        object-position: center;
     }
-}
+
+    .asset-preview i {
+        font-size: 3rem;
+        color: #cbd5e1;
+    }
+
+    /* ✅ IMPROVED AI BADGE POSITIONING */
+    .ai-badge {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        background: linear-gradient(135deg, #9926F3, #1DD8FC);
+        color: white;
+        padding: 0.35rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        box-shadow: 0 2px 8px rgba(153, 38, 243, 0.3);
+    }
+
+    .ai-badge i {
+        font-size: 0.9rem;
+        color: white;
+    }
+
+    /* ✅ IMPROVED INFO SECTION */
+    .asset-info {
+        padding: 1rem;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .asset-info h4 {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #1e293b;
+        margin: 0;
+        line-height: 1.4;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+    }
+
+    .asset-type {
+        font-size: 0.8rem;
+        color: #64748b;
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        margin: 0;
+    }
+
+    .asset-type i {
+        font-size: 1rem;
+    }
+
+    .asset-date {
+        font-size: 0.75rem;
+        color: #94a3b8;
+        margin: 0;
+    }
+
+    .asset-creator {
+        font-size: 0.75rem;
+        color: #64748b;
+        margin: 0;
+    }
+
+    /* ✅ IMPROVED ACTIONS SECTION */
+    .asset-actions {
+        display: flex;
+        gap: 0.5rem;
+        padding: 0.75rem 1rem;
+        border-top: 1px solid #f1f5f9;
+    }
+
+    .asset-actions button {
+        flex: 1;
+        height: 36px;
+        border-radius: 6px;
+        border: 1px solid #e2e8f0;
+        background: white;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.25rem;
+        font-size: 0.85rem;
+        color: #64748b;
+        transition: all 0.2s;
+    }
+
+    .asset-actions button:hover {
+        border-color: #9926F3;
+        color: #9926F3;
+        background: rgba(153, 38, 243, 0.05);
+    }
+
+    .asset-actions button.processing {
+        opacity: 0.6;
+        cursor: not-allowed;
+        background: #f8fafc;
+    }
+
+    .asset-actions button.processing:hover {
+        border-color: #e2e8f0;
+        color: #64748b;
+        background: #f8fafc;
+    }
+
+    .asset-actions button.delete-btn:hover {
+        border-color: #ef4444;
+        color: #ef4444;
+        background: rgba(239, 68, 68, 0.05);
+    }
+
+    .asset-actions button i {
+        font-size: 1.1rem;
+    }
+
+    /* ✅ PROCESSING STATE */
+    .asset-card.processing {
+        opacity: 0.7;
+    }
+
+    .asset-card.processing .asset-preview {
+        background: linear-gradient(90deg,
+                #f8fafc 0%,
+                #f1f5f9 50%,
+                #f8fafc 100%);
+        background-size: 200% 100%;
+        animation: shimmer 2s infinite;
+    }
+
+    @keyframes shimmer {
+        0% {
+            background-position: -200% 0;
+        }
+
+        100% {
+            background-position: 200% 0;
+        }
+    }
+
+    /* ✅ EMPTY AND LOADING STATES */
+    .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 4rem 2rem;
+        text-align: center;
+        color: #64748b;
+    }
+
+    .empty-state i {
+        font-size: 4rem;
+        color: #cbd5e1;
+        margin-bottom: 1rem;
+    }
+
+    .empty-state h3 {
+        font-size: 1.25rem;
+        color: #334155;
+        margin-bottom: 0.5rem;
+    }
+
+    .empty-state p {
+        font-size: 0.95rem;
+        color: #64748b;
+    }
+
+    .loading-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 4rem 2rem;
+    }
+
+    .loader-spinner {
+        width: 48px;
+        height: 48px;
+        border: 4px solid #f1f5f9;
+        border-top-color: #9926F3;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-bottom: 1rem;
+    }
+
+    @keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    /* ✅ RESPONSIVE DESIGN */
+    @media (max-width: 768px) {
+        .asset-grid {
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 1rem;
+        }
+
+        .asset-preview {
+            height: 160px;
+        }
+
+        .asset-info {
+            padding: 0.875rem;
+        }
+
+        .asset-actions {
+            padding: 0.625rem 0.875rem;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .asset-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+
+    .btn-refresh-status {
+        background: linear-gradient(135deg, #9926F3, #1DD8FC) !important;
+        color: white !important;
+        border: none !important;
+        font-weight: 500;
+    }
+
+    .btn-refresh-status:hover {
+        transform: scale(1.05);
+        box-shadow: 0 4px 12px rgba(153, 38, 243, 0.3);
+    }
+
+    .btn-refresh-status i {
+        animation: rotate 2s linear infinite;
+    }
+
+    @keyframes rotate {
+        from {
+            transform: rotate(0deg);
+        }
+
+        to {
+            transform: rotate(360deg);
+        }
+    }
 </style>
 {% endblock %}
 
@@ -773,48 +815,60 @@
             <div class="tool-icon">
                 <i class="ti ti-photo-ai"></i>
             </div>
-            <h3>AI Image Generator</h3>
-            <p>Create stunning images from text descriptions using DALL-E 3</p>
+            <div class="tool-content">
+                <h3>AI Image Generator</h3>
+                <p>Create stunning images from text descriptions using DALL-E</p>
+            </div>
         </div>
 
         <div class="tool-card" onclick="openVideoGenerator()">
             <div class="tool-icon">
                 <i class="ti ti-video"></i>
             </div>
-            <h3>AI Video Creator</h3>
-            <p>Generate professional AI videos with Magic Hour</p>
+            <div class="tool-content">
+                <h3>AI Video Creator</h3>
+                <p>Generate professional AI avatar videos with Synthesia</p>
+            </div>
         </div>
 
         <div class="tool-card" onclick="openAnimationGenerator()">
             <div class="tool-icon">
                 <i class="ti ti-gif"></i>
             </div>
-            <h3>Text-to-Animation</h3>
-            <p>Create animated content from text descriptions</p>
+            <div class="tool-content">
+                <h3>Text-to-Animation</h3>
+                <p>Create animated content from text descriptions</p>
+            </div>
         </div>
 
         <div class="tool-card" onclick="openImageToVideo()">
             <div class="tool-icon">
                 <i class="ti ti-movie"></i>
             </div>
-            <h3>Image-to-Video</h3>
-            <p>Convert static images into dynamic video content</p>
+            <div class="tool-content">
+                <h3>Image-to-Video</h3>
+                <p>Convert static images into dynamic video content</p>
+            </div>
         </div>
 
         <div class="tool-card" onclick="openImageToAnimation()">
             <div class="tool-icon">
                 <i class="ti ti-player-play"></i>
             </div>
-            <h3>Image-to-Animation</h3>
-            <p>Transform images into engaging animations</p>
+            <div class="tool-content">
+                <h3>Image-to-Animation</h3>
+                <p>Transform images into engaging animations</p>
+            </div>
         </div>
 
         <div class="tool-card" onclick="openDesignStudio()">
             <div class="tool-icon">
                 <i class="ti ti-layout-dashboard"></i>
             </div>
-            <h3>Design Studio</h3>
-            <p>Create social media graphics and presentations with Canva</p>
+            <div class="tool-content">
+                <h3>Design Studio</h3>
+                <p>Create social media graphics and presentations with Canva</p>
+            </div>
         </div>
     </div>
     <!-- Media Library -->
@@ -1037,7 +1091,8 @@
 
                 <div class="form-group">
                     <label>Upload Image <span style="color: #ef4444;">*</span></label>
-                    <input type="file" class="form-control" id="sourceImage" accept="image/*" required>
+                    <input type="file" class="form-control" id="sourceImage" accept="image/*" required
+                        onchange="validateImageSize(this, 10)">
                     <small style="color: #64748b; font-size: 0.85rem;">Upload the image to convert to video</small>
                 </div>
 
@@ -1085,7 +1140,8 @@
 
                 <div class="form-group">
                     <label>Upload Image <span style="color: #ef4444;">*</span></label>
-                    <input type="file" class="form-control" id="animSourceImage" accept="image/*" required>
+                    <input type="file" class="form-control" id="animSourceImage" accept="image/*" required
+                        onchange="validateImageSize(this, 10)">
                     <small style="color: #64748b; font-size: 0.85rem;">Upload the image to animate</small>
                 </div>
 
@@ -1408,5 +1464,5 @@
         });
     }
 </script>
-<script src="/static/js/media-studio-new.js?=8"></script>
+<script src="/static/js/media-studio-new.js?=11"></script>
 {% endblock %}

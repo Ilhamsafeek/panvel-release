@@ -590,7 +590,6 @@ async function checkVideoStatus(videoId) {
 // =====================================================
 // GENERATE ANIMATION (TEXT-TO-ANIMATION)
 // =====================================================
-
 async function generateAnimation(event) {
     event.preventDefault();
     
@@ -631,14 +630,25 @@ async function generateAnimation(event) {
         const result = await response.json();
         
         if (result.success) {
-            let message = 'Animation generated successfully!';
+            let message = 'Animation is being generated! This may take 2-5 minutes. ';
+            message += 'The animation will appear in your library automatically when ready. ';
+            message += 'You can click "Refresh" on the processing card to check status.';
+            
             if (result.brand_applied) {
                 message += ' (Brand kit applied ✓)';
             }
+            
             showNotification(message, 'success');
             closeModal('animationModal');
             document.getElementById('animationForm').reset();
+            
+            // Reload assets to show the processing card
             loadMediaAssets();
+            
+            // Start checking video status
+            if (result.video_id) {
+                checkVideoStatus(result.video_id);
+            }
         }
         
     } catch (error) {
@@ -653,7 +663,6 @@ async function generateAnimation(event) {
 // =====================================================
 // CONVERT IMAGE TO VIDEO
 // =====================================================
-
 async function convertImageToVideo(event) {
     event.preventDefault();
     
@@ -662,7 +671,7 @@ async function convertImageToVideo(event) {
     
     try {
         convertBtn.disabled = true;
-        convertBtn.innerHTML = '<i class="ti ti-loader"></i> Converting...';
+        convertBtn.innerHTML = '<i class="ti ti-loader"></i> Uploading...';
         
         const token = localStorage.getItem('access_token');
         const clientId = document.getElementById('imageToVideoClient').value;
@@ -674,8 +683,23 @@ async function convertImageToVideo(event) {
             throw new Error('Please select an image');
         }
         
+        // ✅ Check file size (max 10MB)
+        const maxSize = 10 * 1024 * 1024; // 10MB
+        if (imageFile.size > maxSize) {
+            throw new Error('Image size must be less than 10MB. Please compress your image and try again.');
+        }
+        
+        showNotification(' Uploading image... This may take a minute.', 'info');
+        
         // Convert image to base64
         const base64Image = await fileToBase64(imageFile);
+        
+        convertBtn.innerHTML = '<i class="ti ti-loader"></i> Processing...';
+        showNotification('🎬 Starting video generation...', 'info');
+        
+        // ✅ INCREASED TIMEOUT: 180 seconds (3 minutes) for image upload
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 180000);
         
         const response = await fetch(`${API_BASE}/image-to-video`, {
             method: 'POST',
@@ -688,26 +712,46 @@ async function convertImageToVideo(event) {
                 image_data: base64Image,
                 motion_prompt: motionPrompt,
                 duration: parseInt(duration)
-            })
+            }),
+            signal: controller.signal
         });
+        
+        clearTimeout(timeoutId);
         
         if (!response.ok) {
             const error = await response.json();
+            
+            // Handle specific error codes
+            if (response.status === 408) {
+                throw new Error('Upload timed out. Please try with a smaller image (compress to under 5MB).');
+            }
+            
             throw new Error(error.detail || 'Failed to convert image to video');
         }
         
         const result = await response.json();
         
         if (result.success) {
-            showNotification('Image converted to video successfully!', 'success');
+            showNotification('✓ Video generation started! This will take 5-15 minutes to complete.', 'success');
             closeModal('imageToVideoModal');
             document.getElementById('imageToVideoForm').reset();
-            loadMediaAssets();
+            
+            // Start monitoring video status
+            if (result.video_id && result.status === 'processing') {
+                monitorVideoStatus(result.video_id, 'Image-to-Video');
+            } else {
+                loadMediaAssets();
+            }
         }
         
     } catch (error) {
         console.error('Error converting image to video:', error);
-        showNotification(error.message || 'Failed to convert image to video', 'error');
+        
+        if (error.name === 'AbortError') {
+            showNotification('⏱️ Upload timed out. Please try with a smaller image (under 5MB).', 'error');
+        } else {
+            showNotification(error.message || 'Failed to convert image to video', 'error');
+        }
     } finally {
         convertBtn.disabled = false;
         convertBtn.innerHTML = originalBtnText;
@@ -717,7 +761,6 @@ async function convertImageToVideo(event) {
 // =====================================================
 // CONVERT IMAGE TO ANIMATION
 // =====================================================
-
 async function convertImageToAnimation(event) {
     event.preventDefault();
     
@@ -726,7 +769,7 @@ async function convertImageToAnimation(event) {
     
     try {
         convertBtn.disabled = true;
-        convertBtn.innerHTML = '<i class="ti ti-loader"></i> Creating...';
+        convertBtn.innerHTML = '<i class="ti ti-loader"></i> Uploading...';
         
         const token = localStorage.getItem('access_token');
         const clientId = document.getElementById('imageToAnimationClient').value;
@@ -738,8 +781,23 @@ async function convertImageToAnimation(event) {
             throw new Error('Please select an image');
         }
         
+        // ✅ Check file size (max 10MB)
+        const maxSize = 10 * 1024 * 1024; // 10MB
+        if (imageFile.size > maxSize) {
+            throw new Error('Image size must be less than 10MB. Please compress your image and try again.');
+        }
+        
+        showNotification(' Uploading image... This may take a minute.', 'info');
+        
         // Convert image to base64
         const base64Image = await fileToBase64(imageFile);
+        
+        convertBtn.innerHTML = '<i class="ti ti-loader"></i> Processing...';
+        showNotification('Starting Animation generation...', 'info');
+        
+        // ✅ INCREASED TIMEOUT: 180 seconds (3 minutes)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 180000);
         
         const response = await fetch(`${API_BASE}/image-to-animation`, {
             method: 'POST',
@@ -752,30 +810,146 @@ async function convertImageToAnimation(event) {
                 image_data: base64Image,
                 animation_effect: animationEffect,
                 animation_type: animationType
-            })
+            }),
+            signal: controller.signal
         });
+        
+        clearTimeout(timeoutId);
         
         if (!response.ok) {
             const error = await response.json();
+            
+            if (response.status === 408) {
+                throw new Error('Upload timed out. Please try with a smaller image (compress to under 5MB).');
+            }
+            
             throw new Error(error.detail || 'Failed to create animation');
         }
         
         const result = await response.json();
         
         if (result.success) {
-            showNotification('Animation created successfully!', 'success');
+            showNotification('Animation generation started! This will take 5-15 minutes.', 'success');
             closeModal('imageToAnimationModal');
             document.getElementById('imageToAnimationForm').reset();
-            loadMediaAssets();
+            
+            // Start monitoring animation status
+            if (result.video_id && result.status === 'processing') {
+                monitorAnimationStatus(result.video_id, 'Image-to-Animation');
+            } else {
+                loadMediaAssets();
+            }
         }
         
     } catch (error) {
         console.error('Error creating animation:', error);
-        showNotification(error.message || 'Failed to create animation', 'error');
+        
+        if (error.name === 'AbortError') {
+            showNotification('⏱️ Upload timed out. Please try with a smaller image (under 5MB).', 'error');
+        } else {
+            showNotification(error.message || 'Failed to create animation', 'error');
+        }
     } finally {
         convertBtn.disabled = false;
         convertBtn.innerHTML = originalBtnText;
     }
+}
+
+
+async function monitorVideoStatus(videoId, assetName) {
+    let attempts = 0;
+    const maxAttempts = 120; // 20 minutes
+    const token = localStorage.getItem('access_token');
+    
+    console.log(`[MONITOR] Starting status monitoring for: ${videoId}`);
+    
+    const checkStatus = async () => {
+        try {
+            console.log(`[MONITOR] Attempt ${attempts + 1}/${maxAttempts}`);
+            
+            const response = await fetch(`${API_BASE}/video/status/${videoId}`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                
+                if (result.status === 'complete') {
+                    showNotification(`✓ ${assetName} is ready!`, 'success');
+                    loadMediaAssets();
+                    return true;
+                } else if (result.status === 'failed') {
+                    showNotification(`✗ ${assetName} generation failed.`, 'error');
+                    loadMediaAssets();
+                    return true;
+                } else if (attempts >= maxAttempts) {
+                    showNotification(
+                        `${assetName} is still processing. Please refresh later.`, 
+                        'info'
+                    );
+                    loadMediaAssets();
+                    return true;
+                }
+                
+                // Progress updates every 30 seconds
+                if (attempts > 0 && attempts % 3 === 0) {
+                    const minutesElapsed = Math.floor((attempts * 10) / 60);
+                    showNotification(
+                        `🎬 ${assetName} still processing... (${minutesElapsed} min)`, 
+                        'info'
+                    );
+                }
+            }
+            
+            attempts++;
+            setTimeout(checkStatus, 10000);
+            
+        } catch (error) {
+            console.error('[MONITOR] Error:', error);
+            if (attempts < maxAttempts) {
+                attempts++;
+                setTimeout(checkStatus, 10000);
+            }
+        }
+    };
+    
+    setTimeout(checkStatus, 10000);
+}
+
+function validateImageSize(input, maxSizeMB) {
+    const file = input.files[0];
+    if (!file) return;
+    
+    const maxSize = maxSizeMB * 1024 * 1024;
+    const fileSizeMB = (file.size / 1024 / 1024).toFixed(2);
+    
+    if (file.size > maxSize) {
+        showNotification(
+            `⚠️ Image size (${fileSizeMB}MB) exceeds ${maxSizeMB}MB limit. Please compress your image.`, 
+            'error'
+        );
+        input.value = ''; // Clear the input
+        return false;
+    }
+    
+    // Show file size info
+    const sizeInfo = document.createElement('small');
+    sizeInfo.style.color = '#64748b';
+    sizeInfo.style.fontSize = '0.85rem';
+    sizeInfo.textContent = `File size: ${fileSizeMB}MB`;
+    
+    // Remove previous size info if exists
+    const previousInfo = input.parentElement.querySelector('small.size-info');
+    if (previousInfo) {
+        previousInfo.remove();
+    }
+    
+    sizeInfo.classList.add('size-info');
+    input.parentElement.appendChild(sizeInfo);
+    
+    return true;
 }
 
 // =====================================================
@@ -923,7 +1097,6 @@ async function loadMediaAssets() {
 // =====================================================
 // CREATE ASSET CARD (IMPROVED VERSION)
 // =====================================================
-
 function createAssetCard(asset) {
     const typeIcons = {
         'image': 'ti-photo',
@@ -934,7 +1107,7 @@ function createAssetCard(asset) {
     
     const generationLabels = {
         'dall-e-3': 'DALL-E',
-        'magic-hour': 'Magic Hour',  // ✅ Updated
+        'magic-hour': 'Magic Hour',
         'canva': 'Canva',
         'openai': 'OpenAI'
     };
@@ -942,9 +1115,9 @@ function createAssetCard(asset) {
     const icon = typeIcons[asset.asset_type] || 'ti-file';
     const genLabel = generationLabels[asset.generation_type] || asset.generation_type;
     
-    // Determine if we should show image preview
-    const isImage = asset.asset_type === 'image' && asset.file_url;
-    const previewContent = isImage 
+    // ✅ FIX: Show previews for both images AND animations (GIFs)
+    const isVisualMedia = (asset.asset_type === 'image' || asset.asset_type === 'animation') && asset.file_url;
+    const previewContent = isVisualMedia 
         ? `<img src="${asset.file_url}" alt="${asset.asset_name}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
            <i class="ti ${icon}" style="display:none;"></i>`
         : `<i class="ti ${icon}"></i>`;
@@ -975,8 +1148,8 @@ function createAssetCard(asset) {
                         <i class="ti ti-eye"></i>
                     </button>
                 ` : `
-                    <button class="processing" disabled title="Processing">
-                        <i class="ti ti-loader"></i> Processing
+                    <button class="btn-refresh-status" onclick="refreshSingleAsset(${asset.asset_id})" title="Refresh Status">
+                        <i class="ti ti-reload"></i> Refresh
                     </button>
                 `}
                 <button onclick="deleteAsset(${asset.asset_id})" title="Delete" class="delete-btn">
@@ -985,6 +1158,23 @@ function createAssetCard(asset) {
             </div>
         </div>
     `;
+}
+
+
+// ✅ NEW FUNCTION: Refresh single asset status
+async function refreshSingleAsset(assetId) {
+    try {
+        showNotification('Checking status...', 'info');
+        
+        // Simply reload all assets - this will update the card if the file is ready
+        await loadMediaAssets();
+        
+        showNotification('Assets refreshed!', 'success');
+        
+    } catch (error) {
+        console.error('Error refreshing asset:', error);
+        showNotification('Failed to refresh status', 'error');
+    }
 }
 
 

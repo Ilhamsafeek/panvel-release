@@ -1845,7 +1845,7 @@ async def send_proposal_email_task(
                 # Continue sending email without PDF
         
         # Send email via SMTP
-        print(f"📤 Connecting to SMTP server...")
+        print(f" Connecting to SMTP server...")
         
         with smtplib.SMTP(smtp_host, smtp_port) as server:
             server.starttls()
