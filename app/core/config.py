@@ -80,9 +80,18 @@ class Settings(BaseSettings):
     WHATSAPP_PHONE_NUMBER_ID: Optional[str] = None
     
     # Meta (Facebook & Instagram)
+    # ============================================
+    # META (FACEBOOK & INSTAGRAM) - ADD THIS
+    # ============================================
     META_APP_ID: Optional[str] = None
     META_APP_SECRET: Optional[str] = None
-    META_ACCESS_TOKEN: Optional[str] = None
+    META_USER_ACCESS_TOKEN: Optional[str] = None
+    META_PAGE_ACCESS_TOKEN: Optional[str] = None
+    META_AD_ACCOUNT_ID: Optional[str] = None
+    META_PAGE_ID: Optional[str] = None
+    META_INSTAGRAM_ACCOUNT_ID: Optional[str] = None
+    META_PIXEL_ID: Optional[str] = None
+    # ============================================
     
     # Google Ads
     GOOGLE_ADS_CUSTOMER_ID: Optional[str] = None
@@ -135,6 +144,9 @@ class Settings(BaseSettings):
     SYNTHESIA_API_KEY: Optional[str] = None
     SYNTHESIA_AVATAR_ID: Optional[str] = "anna_costume1_cameraA"  # Default avatar
     
+    # Magic Hour API
+    MAGIC_HOUR_API_KEY: Optional[str] = None
+
     # File Storage
     UPLOAD_DIR: str = "./static/uploads"
     MAX_UPLOAD_SIZE: int = 10485760
@@ -158,8 +170,11 @@ class Settings(BaseSettings):
     FACEBOOK_APP_ID: str = ""
     FACEBOOK_APP_SECRET: str = ""
 
-    LINKEDIN_CLIENT_ID: str = ""
-    LINKEDIN_CLIENT_SECRET: str = ""
+    # LinkedIn
+    LINKEDIN_CLIENT_ID: Optional[str] = None
+    LINKEDIN_CLIENT_SECRET: Optional[str] = None
+    LINKEDIN_AD_ACCOUNT_ID: Optional[str] = None
+    LINKEDIN_ORGANIZATION_ID: Optional[str] = None
     
     TWITTER_CLIENT_ID: str = ""
     TWITTER_CLIENT_SECRET: str = ""

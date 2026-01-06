@@ -677,7 +677,7 @@ async function convertImageToVideo(event) {
         // Convert image to base64
         const base64Image = await fileToBase64(imageFile);
         
-        const response = await fetch(`${API_BASE}/convert/image-to-video`, {
+        const response = await fetch(`${API_BASE}/image-to-video`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -741,7 +741,7 @@ async function convertImageToAnimation(event) {
         // Convert image to base64
         const base64Image = await fileToBase64(imageFile);
         
-        const response = await fetch(`${API_BASE}/convert/image-to-animation`, {
+        const response = await fetch(`${API_BASE}/image-to-animation`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -920,6 +920,9 @@ async function loadMediaAssets() {
 // =====================================================
 // CREATE ASSET CARD
 // =====================================================
+// =====================================================
+// CREATE ASSET CARD (IMPROVED VERSION)
+// =====================================================
 
 function createAssetCard(asset) {
     const typeIcons = {
@@ -931,48 +934,59 @@ function createAssetCard(asset) {
     
     const generationLabels = {
         'dall-e-3': 'DALL-E',
-        'synthesia': 'Synthesia',
+        'magic-hour': 'Magic Hour',  // ✅ Updated
         'canva': 'Canva',
-        'ideogram': 'Ideogram',
         'openai': 'OpenAI'
     };
     
     const icon = typeIcons[asset.asset_type] || 'ti-file';
     const genLabel = generationLabels[asset.generation_type] || asset.generation_type;
     
+    // Determine if we should show image preview
     const isImage = asset.asset_type === 'image' && asset.file_url;
     const previewContent = isImage 
-        ? `<img src="${asset.file_url}" alt="${asset.asset_name}" onerror="this.style.display='none'; this.parentElement.innerHTML='<i class=\\'ti ${icon}\\'></i>';">`
+        ? `<img src="${asset.file_url}" alt="${asset.asset_name}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+           <i class="ti ${icon}" style="display:none;"></i>`
         : `<i class="ti ${icon}"></i>`;
     
     const escapedUrl = (asset.file_url || '').replace(/'/g, "\\'");
     
+    // Check if asset is still processing
+    const isProcessing = !asset.file_url || asset.file_url === '';
+    
     return `
-        <div class="asset-card">
+        <div class="asset-card ${isProcessing ? 'processing' : ''}">
             <div class="asset-preview">
                 ${previewContent}
-                ${asset.ai_generated ? `<span class="asset-badge">${genLabel}</span>` : ''}
+                ${asset.ai_generated ? `<span class="ai-badge"><i class="ti ti-sparkles"></i> ${genLabel}</span>` : ''}
             </div>
             <div class="asset-info">
-                <h3>${asset.asset_name || 'Untitled Asset'}</h3>
-                <div class="asset-meta">
-                    ${new Date(asset.created_at).toLocaleDateString()}
-                </div>
-                <div class="asset-actions">
-                    <button class="btn-icon" onclick="downloadAsset(${asset.asset_id})" title="Download">
+                <h4>${asset.asset_name}</h4>
+                <p class="asset-type"><i class="ti ${icon}"></i> ${asset.asset_type}</p>
+                <p class="asset-date">${new Date(asset.created_at).toLocaleDateString()}</p>
+                ${asset.creator_name ? `<p class="asset-creator">by ${asset.creator_name}</p>` : ''}
+            </div>
+            <div class="asset-actions">
+                ${!isProcessing ? `
+                    <button onclick="downloadAsset('${escapedUrl}', '${asset.asset_name}')" title="Download">
                         <i class="ti ti-download"></i>
                     </button>
-                    <button class="btn-icon" onclick="viewAsset('${escapedUrl}')" title="View">
+                    <button onclick="viewAsset('${escapedUrl}', '${asset.asset_type}')" title="View">
                         <i class="ti ti-eye"></i>
                     </button>
-                    <button class="btn-icon" onclick="deleteAsset(${asset.asset_id})" title="Delete">
-                        <i class="ti ti-trash"></i>
+                ` : `
+                    <button class="processing" disabled title="Processing">
+                        <i class="ti ti-loader"></i> Processing
                     </button>
-                </div>
+                `}
+                <button onclick="deleteAsset(${asset.asset_id})" title="Delete" class="delete-btn">
+                    <i class="ti ti-trash"></i>
+                </button>
             </div>
         </div>
     `;
 }
+
 
 // =====================================================
 // ASSET ACTIONS
@@ -998,16 +1012,46 @@ async function downloadAsset(assetId) {
         if (contentType && contentType.includes('application/json')) {
             const data = await response.json();
             if (data.redirect_url) {
-                window.open(data.redirect_url, '_blank');
+                // Fetch the actual file from the redirect URL and download it
+                const fileResponse = await fetch(data.redirect_url);
+                if (!fileResponse.ok) {
+                    throw new Error('Failed to fetch file from URL');
+                }
+                
+                const blob = await fileResponse.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                
+                // Extract filename from URL or use default
+                const urlPath = data.redirect_url.split('/').pop();
+                const filename = urlPath.split('?')[0] || `asset_${assetId}`;
+                a.download = filename;
+                
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                
+                showNotification('Download completed', 'success');
                 return;
             }
         }
         
+        // Handle direct FileResponse from backend
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `asset_${assetId}`;
+        
+        // Try to get filename from Content-Disposition header
+        const disposition = response.headers.get('content-disposition');
+        let filename = `asset_${assetId}`;
+        if (disposition && disposition.includes('filename=')) {
+            filename = disposition.split('filename=')[1].replace(/"/g, '');
+        }
+        
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -1020,6 +1064,7 @@ async function downloadAsset(assetId) {
         showNotification('Failed to download asset', 'error');
     }
 }
+
 
 function viewAsset(url) {
     if (url && (url.startsWith('http') || url.startsWith('/static'))) {

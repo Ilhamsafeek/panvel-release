@@ -15,9 +15,9 @@ import json
 import re
 import base64
 from typing import Dict, Any, List, Optional
-from datetime import datetime
 from openai import OpenAI
 from io import BytesIO
+from datetime import datetime, date, time
 
 from app.core.config import settings
 from fastapi import HTTPException, UploadFile
@@ -328,7 +328,7 @@ Provide specific recommendations in JSON format:
                 detail=f"Failed to create ad: {str(e)}"
             )
     
-    
+
     async def _create_meta_ad(
         self,
         campaign_data: Dict[str, Any],
@@ -337,107 +337,208 @@ Provide specific recommendations in JSON format:
     ) -> Dict[str, Any]:
         """
         Create Meta (Facebook/Instagram) ad with REAL API
-        Supports: Feed, Stories, Reels, Carousel
+        ✅ FIXED: Proper date handling and error logging
         """
+        import requests
+        import json
+        from datetime import datetime, date, time
+        
         if not self.meta_access_token or not self.meta_ad_account_id:
             raise ValueError("Meta credentials not configured")
         
-        # Step 1: Create Campaign
-        campaign_url = f"https://graph.facebook.com/v18.0/act_{self.meta_ad_account_id}/campaigns"
-        
-        campaign_payload = {
-            'name': campaign_data.get('campaign_name'),
-            'objective': campaign_data.get('objective', 'OUTCOME_TRAFFIC'),
-            'status': 'PAUSED',
-            'special_ad_categories': [],
-            'access_token': self.meta_access_token
+        # Map objectives to valid Meta API values
+        objective_mapping = {
+            'OUTCOME_TRAFFIC': 'OUTCOME_TRAFFIC',
+            'OUTCOME_LEADS': 'OUTCOME_LEADS',
+            'OUTCOME_SALES': 'OUTCOME_SALES',
+            'OUTCOME_AWARENESS': 'OUTCOME_AWARENESS',
+            'OUTCOME_ENGAGEMENT': 'OUTCOME_ENGAGEMENT',
+            'TRAFFIC': 'OUTCOME_TRAFFIC',
+            'CONVERSIONS': 'OUTCOME_SALES',
+            'LEAD_GENERATION': 'OUTCOME_LEADS',
         }
         
-        campaign_response = requests.post(campaign_url, data=campaign_payload, timeout=30)
-        campaign_response.raise_for_status()
-        campaign_id = campaign_response.json()['id']
+        raw_objective = campaign_data.get('objective', 'OUTCOME_TRAFFIC')
+        objective = objective_mapping.get(raw_objective, 'OUTCOME_TRAFFIC')
         
-        # Step 2: Create Ad Set
-        adset_url = f"https://graph.facebook.com/v18.0/act_{self.meta_ad_account_id}/adsets"
+        print(f"[META_AD] Creating campaign: {campaign_data.get('campaign_name')}")
+        print(f"[META_AD] Objective: {objective}")
         
-        targeting = campaign_data.get('target_audience', {})
-        
-        adset_payload = {
-            'name': f"{campaign_data.get('campaign_name')} - AdSet",
-            'campaign_id': campaign_id,
-            'daily_budget': int(campaign_data.get('budget', 50) * 100),  # Cents
-            'billing_event': 'IMPRESSIONS',
-            'optimization_goal': 'LINK_CLICKS',
-            'bid_amount': 100,
-            'targeting': json.dumps({
+        try:
+            # Step 1: Create Campaign
+            campaign_url = f"https://graph.facebook.com/v18.0/act_{self.meta_ad_account_id}/campaigns"
+            
+            campaign_payload = {
+                'name': campaign_data.get('campaign_name'),
+                'objective': objective,
+                'status': 'PAUSED',
+                'access_token': self.meta_access_token
+            }
+            
+            campaign_response = requests.post(campaign_url, data=campaign_payload, timeout=30)
+            
+            if not campaign_response.ok:
+                error_details = campaign_response.text
+                print(f"[META_AD] Campaign error: {error_details}")
+                try:
+                    error_json = campaign_response.json()
+                    error_msg = error_json.get('error', {}).get('message', error_details)
+                    raise HTTPException(status_code=400, detail=f"Meta API: {error_msg}")
+                except json.JSONDecodeError:
+                    raise HTTPException(status_code=400, detail=f"Meta API: {error_details}")
+            
+            campaign_response.raise_for_status()
+            campaign_id = campaign_response.json()['id']
+            print(f"[META_AD] Campaign created: {campaign_id}")
+            
+            # Step 2: Create Ad Set
+            adset_url = f"https://graph.facebook.com/v18.0/act_{self.meta_ad_account_id}/adsets"
+            
+            targeting = campaign_data.get('target_audience', {})
+            targeting_spec = {
                 'geo_locations': {
                     'countries': targeting.get('countries', ['US'])
                 },
                 'age_min': targeting.get('age_min', 18),
-                'age_max': targeting.get('age_max', 65),
-                'genders': targeting.get('genders', [0])
-            }),
-            'status': 'PAUSED',
-            'access_token': self.meta_access_token
-        }
-        
-        if campaign_data.get('start_date'):
-            adset_payload['start_time'] = campaign_data['start_date'].strftime('%Y-%m-%dT%H:%M:%S')
-        if campaign_data.get('end_date'):
-            adset_payload['end_time'] = campaign_data['end_date'].strftime('%Y-%m-%dT%H:%M:%S')
-        
-        adset_response = requests.post(adset_url, data=adset_payload, timeout=30)
-        adset_response.raise_for_status()
-        adset_id = adset_response.json()['id']
-        
-        # Step 3: Create Ad Creative
-        creative_url = f"https://graph.facebook.com/v18.0/act_{self.meta_ad_account_id}/adcreatives"
-        
-        creative_payload = {
-            'name': ad_data.get('ad_name'),
-            'object_story_spec': json.dumps({
-                'page_id': self.meta_page_id,
-                'link_data': {
-                    'message': ad_data.get('primary_text', ''),
-                    'link': ad_data.get('destination_url', 'https://example.com'),
-                    'caption': ad_data.get('headline', ''),
-                    'description': ad_data.get('description', ''),
-                    'image_hash': media_ids[0] if media_ids else None
-                }
-            }),
-            'access_token': self.meta_access_token
-        }
-        
-        creative_response = requests.post(creative_url, data=creative_payload, timeout=30)
-        creative_response.raise_for_status()
-        creative_id = creative_response.json()['id']
-        
-        # Step 4: Create Ad
-        ad_url = f"https://graph.facebook.com/v18.0/act_{self.meta_ad_account_id}/ads"
-        
-        ad_payload = {
-            'name': ad_data.get('ad_name'),
-            'adset_id': adset_id,
-            'creative': json.dumps({'creative_id': creative_id}),
-            'status': 'PAUSED',
-            'access_token': self.meta_access_token
-        }
-        
-        ad_response = requests.post(ad_url, data=ad_payload, timeout=30)
-        ad_response.raise_for_status()
-        ad_id = ad_response.json()['id']
-        
-        return {
-            'platform': 'meta',
-            'campaign_id': campaign_id,
-            'adset_id': adset_id,
-            'ad_id': ad_id,
-            'creative_id': creative_id,
-            'status': 'PAUSED',
-            'message': 'Meta ad created successfully. Set status to ACTIVE when ready to publish.',
-            'success': True
-        }
-    
+                'age_max': targeting.get('age_max', 65)
+            }
+            
+            adset_payload = {
+                'name': f"{campaign_data.get('campaign_name')} - AdSet",
+                'campaign_id': campaign_id,
+                'daily_budget': int(campaign_data.get('budget', 50) * 100),
+                'billing_event': 'IMPRESSIONS',
+                'optimization_goal': 'LINK_CLICKS',
+                'targeting': json.dumps(targeting_spec),
+                'status': 'PAUSED',
+                'access_token': self.meta_access_token
+            }
+            
+            # ✅ FIX: Proper date conversion
+            if campaign_data.get('start_date'):
+                start_date = campaign_data['start_date']
+                
+                # Convert date to datetime if needed
+                if isinstance(start_date, date) and not isinstance(start_date, datetime):
+                    start_datetime = datetime.combine(start_date, time(0, 0, 0))
+                elif isinstance(start_date, datetime):
+                    start_datetime = start_date
+                else:
+                    start_datetime = datetime.fromisoformat(str(start_date))
+                
+                adset_payload['start_time'] = start_datetime.strftime('%Y-%m-%dT%H:%M:%S+0000')
+            
+            if campaign_data.get('end_date'):
+                end_date = campaign_data['end_date']
+                
+                # Convert date to datetime if needed
+                if isinstance(end_date, date) and not isinstance(end_date, datetime):
+                    end_datetime = datetime.combine(end_date, time(23, 59, 59))
+                elif isinstance(end_date, datetime):
+                    end_datetime = end_date
+                else:
+                    end_datetime = datetime.fromisoformat(str(end_date))
+                
+                adset_payload['end_time'] = end_datetime.strftime('%Y-%m-%dT%H:%M:%S+0000')
+            
+            print(f"[META_AD] Creating ad set...")
+            adset_response = requests.post(adset_url, data=adset_payload, timeout=30)
+            
+            if not adset_response.ok:
+                error_details = adset_response.text
+                print(f"[META_AD] AdSet error: {error_details}")
+                try:
+                    error_json = adset_response.json()
+                    error_msg = error_json.get('error', {}).get('message', error_details)
+                    raise HTTPException(status_code=400, detail=f"Meta AdSet: {error_msg}")
+                except json.JSONDecodeError:
+                    raise HTTPException(status_code=400, detail=f"Meta AdSet: {error_details}")
+            
+            adset_response.raise_for_status()
+            adset_id = adset_response.json()['id']
+            print(f"[META_AD] AdSet created: {adset_id}")
+            
+            # Step 3: Create Ad Creative
+            creative_url = f"https://graph.facebook.com/v18.0/act_{self.meta_ad_account_id}/adcreatives"
+            
+            link_data = {
+                'message': ad_data.get('primary_text', ''),
+                'link': ad_data.get('destination_url', 'https://example.com'),
+                'caption': ad_data.get('headline', ''),
+                'description': ad_data.get('description', '')
+            }
+            
+            if media_ids and len(media_ids) > 0:
+                link_data['image_hash'] = media_ids[0]
+            
+            creative_payload = {
+                'name': ad_data.get('ad_name'),
+                'object_story_spec': json.dumps({
+                    'page_id': self.meta_page_id,
+                    'link_data': link_data
+                }),
+                'access_token': self.meta_access_token
+            }
+            
+            creative_response = requests.post(creative_url, data=creative_payload, timeout=30)
+            
+            if not creative_response.ok:
+                error_details = creative_response.text
+                print(f"[META_AD] Creative error: {error_details}")
+                try:
+                    error_json = creative_response.json()
+                    error_msg = error_json.get('error', {}).get('message', error_details)
+                    raise HTTPException(status_code=400, detail=f"Meta Creative: {error_msg}")
+                except json.JSONDecodeError:
+                    raise HTTPException(status_code=400, detail=f"Meta Creative: {error_details}")
+            
+            creative_response.raise_for_status()
+            creative_id = creative_response.json()['id']
+            print(f"[META_AD] Creative created: {creative_id}")
+            
+            # Step 4: Create Ad
+            ad_url = f"https://graph.facebook.com/v18.0/act_{self.meta_ad_account_id}/ads"
+            
+            ad_payload = {
+                'name': ad_data.get('ad_name'),
+                'adset_id': adset_id,
+                'creative': json.dumps({'creative_id': creative_id}),
+                'status': 'PAUSED',
+                'access_token': self.meta_access_token
+            }
+            
+            ad_response = requests.post(ad_url, data=ad_payload, timeout=30)
+            
+            if not ad_response.ok:
+                error_details = ad_response.text
+                print(f"[META_AD] Ad error: {error_details}")
+                try:
+                    error_json = ad_response.json()
+                    error_msg = error_json.get('error', {}).get('message', error_details)
+                    raise HTTPException(status_code=400, detail=f"Meta Ad: {error_msg}")
+                except json.JSONDecodeError:
+                    raise HTTPException(status_code=400, detail=f"Meta Ad: {error_details}")
+            
+            ad_response.raise_for_status()
+            ad_id = ad_response.json()['id']
+            print(f"[META_AD] Ad created: {ad_id}")
+            
+            return {
+                'platform': 'meta',
+                'campaign_id': campaign_id,
+                'adset_id': adset_id,
+                'ad_id': ad_id,
+                'creative_id': creative_id,
+                'status': 'PAUSED',
+                'message': 'Meta ad created successfully.',
+                'success': True
+            }
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f"[META_AD] Error: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to create ad: {str(e)}")
     
     async def _create_google_ad(
         self,
