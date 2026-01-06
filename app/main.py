@@ -16,7 +16,7 @@ from jose import JWTError, jwt
 from fastapi.responses import FileResponse
 import os
 
-from app.core.security import get_current_user, require_admin, get_db_connection
+from app.core.security import get_current_user, require_admin, get_db_connection, require_admin_or_dept_leader
 from app.api.v1.endpoints import brand_kit
 from app.core.config import settings
 from app.api.v1.router import api_router
@@ -176,6 +176,15 @@ async def admin_dashboard(request: Request):
 
 
 @app.get("/dashboard/employee", response_class=HTMLResponse)
+async def employee_dashboard(request: Request):
+    """Employee dashboard"""
+    return templates.TemplateResponse(
+        "dashboard/employee.html",
+        {"request": request, "show_sidebar": True}
+    )
+
+
+@app.get("/dashboard/department_leader", response_class=HTMLResponse)
 async def employee_dashboard(request: Request):
     """Employee dashboard"""
     return templates.TemplateResponse(
@@ -1084,7 +1093,7 @@ async def campaigns_page(request: Request):
 @app.get("/api/v1/tasks/pending")
 async def get_pending_tasks(
     limit: int = 5,
-    current_user: dict = Depends(require_admin)
+    current_user: dict = Depends(require_admin_or_dept_leader)
 ):
     """Get pending tasks for dashboard"""
     connection = None
@@ -1154,12 +1163,6 @@ async def verify_dual_otp_page(request: Request):
         }
     )
 
-
-
-@app.get("/department-leader/dashboard", response_class=HTMLResponse)
-async def department_leader_dashboard(request: Request):
-    return templates.TemplateResponse("department_leader/dashboard.html", {"request": request})
-
 @app.get("/department-leader/tasks", response_class=HTMLResponse)
 async def department_leader_tasks(request: Request):
     return templates.TemplateResponse("admin/tasks.html", {"request": request})
@@ -1168,13 +1171,6 @@ async def department_leader_tasks(request: Request):
 async def department_leader_create_task(request: Request):
     return templates.TemplateResponse("admin/tasks.html", {"request": request})
 
-@app.get("/admin/departments", response_class=HTMLResponse)
-async def admin_departments(request: Request):
-    return templates.TemplateResponse("admin/departments.html", {"request": request})
-
-@app.get("/admin/departments/{department_id}/manage", response_class=HTMLResponse)
-async def manage_department_members(request: Request, department_id: int):
-    return templates.TemplateResponse("admin/department_manage.html", {"request": request})
 
 
 # ========== HEALTH CHECK ==========

@@ -443,6 +443,28 @@
             grid-template-columns: repeat(2, 1fr);
         }
     }
+
+    @keyframes progressBar {
+        from {
+            width: 0%;
+        }
+
+        to {
+            width: 100%;
+        }
+    }
+
+    @keyframes fadeOut {
+        from {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        to {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+    }
 </style>
 {% endblock %}
 
@@ -740,8 +762,6 @@
                             <option value="meta">Meta (Facebook & Instagram)</option>
                             <option value="google">Google Ads</option>
                             <option value="linkedin">LinkedIn</option>
-                            <option value="tiktok">TikTok</option>
-                            <option value="youtube">YouTube</option>
                         </select>
                     </div>
                 </div>
@@ -1077,5 +1097,5 @@
     }
 </style>
 
-<script src="/static/js/ad-strategy.js?v=5"></script>
+<script src="/static/js/ad-strategy.js?v=12"></script>
 {% endblock %}

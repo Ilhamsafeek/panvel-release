@@ -596,7 +596,37 @@
                 </a>
             </div>
         `;
-        } else {
+        } else if (role === 'department_leader') {
+    // ADD THIS NEW SECTION
+    return `
+    <div class="nav-section">
+        <div class="nav-section-title">Dashboard</div>
+         <a href="/dashboard/employee" class="nav-item" data-path="/dashboard/employee">
+                    <i class="ti ti-dashboard"></i>
+                    <span>Dashboard</span>
+                </a>
+    </div>
+    <div class="nav-section">
+        <div class="nav-section-title">Team Management</div>
+        <a href="/admin/tasks" class="nav-item" data-path="/admin/tasks">
+                    <i class="ti ti-list-check"></i>
+                    <span>Task Management</span>
+                </a>
+        <a href="/clients" class="nav-item" data-path="/clients">
+            <i class="ti ti-briefcase"></i>
+            <span>My Clients</span>
+        </a>
+    </div>
+    ${commonModules}
+    <div class="nav-section">
+        <div class="nav-section-title">Settings</div>
+        <a href="/settings" class="nav-item" data-path="/settings">
+            <i class="ti ti-settings"></i>
+            <span>Settings</span>
+        </a>
+    </div>
+`;
+} else if (role === 'client') {
             // Client navigation
             return `
             <div class="nav-section">

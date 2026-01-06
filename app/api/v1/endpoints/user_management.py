@@ -26,7 +26,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     full_name: str
     password: str = Field(min_length=8)
-    role: str = Field(pattern="^(client|admin|employee)$")
+    role: str = Field(pattern="^(client|admin|employee|department_leader)$")  # ADD department_leader
     phone: Optional[str] = None
     status: str = Field(default="active", pattern="^(active|suspended|inactive)$")
 
@@ -34,7 +34,7 @@ class UserCreate(BaseModel):
 class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     phone: Optional[str] = None
-    role: Optional[str] = Field(None, pattern="^(client|admin|employee)$")
+    role: Optional[str] = Field(None, pattern="^(client|admin|employee|department_leader)$")  # ADD department_leader
     status: Optional[str] = Field(None, pattern="^(active|suspended|inactive)$")
 
 
@@ -419,77 +419,71 @@ async def create_user(
             connection.close()
 
 
+
 @router.put("/users/{user_id}", summary="Update user")
 async def update_user(
     user_id: int,
     user_update: UserUpdate,
-    request: Request,
     current_user: dict = Depends(require_admin)
 ):
-    """Update user information (Admin only)"""
+    """Update user details (Admin only)"""
     connection = None
     cursor = None
     
     try:
         connection = get_db_connection()
-        cursor = connection.cursor(pymysql.cursors.DictCursor)
+        cursor = connection.cursor()
         
         # Check if user exists
-        cursor.execute("SELECT role, status FROM users WHERE user_id = %s", (user_id,))
+        cursor.execute("SELECT user_id, role FROM users WHERE user_id = %s", (user_id,))
         existing_user = cursor.fetchone()
         
         if not existing_user:
-            raise HTTPException(status_code=404, detail="User not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
         
-        # Build update query
-        updates = []
+        # Build update query dynamically
+        update_fields = []
         params = []
-        changes = {}
         
         if user_update.full_name is not None:
-            updates.append("full_name = %s")
+            update_fields.append("full_name = %s")
             params.append(user_update.full_name)
-            changes['full_name'] = user_update.full_name
         
         if user_update.phone is not None:
-            updates.append("phone = %s")
+            update_fields.append("phone = %s")
             params.append(user_update.phone)
-            changes['phone'] = user_update.phone
         
         if user_update.role is not None:
-            updates.append("role = %s")
+            # Validate role
+            if user_update.role not in ['client', 'admin', 'employee', 'department_leader']:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid role"
+                )
+            update_fields.append("role = %s")
             params.append(user_update.role)
-            changes['role'] = {'from': existing_user['role'], 'to': user_update.role}
         
         if user_update.status is not None:
-            updates.append("status = %s")
+            update_fields.append("status = %s")
             params.append(user_update.status)
-            changes['status'] = {'from': existing_user['status'], 'to': user_update.status}
         
-        if not updates:
+        if not update_fields:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="No fields to update"
             )
         
-        # Update user
+        # Add updated_at
+        update_fields.append("updated_at = CURRENT_TIMESTAMP")
         params.append(user_id)
-        cursor.execute(f"""
-            UPDATE users 
-            SET {', '.join(updates)}, updated_at = NOW()
-            WHERE user_id = %s
-        """, params)
         
+        # Execute update
+        query = f"UPDATE users SET {', '.join(update_fields)} WHERE user_id = %s"
+        cursor.execute(query, params)
         connection.commit()
-        
-        # Log audit
-        log_audit(
-            cursor, connection, current_user['user_id'],
-            'user_updated',
-            {'changes': changes},
-            target_user_id=user_id,
-            ip_address=request.client.host
-        )
         
         return {
             "success": True,
@@ -497,12 +491,11 @@ async def update_user(
         }
         
     except HTTPException:
-        if connection:
-            connection.rollback()
         raise
     except Exception as e:
         if connection:
             connection.rollback()
+        print(f"Error updating user: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update user: {str(e)}"
@@ -512,6 +505,7 @@ async def update_user(
             cursor.close()
         if connection:
             connection.close()
+
 
 
 @router.delete("/users/{user_id}", summary="Delete user")

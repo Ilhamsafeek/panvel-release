@@ -182,7 +182,7 @@ async def require_admin(current_user: dict = Depends(get_current_user)):
 
 async def require_admin_or_employee(current_user: dict = Depends(get_current_user)):
     """Require admin or employee role"""
-    if current_user['role'] not in ['admin', 'employee']:
+    if current_user['role'] not in ['admin', 'employee','department_leader']:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin or Employee access required"
@@ -213,3 +213,14 @@ def check_role(allowed_roles: list):
             )
         return current_user
     return role_checker
+
+
+async def require_admin_or_dept_leader(current_user: dict = Depends(get_current_user)):
+    """Require admin or department_leader role"""
+    if current_user['role'] not in ['admin', 'department_leader']:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin or Department Leader access required"
+        )
+    return current_user
+

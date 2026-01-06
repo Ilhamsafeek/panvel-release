@@ -361,13 +361,15 @@ def get_pagespeed_insights(url: str, strategy: str = "mobile") -> Dict[str, Any]
         return {'success': False, 'error': str(e)}
 
 
-# ========== SERP TRACKING - FIXED ==========
+
 def get_search_console_service():
     """Initialize Google Search Console API service - REAL IMPLEMENTATION"""
     try:
         from google.oauth2 import service_account
         from googleapiclient.discovery import build
         import base64
+        import tempfile
+        import os
         
         # Try base64 first, then fall back to JSON
         credentials_json = None
@@ -393,12 +395,72 @@ def get_search_console_service():
             print("❌ No valid credentials found")
             return None
         
-        # Create credentials with proper scopes
-        credentials = service_account.Credentials.from_service_account_info(
-            credentials_json,
-            scopes=['https://www.googleapis.com/auth/webmasters.readonly']
-        )
-        print("✅ Service account credentials created")
+        # ========== CRITICAL FIX: Handle private key newlines ==========
+        if 'private_key' in credentials_json:
+            private_key = credentials_json['private_key']
+            
+            # Debug: Show first 100 chars of key BEFORE fix
+            print(f"🔍 Private key BEFORE fix (first 100 chars): {private_key[:100]}")
+            
+            # Check if key contains escaped newlines
+            if '\\n' in private_key:
+                print("⚠️  Found escaped newlines (\\n) - converting to actual newlines")
+                private_key = private_key.replace('\\n', '\n')
+                credentials_json['private_key'] = private_key
+                print("✅ Converted escaped newlines to actual newlines")
+            else:
+                print("ℹ️  No escaped newlines found")
+            
+            # Debug: Show first 100 chars AFTER fix
+            print(f"🔍 Private key AFTER fix (first 100 chars): {private_key[:100]}")
+            
+            # Validate key format
+            if not private_key.startswith('-----BEGIN PRIVATE KEY-----'):
+                print(f"❌ Invalid private key format - missing header")
+                print(f"   Key starts with: {private_key[:50]}")
+                return None
+            
+            if not private_key.strip().endswith('-----END PRIVATE KEY-----'):
+                print(f"❌ Invalid private key format - missing footer")
+                print(f"   Key ends with: {private_key[-50:]}")
+                return None
+            
+            print(f"✅ Private key format validated (total length: {len(private_key)} chars)")
+        
+        # Try creating credentials directly first
+        try:
+            print("🔄 Attempting direct credential creation...")
+            credentials = service_account.Credentials.from_service_account_info(
+                credentials_json,
+                scopes=['https://www.googleapis.com/auth/webmasters.readonly']
+            )
+            print("✅ Service account credentials created successfully (direct method)")
+        
+        except Exception as direct_error:
+            print(f"⚠️  Direct method failed: {str(direct_error)}")
+            print("🔄 Trying temporary file workaround...")
+            
+            # Workaround: Use temporary file method
+            temp_file = None
+            try:
+                # Create a temporary file with the credentials
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
+                    json.dump(credentials_json, tmp, indent=2)
+                    temp_file = tmp.name
+                    print(f"✅ Created temp credentials file: {temp_file}")
+                
+                # Load credentials from file
+                credentials = service_account.Credentials.from_service_account_file(
+                    temp_file,
+                    scopes=['https://www.googleapis.com/auth/webmasters.readonly']
+                )
+                print("✅ Service account credentials created successfully (temp file method)")
+                
+            finally:
+                # Clean up temp file
+                if temp_file and os.path.exists(temp_file):
+                    os.unlink(temp_file)
+                    print(f"🗑️  Cleaned up temp file: {temp_file}")
         
         # Build and return the Search Console service
         service = build('searchconsole', 'v1', credentials=credentials)
@@ -411,7 +473,6 @@ def get_search_console_service():
         traceback.print_exc()
         return None
 
-        
 def get_keyword_position_from_gsc(site_url: str, keyword: str) -> Optional[float]:
     """Get actual keyword position from Google Search Console - REAL DATA ONLY"""
     try:

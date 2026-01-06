@@ -34,6 +34,7 @@ class EmployeeCreate(BaseModel):
     password: str
     full_name: str
     phone: Optional[str] = None
+    role: str = "employee"  # Can be "employee" or "department_leader"
 
 
 class UserStatusUpdate(BaseModel):
@@ -68,7 +69,7 @@ async def get_all_employees(
                 created_at,
                 last_login
             FROM users
-            WHERE role = 'employee'
+            WHERE role = 'employee' OR role = 'department_leader'
         """
         
         params = []
@@ -219,15 +220,20 @@ async def create_employee(
     employee: EmployeeCreate,
     current_user: dict = Depends(require_admin)
 ):
-    """
-    Create a new employee account
-    """
+    """Create a new employee or department leader account"""
     connection = None
     cursor = None
     
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
+        
+        # Validate role
+        if employee.role not in ['employee', 'department_leader']:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid role. Must be 'employee' or 'department_leader'"
+            )
         
         # Check if email already exists
         cursor.execute("SELECT user_id FROM users WHERE email = %s", (employee.email,))
@@ -240,18 +246,18 @@ async def create_employee(
         # Hash password
         hashed_password = pwd_context.hash(employee.password)
         
-        # Insert new employee
+        # Insert new employee with specified role
         cursor.execute("""
             INSERT INTO users (email, password_hash, full_name, phone, role, status)
-            VALUES (%s, %s, %s, %s, 'employee', 'active')
-        """, (employee.email, hashed_password, employee.full_name, employee.phone))
+            VALUES (%s, %s, %s, %s, %s, 'active')
+        """, (employee.email, hashed_password, employee.full_name, employee.phone, employee.role))
         
         connection.commit()
         employee_id = cursor.lastrowid
         
         return {
             "success": True,
-            "message": "Employee created successfully",
+            "message": f"{employee.role.replace('_', ' ').title()} created successfully",
             "employee_id": employee_id
         }
         
@@ -270,6 +276,8 @@ async def create_employee(
             cursor.close()
         if connection:
             connection.close()
+
+            
 
 
 @router.put("/employees/{employee_id}/status", summary="Update employee status (Admin only)")

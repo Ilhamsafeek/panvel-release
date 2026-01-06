@@ -11,8 +11,7 @@ import pymysql
 from fastapi import Query
 
 from app.core.config import settings
-from app.core.security import get_current_user, require_admin, require_admin_or_employee, get_db_connection
-
+from app.core.security import get_current_user, require_admin, require_admin_or_employee, get_db_connection, require_admin_or_dept_leader
 router = APIRouter()
 
 
@@ -42,7 +41,7 @@ class TaskUpdate(BaseModel):
 async def get_all_tasks(
     status: Optional[str] = None,
     priority: Optional[str] = None,
-    current_user: dict = Depends(require_admin)
+    current_user: dict = Depends(require_admin_or_dept_leader)  # CHANGED THIS LINE
 ):
     """
     Get all tasks in the system with their assigned employees
@@ -337,11 +336,10 @@ async def get_task_stats(
         if connection:
             connection.close()
 
-
 @router.post("/create", summary="Create new task with multiple assignees")
 async def create_task(
     task: TaskCreate,
-    current_user: dict = Depends(require_admin)
+    current_user: dict = Depends(require_admin_or_dept_leader)  # CHANGED THIS LINE
 ):
     """
     Create a new task and assign it to multiple employees
@@ -400,6 +398,7 @@ async def create_task(
             cursor.close()
         if connection:
             connection.close()
+
 
 
 @router.patch("/{task_id}", summary="Update task")
@@ -497,7 +496,7 @@ async def update_task(
 @router.delete("/{task_id}", summary="Delete task")
 async def delete_task(
     task_id: int,
-    current_user: dict = Depends(require_admin)
+    current_user: dict = Depends(require_admin_or_dept_leader)  # CHANGE THIS LINE
 ):
     """
     Delete a task (assignments will be deleted automatically via CASCADE)

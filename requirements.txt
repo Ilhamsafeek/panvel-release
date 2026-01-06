@@ -6,7 +6,7 @@ python-multipart==0.0.6
 # Database
 SQLAlchemy==2.0.23
 pymysql==1.1.0
-cryptography==41.0.7
+cryptography==43.0.0
 alembic==1.12.1
 
 # Authentication & Security
@@ -47,12 +47,12 @@ twilio==8.11.0
 # Social Media APIs
 facebook-sdk==3.1.0
 tweepy==4.14.0
-google-auth==2.25.2
+google-auth==2.35.0
 google-auth-oauthlib==1.2.0
 google-auth-httplib2==0.2.0
 
 # Google Services
-google-api-python-client==2.108.0
+google-api-python-client==2.150.0
 
 # SEO Tools
 beautifulsoup4==4.12.2

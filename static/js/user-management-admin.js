@@ -259,6 +259,8 @@ async function editUser(userId) {
     }
 }
 
+
+
 async function saveUser() {
     try {
         const userId = document.getElementById('userId').value;
@@ -281,7 +283,15 @@ async function saveUser() {
             }
             userData.password = password;
 
-            const response = await fetch(`${API_BASE}/users`, {
+            // Determine the correct endpoint based on role
+            let endpoint = `${API_BASE}/users`;
+            
+            // If creating employee or department_leader, use the employees endpoint
+            if (userData.role === 'employee' || userData.role === 'department_leader') {
+                endpoint = '/api/v1/admin/employees';
+            }
+
+            const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -291,7 +301,8 @@ async function saveUser() {
             });
 
             if (response.ok) {
-                showSuccess('User created successfully');
+                const data = await response.json();
+                showSuccess(data.message || 'User created successfully');
                 closeModal('userModal');
                 loadUsers();
                 loadStatistics();
@@ -311,9 +322,11 @@ async function saveUser() {
             });
 
             if (response.ok) {
-                showSuccess('User updated successfully');
+                const data = await response.json();
+                showSuccess(data.message || 'User updated successfully');
                 closeModal('userModal');
                 loadUsers();
+                loadStatistics();
             } else {
                 const error = await response.json();
                 showError(error.detail || 'Failed to update user');
@@ -321,9 +334,10 @@ async function saveUser() {
         }
     } catch (error) {
         console.error('Error saving user:', error);
-        showError('Failed to save user');
+        showError('Failed to save user. Please try again.');
     }
 }
+
 
 async function deleteUser(userId) {
     if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) {

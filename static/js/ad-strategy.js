@@ -397,122 +397,6 @@ async function handleMediaFiles(files, campaignId) {
     }
 }
 
-async function uploadMediaFile(file, platform, campaignId) {
-    // Validate file type
-    const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'video/mp4', 'video/quicktime'];
-    if (!validTypes.includes(file.type)) {
-        showNotification(`Invalid file type: ${file.type}`, 'error');
-        return;
-    }
-    
-    // Show upload progress
-    const uploadId = showUploadProgress(file.name);
-    
-    try {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('platform', platform);
-        formData.append('campaign_id', campaignId);
-        
-        const response = await fetch(`${API_BASE}/media/upload`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`
-            },
-            body: formData
-        });
-        
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Upload failed');
-        }
-        
-        const data = await response.json();
-        
-        // Add to uploaded assets
-        uploadedMediaAssets.push({
-            asset_id: data.asset_id,
-            media_id: data.media_id,
-            url: data.url,
-            file_name: file.name,
-            platform
-        });
-        
-        updateUploadProgress(uploadId, 'success', file.name);
-        updateMediaGallery();
-        
-        showNotification('Media uploaded successfully', 'success');
-        
-    } catch (error) {
-        console.error('Upload error:', error);
-        updateUploadProgress(uploadId, 'error', file.name);
-        showNotification(error.message, 'error');
-    }
-}
-
-function showUploadProgress(fileName) {
-    const container = document.getElementById('uploadProgressContainer');
-    if (!container) return null;
-    
-    const uploadId = `upload_${Date.now()}`;
-    const progressHTML = `
-        <div id="${uploadId}" style="padding: 0.75rem; background: #f8fafc; border-radius: 8px; margin-bottom: 0.5rem;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-size: 0.875rem;">${fileName}</span>
-                <i class="ti ti-loader" style="animation: spin 1s linear infinite;"></i>
-            </div>
-        </div>
-    `;
-    
-    container.insertAdjacentHTML('beforeend', progressHTML);
-    return uploadId;
-}
-
-function updateUploadProgress(uploadId, status, fileName) {
-    const element = document.getElementById(uploadId);
-    if (!element) return;
-    
-    const icon = status === 'success' ? 
-        '<i class="ti ti-check" style="color: #10b981;"></i>' :
-        '<i class="ti ti-x" style="color: #ef4444;"></i>';
-    
-    element.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span style="font-size: 0.875rem;">${fileName}</span>
-            ${icon}
-        </div>
-    `;
-    
-    // Remove after 3 seconds
-    setTimeout(() => element.remove(), 3000);
-}
-
-function updateMediaGallery() {
-    const gallery = document.getElementById('mediaGallery');
-    if (!gallery) return;
-    
-    if (uploadedMediaAssets.length === 0) {
-        gallery.innerHTML = '<p style="text-align: center; color: #94a3b8;">No media uploaded yet</p>';
-        return;
-    }
-    
-    gallery.innerHTML = uploadedMediaAssets.map(asset => `
-        <div style="position: relative; border-radius: 8px; overflow: hidden; border: 2px solid #e2e8f0;">
-            ${asset.url.startsWith('data:video') ?
-                `<video src="${asset.url}" style="width: 100%; height: 150px; object-fit: cover;"></video>` :
-                `<img src="${asset.url}" alt="${asset.file_name}" style="width: 100%; height: 150px; object-fit: cover;">`
-            }
-            <div style="position: absolute; top: 0.5rem; right: 0.5rem;">
-                <button onclick="removeMedia(${asset.asset_id})" style="background: rgba(0,0,0,0.7); border: none; color: white; border-radius: 50%; width: 24px; height: 24px; cursor: pointer;">
-                    <i class="ti ti-x"></i>
-                </button>
-            </div>
-            <div style="padding: 0.5rem; background: white; font-size: 0.75rem; color: #64748b;">
-                ${asset.file_name}
-            </div>
-        </div>
-    `).join('');
-}
 
 function removeMedia(assetId) {
     uploadedMediaAssets = uploadedMediaAssets.filter(a => a.asset_id !== assetId);
@@ -520,35 +404,6 @@ function removeMedia(assetId) {
 }
 
 
-
-
-// =====================================================
-// UTILITY FUNCTIONS
-// =====================================================
-
-function showNotification(message, type = 'info') {
-    const notification = document.createElement('div');
-    notification.className = `notification notification-${type}`;
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        padding: 1rem 1.5rem;
-        background: ${type === 'error' ? '#ef4444' : type === 'success' ? '#10b981' : '#3b82f6'};
-        color: white;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        z-index: 10000;
-        animation: slideIn 0.3s ease-out;
-    `;
-    notification.textContent = message;
-    document.body.appendChild(notification);
-
-    setTimeout(() => {
-        notification.style.animation = 'slideOut 0.3s ease-out';
-        setTimeout(() => notification.remove(), 300);
-    }, 3000);
-}
 
 // =====================================================
 // TAB SWITCHING
@@ -949,10 +804,13 @@ function showCreateAdsStep(campaignId, platform, objective) {
     initializeMediaUpload(campaignId);
 }
 
-function renderPlatformSpecificAdFields(platform, objective) {
+
+async function renderPlatformSpecificAdFields(platform, objective) {
     const container = document.getElementById('platformSpecificFields');
-    
     const platformData = PLATFORM_DATA[platform];
+    
+    // Get AI-powered objective guidance
+    await fetchObjectiveGuidance(platform, objective);
     
     let fieldsHTML = `
         <div class="form-group">
@@ -961,40 +819,62 @@ function renderPlatformSpecificAdFields(platform, objective) {
         </div>
     `;
     
-    // Platform-specific fields
+    // ========== META (FACEBOOK & INSTAGRAM) ==========
     if (platform === 'meta') {
         fieldsHTML += `
-            <div class="form-group">
-                <label>Ad Format *</label>
-                <select class="form-control" id="metaAdFormat" required>
-                    <option value="">Select format...</option>
-                    ${platformData.formats.map(f => `<option value="${f.value}">${f.label}</option>`).join('')}
-                </select>
+            <!-- Meta-Specific Fields -->
+            <div class="alert" style="background: linear-gradient(135deg, #9926F3 0%, #1DD8FC 100%); color: white; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
+                <i class="ti ti-brand-facebook"></i> Meta Ad Requirements
+                <p style="font-size: 0.875rem; margin: 0.5rem 0 0 0;">Feed ads: 125 chars | Stories: 60 chars | Reels: 100 chars</p>
             </div>
             
             <div class="form-group">
-                <label>Primary Text *</label>
-                <textarea class="form-control" id="adPrimaryText" required rows="3" 
-                    placeholder="Main ad copy (125 characters for feed, 60 for stories)"></textarea>
-                <small style="color: #64748b;">This appears above your image or video</small>
+                <label>Ad Format * <i class="ti ti-info-circle" title="Choose where your ad appears"></i></label>
+                <select class="form-control" id="metaAdFormat" required onchange="updateMetaCharLimits(this.value)">
+                    <option value="">Select format...</option>
+                    <option value="FEED">Feed Post (Facebook & Instagram)</option>
+                    <option value="STORY">Stories (Full Screen, Vertical)</option>
+                    <option value="REEL">Reels (Short-form Video)</option>
+                    <option value="CAROUSEL">Carousel (Multiple Images)</option>
+                    <option value="COLLECTION">Collection (Product Catalog)</option>
+                </select>
+                <small id="metaFormatHelp" class="form-text"></small>
+            </div>
+            
+            <div class="form-grid" style="grid-template-columns: 2fr 1fr;">
+                <div class="form-group">
+                    <label>Primary Text *</label>
+                    <textarea class="form-control" id="adPrimaryText" required rows="3" maxlength="125"
+                        placeholder="Main ad copy - appears above your creative"></textarea>
+                </div>
+                <div style="padding-top: 2rem;">
+                    <div style="background: #f8fafc; padding: 0.75rem; border-radius: 8px;">
+                        <div style="font-size: 0.75rem; color: #64748b;">Character Count</div>
+                        <div style="font-size: 1.5rem; font-weight: 600; color: var(--primary-color);">
+                            <span id="primaryTextCount">0</span>/125
+                        </div>
+                    </div>
+                </div>
             </div>
             
             <div class="form-group">
                 <label>Headline *</label>
                 <input type="text" class="form-control" id="adHeadline" required maxlength="40"
                     placeholder="Catchy headline (max 40 characters)">
+                <small><span id="headlineCount">0</span>/40 characters</small>
             </div>
             
             <div class="form-group">
-                <label>Description</label>
+                <label>Description (Optional)</label>
                 <input type="text" class="form-control" id="adDescription" maxlength="30"
                     placeholder="Short description (max 30 characters)">
+                <small><span id="descriptionCount">0</span>/30 characters</small>
             </div>
             
             <div class="form-group">
                 <label>Destination URL *</label>
                 <input type="url" class="form-control" id="adDestinationUrl" required
-                    placeholder="https://example.com/landing-page">
+                    placeholder="https://yourwebsite.com/landing-page">
             </div>
             
             <div class="form-group">
@@ -1006,148 +886,753 @@ function renderPlatformSpecificAdFields(platform, objective) {
                     <option value="DOWNLOAD">Download</option>
                     <option value="GET_QUOTE">Get Quote</option>
                     <option value="CONTACT_US">Contact Us</option>
-                </select>
-            </div>
-        `;
-    } else if (platform === 'google') {
-        fieldsHTML += `
-            <div class="form-group">
-                <label>Campaign Type *</label>
-                <select class="form-control" id="googleCampaignType" required>
-                    <option value="">Select type...</option>
-                    <option value="SEARCH">Search</option>
-                    <option value="DISPLAY">Display</option>
-                    <option value="VIDEO">Video (YouTube)</option>
-                    <option value="SHOPPING">Shopping</option>
+                    <option value="BOOK_NOW">Book Now</option>
+                    <option value="APPLY_NOW">Apply Now</option>
                 </select>
             </div>
             
             <div class="form-group">
-                <label>Headlines (3-15) *</label>
-                <div id="googleHeadlinesContainer">
-                    <input type="text" class="form-control" style="margin-bottom: 0.5rem;" maxlength="30" 
-                        placeholder="Headline 1 (max 30 characters)" data-headline="1">
-                    <input type="text" class="form-control" style="margin-bottom: 0.5rem;" maxlength="30" 
-                        placeholder="Headline 2 (max 30 characters)" data-headline="2">
-                    <input type="text" class="form-control" style="margin-bottom: 0.5rem;" maxlength="30" 
-                        placeholder="Headline 3 (max 30 characters)" data-headline="3">
+                <label>Placements (Auto-optimized by default)</label>
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
+                    <label style="display: flex; align-items: center; padding: 0.5rem; background: #f8fafc; border-radius: 6px;">
+                        <input type="checkbox" checked value="facebook_feed" style="margin-right: 0.5rem;"> Facebook Feed
+                    </label>
+                    <label style="display: flex; align-items: center; padding: 0.5rem; background: #f8fafc; border-radius: 6px;">
+                        <input type="checkbox" checked value="instagram_feed" style="margin-right: 0.5rem;"> Instagram Feed
+                    </label>
+                    <label style="display: flex; align-items: center; padding: 0.5rem; background: #f8fafc; border-radius: 6px;">
+                        <input type="checkbox" checked value="facebook_stories" style="margin-right: 0.5rem;"> Facebook Stories
+                    </label>
+                    <label style="display: flex; align-items: center; padding: 0.5rem; background: #f8fafc; border-radius: 6px;">
+                        <input type="checkbox" checked value="instagram_stories" style="margin-right: 0.5rem;"> Instagram Stories
+                    </label>
                 </div>
-                <button type="button" class="btn btn-secondary" onclick="addGoogleHeadline()">
-                    <i class="ti ti-plus"></i> Add Headline
-                </button>
-            </div>
-            
-            <div class="form-group">
-                <label>Descriptions (2-4) *</label>
-                <div id="googleDescriptionsContainer">
-                    <textarea class="form-control" style="margin-bottom: 0.5rem;" maxlength="90" rows="2"
-                        placeholder="Description 1 (max 90 characters)" data-description="1"></textarea>
-                    <textarea class="form-control" style="margin-bottom: 0.5rem;" maxlength="90" rows="2"
-                        placeholder="Description 2 (max 90 characters)" data-description="2"></textarea>
-                </div>
-                <button type="button" class="btn btn-secondary" onclick="addGoogleDescription()">
-                    <i class="ti ti-plus"></i> Add Description
-                </button>
-            </div>
-            
-            <div class="form-group">
-                <label>Final URL *</label>
-                <input type="url" class="form-control" id="googleFinalUrl" required
-                    placeholder="https://example.com/landing-page">
-            </div>
-            
-            <div class="form-group">
-                <label>Keywords (for Search campaigns)</label>
-                <textarea class="form-control" id="googleKeywords" rows="3"
-                    placeholder="Enter keywords, one per line"></textarea>
-                <small style="color: #64748b;">Add keywords for search campaigns. Use broad, phrase, or exact match.</small>
-            </div>
-        `;
-    } else if (platform === 'linkedin') {
-        fieldsHTML += `
-            <div class="form-group">
-                <label>Ad Format *</label>
-                <select class="form-control" id="linkedinAdFormat" required>
-                    <option value="">Select format...</option>
-                    ${platformData.formats.map(f => `<option value="${f.value}">${f.label}</option>`).join('')}
-                </select>
-            </div>
-            
-            <div class="form-group">
-                <label>Introductory Text *</label>
-                <textarea class="form-control" id="linkedinIntroText" required rows="3" maxlength="600"
-                    placeholder="Introduce your content (max 600 characters)"></textarea>
-            </div>
-            
-            <div class="form-group">
-                <label>Headline *</label>
-                <input type="text" class="form-control" id="linkedinHeadline" required maxlength="200"
-                    placeholder="Headline (max 200 characters)">
-            </div>
-            
-            <div class="form-group">
-                <label>Destination URL *</label>
-                <input type="url" class="form-control" id="linkedinDestinationUrl" required
-                    placeholder="https://example.com/landing-page">
-            </div>
-            
-            <div class="form-group">
-                <label>Call to Action</label>
-                <select class="form-control" id="linkedinCTA">
-                    <option value="LEARN_MORE">Learn More</option>
-                    <option value="APPLY">Apply</option>
-                    <option value="DOWNLOAD">Download</option>
-                    <option value="SIGN_UP">Sign Up</option>
-                    <option value="REGISTER">Register</option>
-                </select>
+                <small class="form-text">Uncheck placements you want to exclude</small>
             </div>
         `;
     }
     
+    // ========== GOOGLE ADS ==========
+    else if (platform === 'google') {
+        fieldsHTML += `
+            <!-- Google Ads-Specific Fields -->
+            <div class="alert" style="background: linear-gradient(135deg, #4285F4 0%, #34A853 100%); color: white; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
+                <i class="ti ti-brand-google"></i> Google Ads Requirements
+                <p style="font-size: 0.875rem; margin: 0.5rem 0 0 0;">Provide 3-15 headlines and 2-4 descriptions for responsive ads</p>
+            </div>
+            
+            <div class="form-group">
+                <label>Campaign Type *</label>
+                <select class="form-control" id="googleCampaignType" required onchange="updateGoogleFields(this.value)">
+                    <option value="">Select type...</option>
+                    <option value="SEARCH">Search (Text Ads on Google Search)</option>
+                    <option value="DISPLAY">Display (Banner Ads on Websites)</option>
+                    <option value="VIDEO">Video (YouTube Ads)</option>
+                    <option value="SHOPPING">Shopping (Product Listings)</option>
+                    <option value="PERFORMANCE_MAX">Performance Max (All Channels)</option>
+                </select>
+            </div>
+            
+            <div id="googleSearchFields" style="display: none;">
+                <div class="form-group">
+                    <label>Headlines (3-15 required) * <i class="ti ti-info-circle" title="Google rotates these automatically"></i></label>
+                    <div id="googleHeadlinesContainer">
+                        <input type="text" class="form-control google-headline" style="margin-bottom: 0.5rem;" maxlength="30" 
+                            placeholder="Headline 1 (max 30 characters)" required>
+                        <input type="text" class="form-control google-headline" style="margin-bottom: 0.5rem;" maxlength="30" 
+                            placeholder="Headline 2 (max 30 characters)" required>
+                        <input type="text" class="form-control google-headline" style="margin-bottom: 0.5rem;" maxlength="30" 
+                            placeholder="Headline 3 (max 30 characters)" required>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="addGoogleHeadline()">
+                        <i class="ti ti-plus"></i> Add Headline (Max 15)
+                    </button>
+                </div>
+                
+                <div class="form-group">
+                    <label>Descriptions (2-4 required) *</label>
+                    <div id="googleDescriptionsContainer">
+                        <textarea class="form-control google-description" style="margin-bottom: 0.5rem;" maxlength="90" rows="2"
+                            placeholder="Description 1 (max 90 characters)" required></textarea>
+                        <textarea class="form-control google-description" style="margin-bottom: 0.5rem;" maxlength="90" rows="2"
+                            placeholder="Description 2 (max 90 characters)" required></textarea>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="addGoogleDescription()">
+                        <i class="ti ti-plus"></i> Add Description (Max 4)
+                    </button>
+                </div>
+                
+                <div class="form-group">
+                    <label>Final URL *</label>
+                    <input type="url" class="form-control" id="googleFinalUrl" required
+                        placeholder="https://yourwebsite.com/landing-page">
+                </div>
+                
+                <div class="form-group">
+                    <label>Display Path (Optional)</label>
+                    <div class="form-grid" style="grid-template-columns: 1fr 1fr;">
+                        <input type="text" class="form-control" id="googlePath1" maxlength="15"
+                            placeholder="Path 1 (e.g., 'shoes')">
+                        <input type="text" class="form-control" id="googlePath2" maxlength="15"
+                            placeholder="Path 2 (e.g., 'sale')">
+                    </div>
+                    <small class="form-text">Appears as: yourwebsite.com/path1/path2</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>Keywords (Comma-separated)</label>
+                    <textarea class="form-control" id="googleKeywords" rows="2"
+                        placeholder="running shoes, athletic footwear, sports shoes"></textarea>
+                    <small class="form-text">Keywords help trigger your search ads</small>
+                </div>
+            </div>
+        `;
+    }
+    
+    // ========== LINKEDIN ==========
+    else if (platform === 'linkedin') {
+        fieldsHTML += `
+            <!-- LinkedIn-Specific Fields -->
+            <div class="alert" style="background: linear-gradient(135deg, #0077B5 0%, #00A0DC 100%); color: white; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
+                <i class="ti ti-brand-linkedin"></i> LinkedIn Ad Requirements
+                <p style="font-size: 0.875rem; margin: 0.5rem 0 0 0;">Professional B2B advertising with job title & company targeting</p>
+            </div>
+            
+            <div class="form-group">
+                <label>Ad Format *</label>
+                <select class="form-control" id="linkedinAdFormat" required onchange="updateLinkedInFields(this.value)">
+                    <option value="">Select format...</option>
+                    <option value="SPONSORED_CONTENT">Sponsored Content (Native Feed Posts)</option>
+                    <option value="MESSAGE_AD">Message Ads (Direct InMail)</option>
+                    <option value="TEXT_AD">Text Ads (Sidebar Ads)</option>
+                    <option value="VIDEO_AD">Video Ads (Feed Video)</option>
+                    <option value="CAROUSEL">Carousel (Multiple Images)</option>
+                </select>
+            </div>
+            
+            <div id="linkedinSponsoredFields">
+                <div class="form-group">
+                    <label>Introductory Text * <i class="ti ti-info-circle" title="Main message, max 600 chars"></i></label>
+                    <textarea class="form-control" id="linkedinIntroText" required rows="4" maxlength="600"
+                        placeholder="Introduce your content (appears above the image/video)"></textarea>
+                    <small><span id="linkedinIntroCount">0</span>/600 characters</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>Headline *</label>
+                    <input type="text" class="form-control" id="linkedinHeadline" required maxlength="200"
+                        placeholder="Headline (max 200 characters)">
+                    <small><span id="linkedinHeadlineCount">0</span>/200 characters</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>Destination URL *</label>
+                    <input type="url" class="form-control" id="linkedinDestinationUrl" required
+                        placeholder="https://yourwebsite.com/landing-page">
+                </div>
+                
+                <div class="form-group">
+                    <label>Call to Action</label>
+                    <select class="form-control" id="linkedinCTA">
+                        <option value="LEARN_MORE">Learn More</option>
+                        <option value="APPLY">Apply</option>
+                        <option value="DOWNLOAD">Download</option>
+                        <option value="SIGN_UP">Sign Up</option>
+                        <option value="REGISTER">Register</option>
+                        <option value="JOIN">Join</option>
+                        <option value="ATTEND">Attend</option>
+                        <option value="REQUEST_DEMO">Request Demo</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>Target Audience (Optional but Recommended)</label>
+                    <div style="background: #f8fafc; padding: 1rem; border-radius: 8px;">
+                        <div class="form-group" style="margin-bottom: 0.75rem;">
+                            <label style="font-size: 0.875rem;">Job Titles</label>
+                            <input type="text" class="form-control" id="linkedinJobTitles" 
+                                placeholder="e.g., CEO, Marketing Director, VP Sales">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0.75rem;">
+                            <label style="font-size: 0.875rem;">Company Size</label>
+                            <select class="form-control" id="linkedinCompanySize">
+                                <option value="">All Sizes</option>
+                                <option value="1-10">1-10 employees</option>
+                                <option value="11-50">11-50 employees</option>
+                                <option value="51-200">51-200 employees</option>
+                                <option value="201-500">201-500 employees</option>
+                                <option value="501-1000">501-1000 employees</option>
+                                <option value="1001+">1001+ employees</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label style="font-size: 0.875rem;">Industries</label>
+                            <input type="text" class="form-control" id="linkedinIndustries" 
+                                placeholder="e.g., Technology, Healthcare, Finance">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+  
+    // ========== UNIVERSAL MEDIA UPLOAD SECTION (Single Unified Section) ==========
+fieldsHTML += `
+    <hr style="margin: 2rem 0; border: none; border-top: 1px solid #e2e8f0;">
+    
+    <div class="form-group">
+        <label style="font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; display: block;">
+            <i class="ti ti-photo"></i> Media Assets *
+        </label>
+        <p style="font-size: 0.875rem; color: #64748b; margin-bottom: 1.5rem;">
+            Upload images/videos OR provide URLs (at least one required)
+        </p>
+        
+        <!-- Combined Upload Area -->
+        <div style="background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 2rem; margin-bottom: 1.5rem;" 
+             id="dropZone"
+             ondragover="handleDragOver(event)"
+             ondragleave="handleDragLeave(event)"
+             ondrop="handleDrop(event)">
+            
+            <input type="file" 
+                   id="mediaFileInput" 
+                   accept="image/jpeg,image/jpg,image/png,video/mp4,video/quicktime" 
+                   multiple 
+                   style="display: none;" 
+                   onchange="handleFileSelection(event)">
+            
+            <div style="text-align: center;">
+                <i class="ti ti-upload" style="font-size: 3rem; color: var(--primary-color); margin-bottom: 1rem; display: block;"></i>
+                
+                <button type="button" class="btn btn-primary" style="margin-bottom: 1rem;" onclick="document.getElementById('mediaFileInput').click()">
+                    <i class="ti ti-upload"></i> Upload Files
+                </button>
+                
+                <p style="font-size: 0.875rem; color: #64748b; margin: 0;">
+                    or drag and drop files here
+                </p>
+                
+                <p style="font-size: 0.75rem; color: #94a3b8; margin-top: 0.5rem;">
+                    Images: JPG, PNG (max 30MB) | Videos: MP4, MOV (max 4GB)
+                </p>
+            </div>
+            
+            <!-- Upload Progress -->
+            <div id="uploadProgressContainer" style="margin-top: 1.5rem;"></div>
+        </div>
+        
+        <!-- Uploaded Files Gallery -->
+        <div id="uploadedMediaGallery" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;"></div>
+        
+        <!-- OR Divider -->
+        <div style="display: flex; align-items: center; gap: 1rem; margin: 1.5rem 0;">
+            <div style="flex: 1; height: 1px; background: #e2e8f0;"></div>
+            <span style="color: #64748b; font-size: 0.875rem; font-weight: 500;">OR provide URLs</span>
+            <div style="flex: 1; height: 1px; background: #e2e8f0;"></div>
+        </div>
+        
+        <!-- URL Inputs -->
+        <div id="mediaUrlsContainer" style="display: flex; flex-direction: column; gap: 0.5rem;">
+            <input type="url" class="form-control" placeholder="https://example.com/image1.jpg" style="font-size: 0.875rem;">
+            <input type="url" class="form-control" placeholder="https://example.com/image2.jpg" style="font-size: 0.875rem;">
+        </div>
+        
+        <button type="button" class="btn btn-sm btn-secondary" style="margin-top: 0.5rem;" onclick="addMoreMediaUrl()">
+            <i class="ti ti-plus"></i> Add More URLs
+        </button>
+    </div>
+    
+    <!-- Objective-Based Guidance Display -->
+    <div id="objectiveGuidanceDisplay" style="margin-top: 2rem;"></div>
+`;
+
+
     container.innerHTML = fieldsHTML;
+    
+    // Initialize character counters
+    initializeCharacterCounters();
+    
+    // Show platform-specific fields based on selection
+    if (platform === 'google') {
+        updateGoogleFields('SEARCH'); // Default to search
+    }
+    if (platform === 'linkedin') {
+        updateLinkedInFields('SPONSORED_CONTENT'); // Default to sponsored
+    }
 }
 
 
+
+
+// ========== HELPER FUNCTIONS ==========
+
+function updateMetaCharLimits(format) {
+    const help = document.getElementById('metaFormatHelp');
+    const primaryText = document.getElementById('adPrimaryText');
+    
+    switch(format) {
+        case 'FEED':
+            primaryText.maxLength = 125;
+            help.textContent = '📱 Feed ads: Perfect for detailed storytelling (125 chars)';
+            break;
+        case 'STORY':
+            primaryText.maxLength = 60;
+            help.textContent = '📱 Stories: Short & punchy for full-screen impact (60 chars)';
+            break;
+        case 'REEL':
+            primaryText.maxLength = 100;
+            help.textContent = '🎬 Reels: Engaging short-form video content (100 chars)';
+            break;
+        case 'CAROUSEL':
+            primaryText.maxLength = 125;
+            help.textContent = '🎠 Carousel: Showcase multiple products/features (125 chars)';
+            break;
+        case 'COLLECTION':
+            primaryText.maxLength = 125;
+            help.textContent = '🛍️ Collection: Drive product discovery with catalog (125 chars)';
+            break;
+    }
+}
+
+function updateGoogleFields(campaignType) {
+    const searchFields = document.getElementById('googleSearchFields');
+    searchFields.style.display = campaignType === 'SEARCH' || campaignType === 'PERFORMANCE_MAX' ? 'block' : 'none';
+}
+
+function updateLinkedInFields(format) {
+    const sponsoredFields = document.getElementById('linkedinSponsoredFields');
+    sponsoredFields.style.display = format === 'SPONSORED_CONTENT' || format === 'VIDEO_AD' || format === 'CAROUSEL' ? 'block' : 'none';
+}
+
 function addGoogleHeadline() {
     const container = document.getElementById('googleHeadlinesContainer');
-    const count = container.querySelectorAll('input').length + 1;
+    const currentCount = container.querySelectorAll('.google-headline').length;
     
-    if (count > 15) {
-        showNotification('Maximum 15 headlines allowed', 'error');
+    if (currentCount >= 15) {
+        showNotification('Maximum 15 headlines allowed', 'warning');
         return;
     }
     
     const input = document.createElement('input');
     input.type = 'text';
-    input.className = 'form-control';
+    input.className = 'form-control google-headline';
     input.style.marginBottom = '0.5rem';
     input.maxLength = 30;
-    input.placeholder = `Headline ${count} (max 30 characters)`;
-    input.dataset.headline = count;
+    input.placeholder = `Headline ${currentCount + 1} (max 30 characters)`;
     
     container.appendChild(input);
 }
 
 function addGoogleDescription() {
     const container = document.getElementById('googleDescriptionsContainer');
-    const count = container.querySelectorAll('textarea').length + 1;
+    const currentCount = container.querySelectorAll('.google-description').length;
     
-    if (count > 4) {
-        showNotification('Maximum 4 descriptions allowed', 'error');
+    if (currentCount >= 4) {
+        showNotification('Maximum 4 descriptions allowed', 'warning');
         return;
     }
     
     const textarea = document.createElement('textarea');
-    textarea.className = 'form-control';
+    textarea.className = 'form-control google-description';
     textarea.style.marginBottom = '0.5rem';
     textarea.maxLength = 90;
     textarea.rows = 2;
-    textarea.placeholder = `Description ${count} (max 90 characters)`;
-    textarea.dataset.description = count;
+    textarea.placeholder = `Description ${currentCount + 1} (max 90 characters)`;
     
     container.appendChild(textarea);
 }
 
+function initializeCharacterCounters() {
+    // Meta counters
+    const primaryText = document.getElementById('adPrimaryText');
+    const headline = document.getElementById('adHeadline');
+    const description = document.getElementById('adDescription');
+    
+    if (primaryText) {
+        primaryText.addEventListener('input', (e) => {
+            document.getElementById('primaryTextCount').textContent = e.target.value.length;
+        });
+    }
+    
+    if (headline) {
+        headline.addEventListener('input', (e) => {
+            document.getElementById('headlineCount').textContent = e.target.value.length;
+        });
+    }
+    
+    if (description) {
+        description.addEventListener('input', (e) => {
+            document.getElementById('descriptionCount').textContent = e.target.value.length;
+        });
+    }
+    
+    // LinkedIn counters
+    const linkedinIntro = document.getElementById('linkedinIntroText');
+    const linkedinHeadline = document.getElementById('linkedinHeadline');
+    
+    if (linkedinIntro) {
+        linkedinIntro.addEventListener('input', (e) => {
+            document.getElementById('linkedinIntroCount').textContent = e.target.value.length;
+        });
+    }
+    
+    if (linkedinHeadline) {
+        linkedinHeadline.addEventListener('input', (e) => {
+            document.getElementById('linkedinHeadlineCount').textContent = e.target.value.length;
+        });
+    }
+}
+
+
+
+// ========== DRAG AND DROP HANDLERS ==========
+
+function handleDragOver(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const dropZone = document.getElementById('dropZone');
+    dropZone.style.borderColor = 'var(--primary-color)';
+    dropZone.style.background = 'linear-gradient(135deg, rgba(153, 38, 243, 0.05) 0%, rgba(29, 216, 252, 0.05) 100%)';
+}
+
+function handleDragLeave(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const dropZone = document.getElementById('dropZone');
+    dropZone.style.borderColor = '#cbd5e1';
+    dropZone.style.background = '#f8fafc';
+}
+
+function handleDrop(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const dropZone = document.getElementById('dropZone');
+    dropZone.style.borderColor = '#cbd5e1';
+    dropZone.style.background = '#f8fafc';
+    
+    const files = event.dataTransfer.files;
+    if (files.length > 0) {
+        processFiles(files);
+    }
+}
+
+// ========== FILE SELECTION AND UPLOAD ==========
+
+async function handleFileSelection(event) {
+    const files = event.target.files;
+    if (files.length > 0) {
+        await processFiles(files);
+    }
+}
+
+
+
+async function processFiles(files) {
+    const campaignId = document.getElementById('adCampaignId').value;
+    const platform = currentSelectedPlatform;
+    
+    if (!campaignId || !platform) {
+        showNotification('Campaign information missing. Please close and reopen the modal.', 'error');
+        return;
+    }
+    
+    for (let file of files) {
+        await uploadMediaFile(file, platform, campaignId);
+    }
+}
+
+async function uploadMediaFile(file, platform, campaignId) {
+    const token = localStorage.getItem('token');
+    
+    // Validate file type
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'video/mp4', 'video/quicktime'];
+    if (!validTypes.includes(file.type)) {
+        showNotification(`Invalid file type: ${file.type}. Please use JPG, PNG, MP4, or MOV.`, 'error');
+        return;
+    }
+    
+    // Validate file size
+    const maxSize = file.type.startsWith('video') ? 4 * 1024 * 1024 * 1024 : 30 * 1024 * 1024;
+    if (file.size > maxSize) {
+        const maxSizeMB = maxSize / (1024 * 1024);
+        showNotification(`File too large. Max size: ${maxSizeMB}MB`, 'error');
+        return;
+    }
+    
+    // Show upload progress
+    const uploadId = showUploadProgress(file.name);
+    
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('platform', platform);
+        formData.append('campaign_id', campaignId);
+        
+        const response = await fetch(`${API_BASE}/ads/media/upload`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
+            body: formData
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Upload failed');
+        }
+        
+        const data = await response.json();
+        
+        // Add to uploaded assets
+        uploadedMediaAssets.push({
+            asset_id: data.asset_id,
+            media_id: data.media_id,
+            url: data.url,
+            file_name: file.name,
+            file_type: file.type,
+            platform: platform
+        });
+        
+        updateUploadProgress(uploadId, 'success', file.name);
+        updateMediaGallery();
+        
+        showNotification(`✅ ${file.name} uploaded successfully`, 'success');
+        
+    } catch (error) {
+        console.error('Upload error:', error);
+        updateUploadProgress(uploadId, 'error', file.name);
+        showNotification(`Failed to upload ${file.name}: ${error.message}`, 'error');
+    }
+}
+
+
+function showUploadProgress(fileName) {
+    const container = document.getElementById('uploadProgressContainer');
+    if (!container) return null;
+    
+    const uploadId = `upload_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const progressHTML = `
+        <div id="${uploadId}" style="padding: 0.75rem; background: white; border-radius: 8px; margin-bottom: 0.5rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 0.875rem; display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="ti ti-file"></i> ${fileName}
+                </span>
+                <i class="ti ti-loader" style="animation: spin 1s linear infinite; color: var(--primary-color);"></i>
+            </div>
+            <div style="margin-top: 0.5rem; height: 4px; background: #e2e8f0; border-radius: 2px; overflow: hidden;">
+                <div style="height: 100%; background: var(--primary-color); width: 0%; animation: progressBar 2s ease-in-out;"></div>
+            </div>
+        </div>
+    `;
+    
+    container.insertAdjacentHTML('beforeend', progressHTML);
+    return uploadId;
+}
+
+function updateUploadProgress(uploadId, status, fileName) {
+    const element = document.getElementById(uploadId);
+    if (!element) return;
+    
+    const icon = status === 'success' ? 
+        '<i class="ti ti-circle-check" style="color: #22c55e; font-size: 1.25rem;"></i>' : 
+        '<i class="ti ti-circle-x" style="color: #ef4444; font-size: 1.25rem;"></i>';
+    
+    const bgColor = status === 'success' ? '#f0fdf4' : '#fef2f2';
+    
+    element.style.background = bgColor;
+    element.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 0.875rem; display: flex; align-items: center; gap: 0.5rem;">
+                <i class="ti ti-file"></i> ${fileName}
+            </span>
+            ${icon}
+        </div>
+    `;
+    
+    // Remove after 3 seconds if success
+    if (status === 'success') {
+        setTimeout(() => {
+            element.style.animation = 'fadeOut 0.3s ease-out';
+            setTimeout(() => element.remove(), 300);
+        }, 3000);
+    }
+}
+
+
+
+
+function updateMediaGallery() {
+    const gallery = document.getElementById('uploadedMediaGallery');
+    if (!gallery) return;
+    
+    if (uploadedMediaAssets.length === 0) {
+        gallery.innerHTML = '';
+        return;
+    }
+    
+    gallery.innerHTML = uploadedMediaAssets.map((asset, index) => {
+        const isVideo = asset.file_type && asset.file_type.startsWith('video');
+        
+        return `
+            <div style="position: relative; aspect-ratio: 1; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border: 2px solid var(--primary-color);">
+                ${isVideo ? `
+                    <video src="${asset.url}" style="width: 100%; height: 100%; object-fit: cover;"></video>
+                    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.6); border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
+                        <i class="ti ti-player-play" style="color: white; font-size: 1.5rem;"></i>
+                    </div>
+                ` : `
+                    <img src="${asset.url}" alt="${asset.file_name}" style="width: 100%; height: 100%; object-fit: cover;">
+                `}
+                
+                <button onclick="removeUploadedAsset(${index})" type="button"
+                    style="position: absolute; top: 4px; right: 4px; background: rgba(239, 68, 68, 0.9); color: white; border: none; border-radius: 50%; width: 28px; height: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">
+                    <i class="ti ti-x" style="font-size: 16px;"></i>
+                </button>
+                
+                <div style="position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(to top, rgba(0,0,0,0.7), transparent); padding: 0.5rem; color: white; font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                    ${asset.file_name}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function removeUploadedAsset(index) {
+    if (confirm('Remove this media asset?')) {
+        uploadedMediaAssets.splice(index, 1);
+        updateMediaGallery();
+        showNotification('Media asset removed', 'info');
+    }
+}
+
+function addMoreMediaUrl() {
+    const container = document.getElementById('mediaUrlsContainer');
+    const input = document.createElement('input');
+    input.type = 'url';
+    input.className = 'form-control';
+    input.style.fontSize = '0.875rem';
+    input.placeholder = 'https://example.com/image.jpg';
+    
+    container.appendChild(input);
+}
+
+
+// ========== OBJECTIVE-BASED AI GUIDANCE ==========
+
+async function fetchObjectiveGuidance(platform, objective) {
+    const token = localStorage.getItem('token');
+    const guidanceDisplay = document.getElementById('objectiveGuidanceDisplay');
+    
+    if (!guidanceDisplay) return;
+    
+    // Show loading
+    guidanceDisplay.innerHTML = `
+        <div style="background: #f8fafc; padding: 1.5rem; border-radius: 12px; text-align: center;">
+            <i class="ti ti-loader" style="font-size: 2rem; animation: spin 1s linear infinite; color: var(--primary-color);"></i>
+            <p style="margin-top: 1rem; color: #64748b;">Generating AI recommendations...</p>
+        </div>
+    `;
+    
+    try {
+        const response = await fetch(`${API_BASE}/ads/objective-guidance`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                platform,
+                objective,
+                budget: parseFloat(document.getElementById('campaignBudget')?.value || 1000),
+                target_audience: {},
+                industry: null
+            })
+        });
+        
+        if (!response.ok) throw new Error('Failed to fetch guidance');
+        
+        const data = await response.json();
+        
+        // Display guidance
+        displayObjectiveGuidance(data.guidance);
+        
+    } catch (error) {
+        console.error('Guidance error:', error);
+        guidanceDisplay.innerHTML = '';
+    }
+}
+
+function displayObjectiveGuidance(guidance) {
+    const guidanceDisplay = document.getElementById('objectiveGuidanceDisplay');
+    if (!guidanceDisplay) return;
+    
+    const settings = guidance.platform_specific_settings || {};
+    const creative = guidance.creative_guidelines || {};
+    const performance = guidance.performance_expectations || {};
+    const tips = guidance.optimization_tips || [];
+    
+    guidanceDisplay.innerHTML = `
+        <div style="background: linear-gradient(135deg, rgba(153, 38, 243, 0.1) 0%, rgba(29, 216, 252, 0.1) 100%); padding: 1.5rem; border-radius: 12px; border: 1px solid rgba(153, 38, 243, 0.2);">
+            <h3 style="margin: 0 0 1rem 0; display: flex; align-items: center; gap: 0.5rem;">
+                <i class="ti ti-bulb"></i> AI Recommendations for ${guidance.objective}
+            </h3>
+            
+            ${settings.recommended_ad_formats && settings.recommended_ad_formats.length > 0 ? `
+                <div style="margin-bottom: 1rem;">
+                    <strong style="color: var(--primary-color);">Recommended Ad Formats:</strong>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem;">
+                        ${settings.recommended_ad_formats.map(format => `
+                            <span style="padding: 0.25rem 0.75rem; background: white; border-radius: 16px; font-size: 0.875rem; border: 1px solid var(--primary-color); color: var(--primary-color);">
+                                ${format}
+                            </span>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : ''}
+            
+            ${settings.bidding_strategy ? `
+                <div style="margin-bottom: 1rem;">
+                    <strong style="color: var(--primary-color);">Bidding Strategy:</strong>
+                    <p style="margin: 0.5rem 0 0 0; color: #64748b;">${settings.bidding_strategy}</p>
+                </div>
+            ` : ''}
+            
+            ${performance.estimated_ctr ? `
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
+                    <div style="background: white; padding: 1rem; border-radius: 8px;">
+                        <div style="font-size: 0.75rem; color: #64748b;">Est. CTR</div>
+                        <div style="font-size: 1.5rem; font-weight: 600; color: var(--primary-color);">${performance.estimated_ctr}%</div>
+                    </div>
+                    ${performance.estimated_cpc ? `
+                        <div style="background: white; padding: 1rem; border-radius: 8px;">
+                            <div style="font-size: 0.75rem; color: #64748b;">Est. CPC</div>
+                            <div style="font-size: 1.5rem; font-weight: 600; color: var(--primary-color);">$${performance.estimated_cpc}</div>
+                        </div>
+                    ` : ''}
+                    ${performance.estimated_reach ? `
+                        <div style="background: white; padding: 1rem; border-radius: 8px;">
+                            <div style="font-size: 0.75rem; color: #64748b;">Est. Reach</div>
+                            <div style="font-size: 1.5rem; font-weight: 600; color: var(--primary-color);">${performance.estimated_reach.toLocaleString()}</div>
+                        </div>
+                    ` : ''}
+                </div>
+            ` : ''}
+            
+            ${tips.length > 0 ? `
+                <div>
+                    <strong style="color: var(--primary-color);">Optimization Tips:</strong>
+                    <ul style="margin: 0.5rem 0 0 0; padding-left: 1.5rem; color: #64748b;">
+                        ${tips.map(tip => `<li>${tip}</li>`).join('')}
+                    </ul>
+                </div>
+            ` : ''}
+        </div>
+    `;
+}
 
 
 
@@ -1695,21 +2180,78 @@ async function controlCampaign(campaignId, action) {
 }
 
 
+let currentSelectedPlatform = ''; // Global variable to store platform
+let currentSelectedObjective = ''; // Global variable to store objective
 
 async function openCreateAdModal(campaignId) {
-    currentCampaignId = campaignId;
-
-    // Create modal if it doesn't exist
-    if (!document.getElementById('createAdModal')) {
-        createAdModal();
+    const token = localStorage.getItem('token');
+    
+    try {
+        // Fetch campaign details to get platform and objective
+        const response = await fetch(`${API_BASE}/ads/campaigns/${campaignId}`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to fetch campaign details');
+        }
+        
+        const campaign = await response.json();
+        
+        // Store platform and objective globally
+        currentSelectedPlatform = campaign.platform.toLowerCase();
+        currentSelectedObjective = campaign.objective || 'AWARENESS';
+        
+        // Check if modal exists, if not create it
+        let modal = document.getElementById('createAdModal');
+        if (!modal) {
+            createAdModal();
+            modal = document.getElementById('createAdModal');
+        }
+        
+        // Reset form and uploaded assets
+        uploadedMediaAssets = [];
+        document.getElementById('createAdForm').reset();
+        document.getElementById('adCampaignId').value = campaignId;
+        
+        // Clear any previous uploads
+        const uploadProgressContainer = document.getElementById('uploadProgressContainer');
+        if (uploadProgressContainer) uploadProgressContainer.innerHTML = '';
+        
+        const uploadedGallery = document.getElementById('uploadedMediaGallery');
+        if (uploadedGallery) uploadedGallery.innerHTML = '';
+        
+        // Display campaign info in modal header
+        const modalHeader = modal.querySelector('.modal-header h2');
+        if (modalHeader) {
+            modalHeader.innerHTML = `
+                <i class="ti ti-ad"></i> Create Ad for ${campaign.campaign_name}
+                <span style="font-size: 0.875rem; font-weight: 400; color: #64748b; margin-left: 0.5rem;">
+                    (${campaign.platform.toUpperCase()})
+                </span>
+            `;
+        }
+        
+        // Render platform-specific fields
+        await renderPlatformSpecificAdFields(currentSelectedPlatform, currentSelectedObjective);
+        
+        // Show modal
+        modal.style.display = 'flex';
+        
+        // Focus on first input
+        setTimeout(() => {
+            const firstInput = modal.querySelector('input:not([type="hidden"]), textarea, select');
+            if (firstInput) firstInput.focus();
+        }, 100);
+        
+    } catch (error) {
+        console.error('Error opening ad creation modal:', error);
+        showNotification('Failed to open ad creation form: ' + error.message, 'error');
     }
-
-    // Reset form
-    document.getElementById('createAdForm').reset();
-    document.getElementById('adCampaignId').value = campaignId;
-
-    // Show modal
-    document.getElementById('createAdModal').style.display = 'flex';
 }
 
 function createAdModal() {
@@ -1720,7 +2262,7 @@ function createAdModal() {
 
     modal.innerHTML = `
         <div class="modal-overlay" onclick="closeCreateAdModal()"></div>
-        <div class="modal-container" style="max-width: 900px;">
+        <div class="modal-container" style="max-width: 900px; max-height: 90vh; overflow-y: auto;">
             <div class="modal-header">
                 <h2><i class="ti ti-ad"></i> Create New Ad</h2>
                 <button class="modal-close" onclick="closeCreateAdModal()">
@@ -1731,73 +2273,13 @@ function createAdModal() {
                 <form id="createAdForm" onsubmit="event.preventDefault(); submitCreateAd();">
                     <input type="hidden" id="adCampaignId">
                     
-                    <div class="form-group">
-                        <label>Ad Name *</label>
-                        <input type="text" class="form-control" id="adName" required placeholder="e.g., Summer Sale - Variant A">
-                    </div>
+                    <!-- Platform-specific fields will be injected here -->
+                    <div id="platformSpecificFields"></div>
                     
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label>Ad Format *</label>
-                            <select class="form-control" id="adFormat" required>
-                                <option value="">Select format...</option>
-                                <option value="feed">Feed Post</option>
-                                <option value="story">Story</option>
-                                <option value="reel">Reel</option>
-                                <option value="carousel">Carousel</option>
-                                <option value="video">Video</option>
-                                <option value="collection">Collection</option>
-                            </select>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label>
-                                <input type="checkbox" id="isABTest" style="margin-right: 0.5rem;">
-                                A/B Test Variant
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <div id="abTestGroup" style="display: none;">
-                        <div class="form-group">
-                            <label>A/B Test Group</label>
-                            <select class="form-control" id="abGroup">
-                                <option value="A">Variant A</option>
-                                <option value="B">Variant B</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Headline *</label>
-                        <input type="text" class="form-control" id="adHeadline" required placeholder="Catchy headline (max 40 characters)" maxlength="40">
-                        <small style="color: #64748b; font-size: 0.875rem;">Character count: <span id="headlineCount">0</span>/40</small>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Primary Text *</label>
-                        <textarea class="form-control" id="adPrimaryText" required rows="4" placeholder="Main ad copy (max 125 characters)" maxlength="125"></textarea>
-                        <small style="color: #64748b; font-size: 0.875rem;">Character count: <span id="primaryTextCount">0</span>/125</small>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Description</label>
-                        <textarea class="form-control" id="adDescription" rows="3" placeholder="Additional description (optional)" maxlength="30"></textarea>
-                        <small style="color: #64748b; font-size: 0.875rem;">Character count: <span id="descriptionCount">0</span>/30</small>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Media URLs</label>
-                        <div id="mediaUrlsContainer">
-                            <input type="url" class="form-control" id="mediaUrl1" placeholder="https://example.com/image1.jpg" style="margin-bottom: 0.5rem;">
-                            <input type="url" class="form-control" id="mediaUrl2" placeholder="https://example.com/image2.jpg" style="margin-bottom: 0.5rem;">
-                            <input type="url" class="form-control" id="mediaUrl3" placeholder="https://example.com/image3.jpg">
-                        </div>
-                        <small style="color: #64748b; font-size: 0.875rem;">Add image or video URLs for your ad creative</small>
-                    </div>
-                    
-                    <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 2rem;">
-                        <button type="button" class="btn btn-secondary" onclick="closeCreateAdModal()">Cancel</button>
+                    <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e2e8f0;">
+                        <button type="button" class="btn btn-secondary" onclick="closeCreateAdModal()">
+                            <i class="ti ti-x"></i> Cancel
+                        </button>
                         <button type="submit" class="btn btn-primary" id="submitAdBtn">
                             <i class="ti ti-check"></i> Create Ad
                         </button>
@@ -1808,58 +2290,214 @@ function createAdModal() {
     `;
 
     document.body.appendChild(modal);
-
-    // Add character counters
-    document.getElementById('adHeadline').addEventListener('input', function (e) {
-        document.getElementById('headlineCount').textContent = e.target.value.length;
-    });
-
-    document.getElementById('adPrimaryText').addEventListener('input', function (e) {
-        document.getElementById('primaryTextCount').textContent = e.target.value.length;
-    });
-
-    document.getElementById('adDescription').addEventListener('input', function (e) {
-        document.getElementById('descriptionCount').textContent = e.target.value.length;
-    });
-
-    // Show/hide A/B test group
-    document.getElementById('isABTest').addEventListener('change', function (e) {
-        document.getElementById('abTestGroup').style.display = e.target.checked ? 'block' : 'none';
-    });
 }
 
 function closeCreateAdModal() {
-    document.getElementById('createAdModal').style.display = 'none';
+    const modal = document.getElementById('createAdModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    
+    // Reset uploaded assets
+    uploadedMediaAssets = [];
+    
+    // Clear form
+    const form = document.getElementById('createAdForm');
+    if (form) form.reset();
+    
+    // Clear upload progress and gallery
+    const uploadProgressContainer = document.getElementById('uploadProgressContainer');
+    if (uploadProgressContainer) uploadProgressContainer.innerHTML = '';
+    
+    const uploadedGallery = document.getElementById('uploadedMediaGallery');
+    if (uploadedGallery) uploadedGallery.innerHTML = '';
 }
 
-async function submitCreateAd() {
-    const btn = document.getElementById('submitAdBtn');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="ti ti-loader"></i> Creating...';
+// Helper function to show notification
+function showNotification(message, type = 'info') {
+    // Check if notification container exists
+    let container = document.getElementById('notificationContainer');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'notificationContainer';
+        container.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 10px;';
+        document.body.appendChild(container);
+    }
+    
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        padding: 1rem 1.5rem;
+        border-radius: 8px;
+        background: ${type === 'success' ? '#22c55e' : type === 'error' ? '#ef4444' : type === 'warning' ? '#f59e0b' : '#3b82f6'};
+        color: white;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        animation: slideInRight 0.3s ease-out;
+        max-width: 350px;
+    `;
+    
+    const icon = type === 'success' ? 'ti-circle-check' : 
+                 type === 'error' ? 'ti-alert-circle' : 
+                 type === 'warning' ? 'ti-alert-triangle' : 'ti-info-circle';
+    
+    notification.innerHTML = `
+        <i class="ti ${icon}" style="font-size: 1.25rem;"></i>
+        <span style="flex: 1;">${message}</span>
+        <button onclick="this.parentElement.remove()" style="background: none; border: none; color: white; cursor: pointer; padding: 0; font-size: 1.25rem;">
+            <i class="ti ti-x"></i>
+        </button>
+    `;
+    
+    container.appendChild(notification);
+    
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+        notification.style.animation = 'slideOutRight 0.3s ease-out';
+        setTimeout(() => notification.remove(), 300);
+    }, 5000);
+}
 
-    try {
-        // Collect media URLs
-        const mediaUrls = [];
-        for (let i = 1; i <= 3; i++) {
-            const url = document.getElementById(`mediaUrl${i}`).value.trim();
-            if (url) mediaUrls.push(url);
+// Add CSS animations for notifications
+if (!document.getElementById('notificationStyles')) {
+    const style = document.createElement('style');
+    style.id = 'notificationStyles';
+    style.textContent = `
+        @keyframes slideInRight {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
         }
+        
+        @keyframes slideOutRight {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+        }
+        
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    `;
+    document.head.appendChild(style);
+}
 
-        const isABTest = document.getElementById('isABTest').checked;
 
-        const adData = {
-            campaign_id: parseInt(document.getElementById('adCampaignId').value),
+
+async function submitCreateAd() {
+    const token = localStorage.getItem('token');
+    const campaignId = document.getElementById('adCampaignId').value;
+    const platform = currentSelectedPlatform; // Store when modal opens
+    
+    const submitBtn = document.getElementById('submitAdBtn');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="ti ti-loader"></i> Creating...';
+    
+    try {
+        let adData = {
+            campaign_id: parseInt(campaignId),
             ad_name: document.getElementById('adName').value,
-            ad_format: document.getElementById('adFormat').value,
-            headline: document.getElementById('adHeadline').value,
-            primary_text: document.getElementById('adPrimaryText').value,
-            description: document.getElementById('adDescription').value || null,
-            media_urls: mediaUrls,
-            is_ab_test_variant: isABTest,
-            ab_test_group: isABTest ? document.getElementById('abGroup').value : null
+            platform: platform,
+            media_ids: uploadedMediaAssets.map(a => a.media_id)
         };
-
-        const response = await fetch(`${API_BASE}/ads/create`, {
+        
+        // Collect media URLs if any
+        const mediaUrls = [];
+        document.querySelectorAll('#mediaUrlsContainer input[type="url"]').forEach(input => {
+            if (input.value.trim()) mediaUrls.push(input.value.trim());
+        });
+        
+        // Platform-specific data collection
+        if (platform === 'meta') {
+            adData = {
+                ...adData,
+                primary_text: document.getElementById('adPrimaryText').value,
+                headline: document.getElementById('adHeadline').value,
+                description: document.getElementById('adDescription')?.value || '',
+                destination_url: document.getElementById('adDestinationUrl').value,
+                call_to_action: document.getElementById('adCTA').value,
+                platform_specific_data: {
+                    ad_format: document.getElementById('metaAdFormat').value,
+                    placements: Array.from(document.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value)
+                }
+            };
+        } 
+        else if (platform === 'google') {
+            const headlines = Array.from(document.querySelectorAll('.google-headline'))
+                .map(input => input.value.trim())
+                .filter(v => v);
+            
+            const descriptions = Array.from(document.querySelectorAll('.google-description'))
+                .map(textarea => textarea.value.trim())
+                .filter(v => v);
+            
+            if (headlines.length < 3) {
+                throw new Error('At least 3 headlines required for Google Ads');
+            }
+            if (descriptions.length < 2) {
+                throw new Error('At least 2 descriptions required for Google Ads');
+            }
+            
+            adData = {
+                ...adData,
+                primary_text: headlines[0],
+                headline: headlines.join(' | '),
+                description: descriptions.join(' | '),
+                destination_url: document.getElementById('googleFinalUrl').value,
+                call_to_action: '',
+                platform_specific_data: {
+                    campaign_type: document.getElementById('googleCampaignType').value,
+                    headlines,
+                    descriptions,
+                    keywords: document.getElementById('googleKeywords')?.value.split(',').map(k => k.trim()).filter(k => k) || [],
+                    path1: document.getElementById('googlePath1')?.value || '',
+                    path2: document.getElementById('googlePath2')?.value || ''
+                }
+            };
+        } 
+        else if (platform === 'linkedin') {
+            adData = {
+                ...adData,
+                primary_text: document.getElementById('linkedinIntroText').value,
+                headline: document.getElementById('linkedinHeadline').value,
+                description: '',
+                destination_url: document.getElementById('linkedinDestinationUrl').value,
+                call_to_action: document.getElementById('linkedinCTA').value,
+                platform_specific_data: {
+                    ad_format: document.getElementById('linkedinAdFormat').value,
+                    targeting: {
+                        job_titles: document.getElementById('linkedinJobTitles')?.value.split(',').map(t => t.trim()).filter(t => t) || [],
+                        company_size: document.getElementById('linkedinCompanySize')?.value || '',
+                        industries: document.getElementById('linkedinIndustries')?.value.split(',').map(i => i.trim()).filter(i => i) || []
+                    }
+                }
+            };
+        }
+        
+        // Add media URLs if no files uploaded
+        if (uploadedMediaAssets.length === 0 && mediaUrls.length > 0) {
+            adData.media_urls = mediaUrls;
+        }
+        
+        // Create ad via API
+        const response = await fetch(`${API_BASE}/ads/create-platform-specific`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1867,27 +2505,35 @@ async function submitCreateAd() {
             },
             body: JSON.stringify(adData)
         });
-
+        
         if (!response.ok) {
             const error = await response.json();
             throw new Error(error.detail || 'Failed to create ad');
         }
-
+        
         const data = await response.json();
-        showNotification('Ad created successfully!', 'success');
+        
+        showNotification('✅ Ad created successfully!', 'success');
         closeCreateAdModal();
-
-        // Reload campaign details to show new ad
-        viewCampaign(adData.campaign_id);
-
+        
+        // Refresh campaign details
+        if (typeof loadCampaignAds === 'function') {
+            loadCampaignAds(campaignId);
+        }
+        
+        // Reset uploaded assets
+        uploadedMediaAssets = [];
+        
     } catch (error) {
-        console.error('Error creating ad:', error);
+        console.error('Create ad error:', error);
         showNotification(error.message, 'error');
     } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="ti ti-check"></i> Create Ad';
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="ti ti-check"></i> Create Ad';
     }
 }
+
+
 
 
 // =====================================================

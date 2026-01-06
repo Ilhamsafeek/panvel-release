@@ -10,7 +10,7 @@ from datetime import datetime
 import pymysql
 
 from app.core.config import settings
-from app.core.security import get_current_user, require_admin, require_admin_or_employee, get_db_connection
+from app.core.security import get_current_user, require_admin, require_admin_or_employee, get_db_connection, require_admin_or_dept_leader
 
 router = APIRouter()
 
@@ -161,7 +161,7 @@ async def list_clients(
 async def get_all_clients(
     status_filter: Optional[str] = None,
     package_tier: Optional[str] = None,
-    current_user: dict = Depends(require_admin)
+    current_user: dict = Depends(require_admin_or_dept_leader)
 ):
     """
     Admin endpoint to get all clients with filters
@@ -445,7 +445,7 @@ async def get_client_details(
 
 @router.get("/stats/overview", summary="Get client statistics")
 async def get_client_statistics(
-    current_user: dict = Depends(require_admin)
+    current_user: dict = Depends(require_admin_or_dept_leader)
 ):
     """
     Get overall client statistics (Admin only)
@@ -519,7 +519,7 @@ async def get_client_statistics(
 @router.post("/assign-employee", summary="Assign employee to client")
 async def assign_employee_to_client(
     request: AssignEmployeeRequest,
-    current_user: dict = Depends(require_admin)
+    current_user: dict = Depends(require_admin_or_dept_leader)
 ):
     """
     Assign an employee to a client (Admin only)

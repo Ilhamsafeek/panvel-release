@@ -499,18 +499,21 @@
                     }
 
                     // Redirect based on role
-                    setTimeout(() => {
-
-                        if (data.user && data.user.status === 'pending') {
-                            window.location.href = '/onboarding/verification';
-                        }else if (data.user && data.user.role === 'admin') {
-                            window.location.href = '/dashboard/admin';
-                        } else if (data.user && data.user.role === 'employee') {
-                            window.location.href = '/dashboard/employee';
-                        } else {
-                            window.location.href = '/dashboard/client';
-                        }
-                    }, 1000);
+                  // Redirect based on role
+setTimeout(() => {
+    if (data.user && data.user.status === 'pending') {
+        window.location.href = '/onboarding/verification';
+    } else if (data.user && data.user.role === 'admin') {
+        window.location.href = '/dashboard/admin';
+    } else if (data.user && data.user.role === 'employee') {
+        window.location.href = '/dashboard/employee';
+    } else if (data.user && data.user.role === 'department_leader') {
+        // ADD THIS LINE
+        window.location.href = '/dashboard/department_leader';
+    } else {
+        window.location.href = '/dashboard/client';
+    }
+}, 1000);
                 } else {
                     throw new Error('No access token received');
                 }
