@@ -832,7 +832,7 @@
     }
 
 
-        .empty-state {
+    .empty-state {
         text-align: center;
         padding: 3rem;
         color: #6c757d;
@@ -884,6 +884,40 @@
     }
 
 
+
+    @keyframes spin {
+        from {
+            transform: rotate(0deg);
+        }
+
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    @keyframes slideIn {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+
+    @keyframes slideOut {
+        from {
+            transform: translateX(0);
+            opacity: 1;
+        }
+
+        to {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+    }
 </style>
 
 
@@ -1246,14 +1280,14 @@
                 <i class="ti ti-refresh"></i> Sync Data
             </button>
         </div>
-        
+
         <div class="form-group">
             <label class="form-label">Select Project</label>
             <select id="reports-project" class="form-control" onchange="loadMonthlyReport()">
                 <option value="">Select a project...</option>
             </select>
         </div>
-        
+
         <div class="form-group">
             <label class="form-label">Time Range</label>
             <select id="reports-months" class="form-control" onchange="loadMonthlyReport()">
@@ -1301,12 +1335,13 @@
             <canvas id="traffic-chart" style="max-height: 350px;"></canvas>
         </div>
 
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;">
+        <div
+            style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;">
             <div class="seo-card">
                 <h3 class="seo-card-title"><i class="ti ti-click"></i> Monthly Clicks</h3>
                 <canvas id="clicks-chart" style="max-height: 300px;"></canvas>
             </div>
-            
+
             <div class="seo-card">
                 <h3 class="seo-card-title"><i class="ti ti-eye"></i> Monthly Impressions</h3>
                 <canvas id="impressions-chart" style="max-height: 300px;"></canvas>
@@ -1333,7 +1368,9 @@
                         </tr>
                     </thead>
                     <tbody id="daily-data-body">
-                        <tr><td colspan="5" style="text-align: center; color: #6c757d;">No data available</td></tr>
+                        <tr>
+                            <td colspan="5" style="text-align: center; color: #6c757d;">No data available</td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -1358,18 +1395,18 @@
     const token = localStorage.getItem('access_token');
 
     // Tab Switching
-   function switchTab(tabName) {
-    document.querySelectorAll('.seo-tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.seo-tab-content').forEach(c => c.classList.remove('active'));
-    
-    const tabIndex = getTabIndex(tabName);
-    document.querySelector(`.seo-tab:nth-child(${tabIndex})`).classList.add('active');
-    document.getElementById(`${tabName}-tab`).classList.add('active');
-    
-    if (tabName === 'keywords') loadKeywordRankings();
-    if (tabName === 'backlinks') loadBacklinkHistory();
-    if (tabName === 'reports') loadMonthlyReport();  // ADD THIS LINE
-}
+    function switchTab(tabName) {
+        document.querySelectorAll('.seo-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.seo-tab-content').forEach(c => c.classList.remove('active'));
+
+        const tabIndex = getTabIndex(tabName);
+        document.querySelector(`.seo-tab:nth-child(${tabIndex})`).classList.add('active');
+        document.getElementById(`${tabName}-tab`).classList.add('active');
+
+        if (tabName === 'keywords') loadKeywordRankings();
+        if (tabName === 'backlinks') loadBacklinkHistory();
+        if (tabName === 'reports') loadMonthlyReport();  // ADD THIS LINE
+    }
 
     // Initialize
     document.addEventListener('DOMContentLoaded', () => {
@@ -1418,26 +1455,26 @@
     `;
     }
 
-   function populateProjectSelects(projects) {
-    const selects = [
-        'audit-project',
-        'keyword-project',
-        'backlink-project',
-        'backlink-suggest-project',
-        'heatmap-project',
-        'reports-project'  // THIS LINE WAS MISSING!
-    ];
-    
-    selects.forEach(selectId => {
-        const select = document.getElementById(selectId);
-        if (select) {
-            select.innerHTML = '<option value="">Select a project...</option>';
-            projects.forEach(p => {
-                select.innerHTML += `<option value="${p.seo_project_id}">${p.website_url}</option>`;
-            });
-        }
-    });
-}
+    function populateProjectSelects(projects) {
+        const selects = [
+            'audit-project',
+            'keyword-project',
+            'backlink-project',
+            'backlink-suggest-project',
+            'heatmap-project',
+            'reports-project'  // THIS LINE WAS MISSING!
+        ];
+
+        selects.forEach(selectId => {
+            const select = document.getElementById(selectId);
+            if (select) {
+                select.innerHTML = '<option value="">Select a project...</option>';
+                projects.forEach(p => {
+                    select.innerHTML += `<option value="${p.seo_project_id}">${p.website_url}</option>`;
+                });
+            }
+        });
+    }
 
     function openCreateProjectModal() { document.getElementById('create-project-modal').classList.add('active'); }
     function closeCreateProjectModal() { document.getElementById('create-project-modal').classList.remove('active'); }
@@ -1929,155 +1966,155 @@
 
     // Add these functions to the <script> block in templates/modules/seo.html
 
-// ========== COMPETITOR HEATMAP FUNCTIONS ==========
+    // ========== COMPETITOR HEATMAP FUNCTIONS ==========
 
-let competitorCount = 1;
+    let competitorCount = 1;
 
-function addCompetitorInput() {
-    if (competitorCount >= 5) {
-        showNotification('Maximum 5 competitors allowed', 'warning');
-        return;
-    }
-    
-    competitorCount++;
-    const container = document.getElementById('competitor-inputs');
-    const inputGroup = document.createElement('div');
-    inputGroup.className = 'competitor-input-group';
-    inputGroup.innerHTML = `
+    function addCompetitorInput() {
+        if (competitorCount >= 5) {
+            showNotification('Maximum 5 competitors allowed', 'warning');
+            return;
+        }
+
+        competitorCount++;
+        const container = document.getElementById('competitor-inputs');
+        const inputGroup = document.createElement('div');
+        inputGroup.className = 'competitor-input-group';
+        inputGroup.innerHTML = `
         <input type="url" class="form-control competitor-url" placeholder="https://competitor${competitorCount}.com">
         <button class="btn-icon-remove" onclick="removeCompetitorInput(this)">
             <i class="ti ti-x"></i>
         </button>
     `;
-    container.appendChild(inputGroup);
-    
-    // Update first input to show remove button
-    if (competitorCount > 1) {
-        document.querySelectorAll('.btn-icon-remove').forEach(btn => {
-            btn.style.display = 'flex';
-        });
-    }
-    
-    // Disable add button if at max
-    if (competitorCount >= 5) {
-        document.getElementById('add-competitor-btn').disabled = true;
-    }
-}
+        container.appendChild(inputGroup);
 
-function removeCompetitorInput(button) {
-    button.closest('.competitor-input-group').remove();
-    competitorCount--;
-    
-    // Enable add button
-    document.getElementById('add-competitor-btn').disabled = false;
-    
-    // Hide remove buttons if only one input remains
-    if (competitorCount === 1) {
-        document.querySelectorAll('.btn-icon-remove').forEach(btn => {
-            btn.style.display = 'none';
-        });
-    }
-}
-
-function clearHeatmapResults() {
-    document.getElementById('heatmap-results').style.display = 'none';
-}
-
-async function generateHeatmap() {
-    const projectId = document.getElementById('heatmap-project').value;
-    
-    if (!projectId) {
-        showNotification('Please select an SEO project', 'error');
-        return;
-    }
-    
-    // Get all competitor URLs
-    const competitorInputs = document.querySelectorAll('.competitor-url');
-    const competitorUrls = Array.from(competitorInputs)
-        .map(input => input.value.trim())
-        .filter(url => url !== '');
-    
-    if (competitorUrls.length === 0) {
-        showNotification('Please enter at least one competitor URL', 'error');
-        return;
-    }
-    
-    // Validate URLs
-    const urlPattern = /^https?:\/\/.+/;
-    const invalidUrls = competitorUrls.filter(url => !urlPattern.test(url));
-    if (invalidUrls.length > 0) {
-        showNotification('Please enter valid URLs starting with http:// or https://', 'error');
-        return;
-    }
-    
-    try {
-        // Show loading
-        showNotification('Analyzing competitors... This may take a moment.', 'info');
-        
-        const response = await fetch(`${API_BASE}/competitor-heatmap`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                seo_project_id: parseInt(projectId),
-                competitor_urls: competitorUrls
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok && data.success) {
-            displayHeatmapResults(data);
-            showNotification('Competitor analysis completed successfully', 'success');
-        } else {
-            throw new Error(data.detail || 'Failed to generate heatmap');
+        // Update first input to show remove button
+        if (competitorCount > 1) {
+            document.querySelectorAll('.btn-icon-remove').forEach(btn => {
+                btn.style.display = 'flex';
+            });
         }
-        
-    } catch (error) {
-        console.error('Error generating heatmap:', error);
-        showNotification(error.message || 'Failed to generate competitor heatmap', 'error');
+
+        // Disable add button if at max
+        if (competitorCount >= 5) {
+            document.getElementById('add-competitor-btn').disabled = true;
+        }
     }
-}
 
-function displayHeatmapResults(data) {
-    // Show results section
-    document.getElementById('heatmap-results').style.display = 'block';
-    
-    // 1. Display Gap Analysis Summary
-    displayGapsSummary(data.gaps_analysis);
-    
-    // 2. Display Visual Heatmap
-    displayVisualHeatmap(data.comparison_data, data.max_values);
-    
-    // 3. Display Detailed Metrics Table
-    displayMetricsTable(data.comparison_data);
-    
-    // Scroll to results
-    document.getElementById('heatmap-results').scrollIntoView({ behavior: 'smooth' });
-}
+    function removeCompetitorInput(button) {
+        button.closest('.competitor-input-group').remove();
+        competitorCount--;
 
-function displayGapsSummary(gaps) {
-    const container = document.getElementById('gaps-summary');
-    
-    const metricsLabels = {
-        domain_authority: 'Domain Authority',
-        page_authority: 'Page Authority',
-        spam_score: 'Spam Score',
-        total_backlinks: 'Total Backlinks',
-        referring_domains: 'Referring Domains'
-    };
-    
-    let html = '<div class="gaps-summary">';
-    
-    for (const [metric, data] of Object.entries(gaps)) {
-        const isWinning = data.is_winning;
-        const cardClass = isWinning ? 'winning' : (data.gap === 0 ? 'neutral' : 'losing');
-        const statusBadge = isWinning ? 'winning' : (data.gap === 0 ? 'neutral' : 'losing');
-        const statusText = isWinning ? 'Leading' : (data.gap === 0 ? 'On Par' : 'Gap Identified');
-        
-        html += `
+        // Enable add button
+        document.getElementById('add-competitor-btn').disabled = false;
+
+        // Hide remove buttons if only one input remains
+        if (competitorCount === 1) {
+            document.querySelectorAll('.btn-icon-remove').forEach(btn => {
+                btn.style.display = 'none';
+            });
+        }
+    }
+
+    function clearHeatmapResults() {
+        document.getElementById('heatmap-results').style.display = 'none';
+    }
+
+    async function generateHeatmap() {
+        const projectId = document.getElementById('heatmap-project').value;
+
+        if (!projectId) {
+            showNotification('Please select an SEO project', 'error');
+            return;
+        }
+
+        // Get all competitor URLs
+        const competitorInputs = document.querySelectorAll('.competitor-url');
+        const competitorUrls = Array.from(competitorInputs)
+            .map(input => input.value.trim())
+            .filter(url => url !== '');
+
+        if (competitorUrls.length === 0) {
+            showNotification('Please enter at least one competitor URL', 'error');
+            return;
+        }
+
+        // Validate URLs
+        const urlPattern = /^https?:\/\/.+/;
+        const invalidUrls = competitorUrls.filter(url => !urlPattern.test(url));
+        if (invalidUrls.length > 0) {
+            showNotification('Please enter valid URLs starting with http:// or https://', 'error');
+            return;
+        }
+
+        try {
+            // Show loading
+            showNotification('Analyzing competitors... This may take a moment.', 'info');
+
+            const response = await fetch(`${API_BASE}/competitor-heatmap`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    seo_project_id: parseInt(projectId),
+                    competitor_urls: competitorUrls
+                })
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.success) {
+                displayHeatmapResults(data);
+                showNotification('Competitor analysis completed successfully', 'success');
+            } else {
+                throw new Error(data.detail || 'Failed to generate heatmap');
+            }
+
+        } catch (error) {
+            console.error('Error generating heatmap:', error);
+            showNotification(error.message || 'Failed to generate competitor heatmap', 'error');
+        }
+    }
+
+    function displayHeatmapResults(data) {
+        // Show results section
+        document.getElementById('heatmap-results').style.display = 'block';
+
+        // 1. Display Gap Analysis Summary
+        displayGapsSummary(data.gaps_analysis);
+
+        // 2. Display Visual Heatmap
+        displayVisualHeatmap(data.comparison_data, data.max_values);
+
+        // 3. Display Detailed Metrics Table
+        displayMetricsTable(data.comparison_data);
+
+        // Scroll to results
+        document.getElementById('heatmap-results').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function displayGapsSummary(gaps) {
+        const container = document.getElementById('gaps-summary');
+
+        const metricsLabels = {
+            domain_authority: 'Domain Authority',
+            page_authority: 'Page Authority',
+            spam_score: 'Spam Score',
+            total_backlinks: 'Total Backlinks',
+            referring_domains: 'Referring Domains'
+        };
+
+        let html = '<div class="gaps-summary">';
+
+        for (const [metric, data] of Object.entries(gaps)) {
+            const isWinning = data.is_winning;
+            const cardClass = isWinning ? 'winning' : (data.gap === 0 ? 'neutral' : 'losing');
+            const statusBadge = isWinning ? 'winning' : (data.gap === 0 ? 'neutral' : 'losing');
+            const statusText = isWinning ? 'Leading' : (data.gap === 0 ? 'On Par' : 'Gap Identified');
+
+            html += `
             <div class="gap-card ${cardClass}">
                 <div class="gap-metric-name">${metricsLabels[metric]}</div>
                 <div class="gap-values">
@@ -2088,211 +2125,211 @@ function displayGapsSummary(gaps) {
                 <span class="gap-status-badge ${statusBadge}">${statusText}</span>
             </div>
         `;
-    }
-    
-    html += '</div>';
-    container.innerHTML = html;
-}
+        }
 
-function displayVisualHeatmap(comparisonData, maxValues) {
-    const container = document.getElementById('heatmap-visualization');
-    
-    const metrics = [
-        { key: 'domain_authority', label: 'Domain Authority', max: 100 },
-        { key: 'page_authority', label: 'Page Authority', max: 100 },
-        { key: 'spam_score', label: 'Spam Score', max: 100, inverse: true },
-        { key: 'total_backlinks', label: 'Total Backlinks', max: maxValues.total_backlinks },
-        { key: 'referring_domains', label: 'Referring Domains', max: maxValues.referring_domains }
-    ];
-    
-    // Build heatmap grid
-    let html = '<div class="heatmap-grid" style="grid-template-columns: 200px repeat(' + comparisonData.length + ', 1fr);">';
-    
-    // Header row
-    html += '<div class="heatmap-row" style="grid-template-columns: subgrid; grid-column: span ' + (comparisonData.length + 1) + ';">';
-    html += '<div class="heatmap-cell header">Metric</div>';
-    
-    comparisonData.forEach(site => {
-        const isClient = site.is_client;
-        html += `<div class="heatmap-cell header ${isClient ? 'client-column' : ''}">${site.name}</div>`;
-    });
-    html += '</div>';
-    
-    // Metric rows
-    metrics.forEach(metric => {
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    function displayVisualHeatmap(comparisonData, maxValues) {
+        const container = document.getElementById('heatmap-visualization');
+
+        const metrics = [
+            { key: 'domain_authority', label: 'Domain Authority', max: 100 },
+            { key: 'page_authority', label: 'Page Authority', max: 100 },
+            { key: 'spam_score', label: 'Spam Score', max: 100, inverse: true },
+            { key: 'total_backlinks', label: 'Total Backlinks', max: maxValues.total_backlinks },
+            { key: 'referring_domains', label: 'Referring Domains', max: maxValues.referring_domains }
+        ];
+
+        // Build heatmap grid
+        let html = '<div class="heatmap-grid" style="grid-template-columns: 200px repeat(' + comparisonData.length + ', 1fr);">';
+
+        // Header row
         html += '<div class="heatmap-row" style="grid-template-columns: subgrid; grid-column: span ' + (comparisonData.length + 1) + ';">';
-        html += `<div class="heatmap-cell metric-name">${metric.label}</div>`;
-        
+        html += '<div class="heatmap-cell header">Metric</div>';
+
         comparisonData.forEach(site => {
             const isClient = site.is_client;
-            
-            if (site.error) {
-                html += `<div class="heatmap-cell error ${isClient ? 'client-column' : ''}">Error</div>`;
-                return;
-            }
-            
-            const value = site[metric.key] || 0;
-            const cellClass = getHeatmapCellClass(value, metric.max, metric.inverse);
-            
-            html += `
+            html += `<div class="heatmap-cell header ${isClient ? 'client-column' : ''}">${site.name}</div>`;
+        });
+        html += '</div>';
+
+        // Metric rows
+        metrics.forEach(metric => {
+            html += '<div class="heatmap-row" style="grid-template-columns: subgrid; grid-column: span ' + (comparisonData.length + 1) + ';">';
+            html += `<div class="heatmap-cell metric-name">${metric.label}</div>`;
+
+            comparisonData.forEach(site => {
+                const isClient = site.is_client;
+
+                if (site.error) {
+                    html += `<div class="heatmap-cell error ${isClient ? 'client-column' : ''}">Error</div>`;
+                    return;
+                }
+
+                const value = site[metric.key] || 0;
+                const cellClass = getHeatmapCellClass(value, metric.max, metric.inverse);
+
+                html += `
                 <div class="heatmap-cell ${cellClass} ${isClient ? 'client-column' : ''}">
                     <span class="metric-value">${value}</span>
                 </div>
             `;
-        });
-        
-        html += '</div>';
-    });
-    
-    html += '</div>';
-    container.innerHTML = html;
-}
-
-function getHeatmapCellClass(value, max, inverse = false) {
-    const percentage = max > 0 ? (value / max) * 100 : 0;
-    
-    if (inverse) {
-        // For metrics where lower is better (e.g., spam score)
-        if (percentage <= 25) return 'excellent';
-        if (percentage <= 50) return 'good';
-        if (percentage <= 75) return 'warning';
-        return 'danger';
-    } else {
-        // For metrics where higher is better
-        if (percentage >= 75) return 'excellent';
-        if (percentage >= 50) return 'good';
-        if (percentage >= 25) return 'warning';
-        return 'danger';
-    }
-}
-
-function displayMetricsTable(comparisonData) {
-    const tableHead = document.querySelector('#metrics-table thead tr');
-    const tableBody = document.getElementById('metrics-table-body');
-    
-    // Clear existing competitor columns
-    while (tableHead.children.length > 2) {
-        tableHead.removeChild(tableHead.lastChild);
-    }
-    
-    // Add competitor columns to header
-    comparisonData.forEach(site => {
-        if (!site.is_client) {
-            const th = document.createElement('th');
-            th.textContent = site.name;
-            tableHead.appendChild(th);
-        }
-    });
-    
-    // Build table rows
-    const metrics = [
-        { key: 'domain_authority', label: 'Domain Authority' },
-        { key: 'page_authority', label: 'Page Authority' },
-        { key: 'spam_score', label: 'Spam Score' },
-        { key: 'total_backlinks', label: 'Total Backlinks' },
-        { key: 'referring_domains', label: 'Referring Domains' }
-    ];
-    
-    let html = '';
-    
-    metrics.forEach(metric => {
-        html += '<tr>';
-        html += `<td class="metric-name-cell">${metric.label}</td>`;
-        
-        comparisonData.forEach(site => {
-            const isClient = site.is_client;
-            const value = site.error ? 'Error' : (site[metric.key] || 0);
-            const valueClass = site.error ? '' : getValueClass(metric.key, value);
-            
-            html += `<td class="${isClient ? 'client-value' : ''} ${valueClass}">${value}</td>`;
-        });
-        
-        html += '</tr>';
-    });
-    
-    tableBody.innerHTML = html;
-}
-
-function getValueClass(metricKey, value) {
-    if (metricKey === 'domain_authority' || metricKey === 'page_authority') {
-        if (value >= 70) return 'value-excellent';
-        if (value >= 50) return 'value-good';
-        if (value >= 30) return 'value-warning';
-        return 'value-danger';
-    }
-    
-    if (metricKey === 'spam_score') {
-        if (value <= 5) return 'value-excellent';
-        if (value <= 15) return 'value-good';
-        if (value <= 30) return 'value-warning';
-        return 'value-danger';
-    }
-    
-    return '';
-}
-
-function populateProjectSelects(projects) {
-    const selects = [
-        'audit-project',
-        'keyword-project',
-        'backlink-project',
-        'backlink-suggest-project',
-        'heatmap-project',
-        'reports-project'  // ← MAKE SURE THIS LINE IS HERE
-    ];
-    
-    selects.forEach(selectId => {
-        const select = document.getElementById(selectId);
-        if (select) {
-            select.innerHTML = '<option value="">Select a project...</option>';
-            projects.forEach(p => {
-                const option = document.createElement('option');
-                option.value = p.seo_project_id;
-                option.textContent = p.website_url;
-                select.appendChild(option);
             });
+
+            html += '</div>';
+        });
+
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    function getHeatmapCellClass(value, max, inverse = false) {
+        const percentage = max > 0 ? (value / max) * 100 : 0;
+
+        if (inverse) {
+            // For metrics where lower is better (e.g., spam score)
+            if (percentage <= 25) return 'excellent';
+            if (percentage <= 50) return 'good';
+            if (percentage <= 75) return 'warning';
+            return 'danger';
+        } else {
+            // For metrics where higher is better
+            if (percentage >= 75) return 'excellent';
+            if (percentage >= 50) return 'good';
+            if (percentage >= 25) return 'warning';
+            return 'danger';
         }
-    });
-}
+    }
+
+    function displayMetricsTable(comparisonData) {
+        const tableHead = document.querySelector('#metrics-table thead tr');
+        const tableBody = document.getElementById('metrics-table-body');
+
+        // Clear existing competitor columns
+        while (tableHead.children.length > 2) {
+            tableHead.removeChild(tableHead.lastChild);
+        }
+
+        // Add competitor columns to header
+        comparisonData.forEach(site => {
+            if (!site.is_client) {
+                const th = document.createElement('th');
+                th.textContent = site.name;
+                tableHead.appendChild(th);
+            }
+        });
+
+        // Build table rows
+        const metrics = [
+            { key: 'domain_authority', label: 'Domain Authority' },
+            { key: 'page_authority', label: 'Page Authority' },
+            { key: 'spam_score', label: 'Spam Score' },
+            { key: 'total_backlinks', label: 'Total Backlinks' },
+            { key: 'referring_domains', label: 'Referring Domains' }
+        ];
+
+        let html = '';
+
+        metrics.forEach(metric => {
+            html += '<tr>';
+            html += `<td class="metric-name-cell">${metric.label}</td>`;
+
+            comparisonData.forEach(site => {
+                const isClient = site.is_client;
+                const value = site.error ? 'Error' : (site[metric.key] || 0);
+                const valueClass = site.error ? '' : getValueClass(metric.key, value);
+
+                html += `<td class="${isClient ? 'client-value' : ''} ${valueClass}">${value}</td>`;
+            });
+
+            html += '</tr>';
+        });
+
+        tableBody.innerHTML = html;
+    }
+
+    function getValueClass(metricKey, value) {
+        if (metricKey === 'domain_authority' || metricKey === 'page_authority') {
+            if (value >= 70) return 'value-excellent';
+            if (value >= 50) return 'value-good';
+            if (value >= 30) return 'value-warning';
+            return 'value-danger';
+        }
+
+        if (metricKey === 'spam_score') {
+            if (value <= 5) return 'value-excellent';
+            if (value <= 15) return 'value-good';
+            if (value <= 30) return 'value-warning';
+            return 'value-danger';
+        }
+
+        return '';
+    }
+
+    function populateProjectSelects(projects) {
+        const selects = [
+            'audit-project',
+            'keyword-project',
+            'backlink-project',
+            'backlink-suggest-project',
+            'heatmap-project',
+            'reports-project'  // ← MAKE SURE THIS LINE IS HERE
+        ];
+
+        selects.forEach(selectId => {
+            const select = document.getElementById(selectId);
+            if (select) {
+                select.innerHTML = '<option value="">Select a project...</option>';
+                projects.forEach(p => {
+                    const option = document.createElement('option');
+                    option.value = p.seo_project_id;
+                    option.textContent = p.website_url;
+                    select.appendChild(option);
+                });
+            }
+        });
+    }
 
 
-// Update the switchTab function to include competitor tab
-function switchTab(tabName) {
-    document.querySelectorAll('.seo-tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.seo-tab-content').forEach(c => c.classList.remove('active'));
-    
-    const tabIndex = getTabIndex(tabName);
-    document.querySelector(`.seo-tab:nth-child(${tabIndex})`).classList.add('active');
-    document.getElementById(`${tabName}-tab`).classList.add('active');
-    
-    if (tabName === 'keywords') loadKeywordRankings();
-    if (tabName === 'backlinks') loadBacklinkHistory();
-    if (tabName === 'competitor') clearHeatmapResults();
-}
+    // Update the switchTab function to include competitor tab
+    function switchTab(tabName) {
+        document.querySelectorAll('.seo-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.seo-tab-content').forEach(c => c.classList.remove('active'));
 
-function getTabIndex(name) {
-    const tabs = ['projects', 'audit', 'competitor', 'keywords', 'backlinks', 'reports', 'optimization', 'voice'];
-    return tabs.indexOf(name) + 1;
-}
+        const tabIndex = getTabIndex(tabName);
+        document.querySelector(`.seo-tab:nth-child(${tabIndex})`).classList.add('active');
+        document.getElementById(`${tabName}-tab`).classList.add('active');
+
+        if (tabName === 'keywords') loadKeywordRankings();
+        if (tabName === 'backlinks') loadBacklinkHistory();
+        if (tabName === 'competitor') clearHeatmapResults();
+    }
+
+    function getTabIndex(name) {
+        const tabs = ['projects', 'audit', 'competitor', 'keywords', 'backlinks', 'reports', 'optimization', 'voice'];
+        return tabs.indexOf(name) + 1;
+    }
 
 
-function showNotification(message, type = 'info') {
-    const colors = {
-        success: '#10B981',
-        error: '#EF4444',
-        info: '#3B82F6',
-        warning: '#F59E0B'
-    };
+    function showNotification(message, type = 'info') {
+        const colors = {
+            success: '#10B981',
+            error: '#EF4444',
+            info: '#3B82F6',
+            warning: '#F59E0B'
+        };
 
-    const icons = {
-        success: 'check-circle',
-        error: 'alert-circle',
-        info: 'info-circle',
-        warning: 'alert-triangle'
-    };
+        const icons = {
+            success: 'check-circle',
+            error: 'alert-circle',
+            info: 'info-circle',
+            warning: 'alert-triangle'
+        };
 
-    const notification = document.createElement('div');
-    notification.style.cssText = `
+        const notification = document.createElement('div');
+        notification.style.cssText = `
         position: fixed;
         top: 20px;
         right: 20px;
@@ -2309,257 +2346,257 @@ function showNotification(message, type = 'info') {
         gap: 0.75rem;
     `;
 
-    notification.innerHTML = `
+        notification.innerHTML = `
         <i class="ti ti-${icons[type]}" style="font-size: 1.5rem;"></i>
         <span>${message}</span>
     `;
 
-    document.body.appendChild(notification);
+        document.body.appendChild(notification);
 
-    setTimeout(() => {
-        notification.style.animation = 'slideOut 0.3s ease';
-        setTimeout(() => notification.remove(), 300);
-    }, 3000);
-}
+        setTimeout(() => {
+            notification.style.animation = 'slideOut 0.3s ease';
+            setTimeout(() => notification.remove(), 300);
+        }, 3000);
+    }
 
 </script>
 
 
 <script>
-// Chart instances for cleanup
-let trafficChart = null;
-let clicksChart = null;
-let impressionsChart = null;
+    // Chart instances for cleanup
+    let trafficChart = null;
+    let clicksChart = null;
+    let impressionsChart = null;
 
-// Sync Performance Data from Google Search Console
-async function syncPerformanceData() {
-    const projectId = document.getElementById('reports-project').value;
-    
-    if (!projectId) {
-        alert('Please select a project first');
-        return;
-    }
-    
-    try {
-        showNotification('Syncing data from Google Search Console...', 'info');
-        
-        const response = await fetch(`${API_BASE}/reports/sync/${projectId}`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            showNotification(`Successfully synced ${data.records_synced} days of data`, 'success');
-            loadMonthlyReport();
-        } else {
-            showNotification(data.detail || 'Failed to sync data', 'error');
+    // Sync Performance Data from Google Search Console
+    async function syncPerformanceData() {
+        const projectId = document.getElementById('reports-project').value;
+
+        if (!projectId) {
+            alert('Please select a project first');
+            return;
         }
-    } catch (error) {
-        console.error('Error syncing performance data:', error);
-        showNotification('Failed to sync data. Please check Google Search Console credentials.', 'error');
-    }
-}
 
-// Load Monthly Report
-async function loadMonthlyReport() {
-    const projectId = document.getElementById('reports-project').value;
-    const months = document.getElementById('reports-months').value;
-    
-    if (!projectId) {
-        document.getElementById('reports-summary').style.display = 'none';
-        document.getElementById('reports-empty').style.display = 'block';
-        return;
-    }
-    
-    try {
-        const response = await fetch(`${API_BASE}/reports/monthly/${projectId}?months=${months}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            displayMonthlyReport(data);
-        } else {
-            showNotification('No data available. Please sync data first.', 'warning');
+        try {
+            showNotification('Syncing data from Google Search Console...', 'info');
+
+            const response = await fetch(`${API_BASE}/reports/sync/${projectId}`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showNotification(`Successfully synced ${data.records_synced} days of data`, 'success');
+                loadMonthlyReport();
+            } else {
+                showNotification(data.detail || 'Failed to sync data', 'error');
+            }
+        } catch (error) {
+            console.error('Error syncing performance data:', error);
+            showNotification('Failed to sync data. Please check Google Search Console credentials.', 'error');
         }
-    } catch (error) {
-        console.error('Error loading monthly report:', error);
-        showNotification('Failed to load report', 'error');
     }
-}
 
-// Display Monthly Report
-function displayMonthlyReport(data) {
-    document.getElementById('reports-empty').style.display = 'none';
-    document.getElementById('reports-summary').style.display = 'block';
-    
-    // Update summary cards
-    document.getElementById('report-total-traffic').textContent = data.summary.total_traffic.toLocaleString();
-    document.getElementById('report-total-impressions').textContent = data.summary.total_impressions.toLocaleString();
-    document.getElementById('report-total-clicks').textContent = data.summary.total_clicks.toLocaleString();
-    document.getElementById('report-avg-ctr').textContent = data.summary.average_ctr + '%';
-    document.getElementById('report-avg-position').textContent = data.summary.average_position.toFixed(1);
-    
+    // Load Monthly Report
+    async function loadMonthlyReport() {
+        const projectId = document.getElementById('reports-project').value;
+        const months = document.getElementById('reports-months').value;
+
+        if (!projectId) {
+            document.getElementById('reports-summary').style.display = 'none';
+            document.getElementById('reports-empty').style.display = 'block';
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_BASE}/reports/monthly/${projectId}?months=${months}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                displayMonthlyReport(data);
+            } else {
+                showNotification('No data available. Please sync data first.', 'warning');
+            }
+        } catch (error) {
+            console.error('Error loading monthly report:', error);
+            showNotification('Failed to load report', 'error');
+        }
+    }
+
+    // Display Monthly Report
+    function displayMonthlyReport(data) {
+        document.getElementById('reports-empty').style.display = 'none';
+        document.getElementById('reports-summary').style.display = 'block';
+
+        // Update summary cards
+        document.getElementById('report-total-traffic').textContent = data.summary.total_traffic.toLocaleString();
+        document.getElementById('report-total-impressions').textContent = data.summary.total_impressions.toLocaleString();
+        document.getElementById('report-total-clicks').textContent = data.summary.total_clicks.toLocaleString();
+        document.getElementById('report-avg-ctr').textContent = data.summary.average_ctr + '%';
+        document.getElementById('report-avg-position').textContent = data.summary.average_position.toFixed(1);
+
+        // Create Traffic Trend Chart
+        createTrafficChart(data.monthly_data);
+
+        // Create Clicks Chart
+        createClicksChart(data.monthly_data);
+
+        // Create Impressions Chart
+        createImpressionsChart(data.monthly_data);
+
+        // Populate daily data table
+        displayDailyData(data.daily_data);
+    }
+
     // Create Traffic Trend Chart
-    createTrafficChart(data.monthly_data);
-    
-    // Create Clicks Chart
-    createClicksChart(data.monthly_data);
-    
-    // Create Impressions Chart
-    createImpressionsChart(data.monthly_data);
-    
-    // Populate daily data table
-    displayDailyData(data.daily_data);
-}
+    function createTrafficChart(monthlyData) {
+        const ctx = document.getElementById('traffic-chart').getContext('2d');
 
-// Create Traffic Trend Chart
-function createTrafficChart(monthlyData) {
-    const ctx = document.getElementById('traffic-chart').getContext('2d');
-    
-    // Destroy existing chart
-    if (trafficChart) {
-        trafficChart.destroy();
-    }
-    
-    trafficChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: monthlyData.labels,
-            datasets: [{
-                label: 'Traffic (Organic Clicks)',
-                data: monthlyData.traffic,
-                borderColor: '#9926F3',
-                backgroundColor: 'rgba(153, 38, 243, 0.1)',
-                tension: 0.4,
-                fill: true,
-                pointRadius: 5,
-                pointHoverRadius: 7
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: true,
-                    position: 'top'
+        // Destroy existing chart
+        if (trafficChart) {
+            trafficChart.destroy();
+        }
+
+        trafficChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: monthlyData.labels,
+                datasets: [{
+                    label: 'Traffic (Organic Clicks)',
+                    data: monthlyData.traffic,
+                    borderColor: '#9926F3',
+                    backgroundColor: 'rgba(153, 38, 243, 0.1)',
+                    tension: 0.4,
+                    fill: true,
+                    pointRadius: 5,
+                    pointHoverRadius: 7
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        padding: 12,
+                        titleFont: { size: 14 },
+                        bodyFont: { size: 13 }
+                    }
                 },
-                tooltip: {
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    padding: 12,
-                    titleFont: { size: 14 },
-                    bodyFont: { size: 13 }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        callback: function(value) {
-                            return value.toLocaleString();
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function (value) {
+                                return value.toLocaleString();
+                            }
                         }
                     }
                 }
             }
-        }
-    });
-}
-
-// Create Clicks Chart
-function createClicksChart(monthlyData) {
-    const ctx = document.getElementById('clicks-chart').getContext('2d');
-    
-    if (clicksChart) {
-        clicksChart.destroy();
+        });
     }
-    
-    clicksChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: monthlyData.labels,
-            datasets: [{
-                label: 'Clicks',
-                data: monthlyData.clicks,
-                backgroundColor: '#1DD8FC',
-                borderRadius: 6
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false }
+
+    // Create Clicks Chart
+    function createClicksChart(monthlyData) {
+        const ctx = document.getElementById('clicks-chart').getContext('2d');
+
+        if (clicksChart) {
+            clicksChart.destroy();
+        }
+
+        clicksChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: monthlyData.labels,
+                datasets: [{
+                    label: 'Clicks',
+                    data: monthlyData.clicks,
+                    backgroundColor: '#1DD8FC',
+                    borderRadius: 6
+                }]
             },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        callback: function(value) {
-                            return value.toLocaleString();
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function (value) {
+                                return value.toLocaleString();
+                            }
                         }
                     }
                 }
             }
-        }
-    });
-}
-
-// Create Impressions Chart
-function createImpressionsChart(monthlyData) {
-    const ctx = document.getElementById('impressions-chart').getContext('2d');
-    
-    if (impressionsChart) {
-        impressionsChart.destroy();
+        });
     }
-    
-    impressionsChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: monthlyData.labels,
-            datasets: [{
-                label: 'Impressions',
-                data: monthlyData.impressions,
-                backgroundColor: '#9926F3',
-                borderRadius: 6
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false }
+
+    // Create Impressions Chart
+    function createImpressionsChart(monthlyData) {
+        const ctx = document.getElementById('impressions-chart').getContext('2d');
+
+        if (impressionsChart) {
+            impressionsChart.destroy();
+        }
+
+        impressionsChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: monthlyData.labels,
+                datasets: [{
+                    label: 'Impressions',
+                    data: monthlyData.impressions,
+                    backgroundColor: '#9926F3',
+                    borderRadius: 6
+                }]
             },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        callback: function(value) {
-                            return value.toLocaleString();
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function (value) {
+                                return value.toLocaleString();
+                            }
                         }
                     }
                 }
             }
-        }
-    });
-}
-
-// Display Daily Data Table
-function displayDailyData(dailyData) {
-    const tbody = document.getElementById('daily-data-body');
-    
-    if (!dailyData || dailyData.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #6c757d;">No daily data available</td></tr>';
-        return;
+        });
     }
-    
-    // Show last 30 days only
-    const recentData = dailyData.slice(-30);
-    
-    tbody.innerHTML = recentData.reverse().map(row => `
+
+    // Display Daily Data Table
+    function displayDailyData(dailyData) {
+        const tbody = document.getElementById('daily-data-body');
+
+        if (!dailyData || dailyData.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #6c757d;">No daily data available</td></tr>';
+            return;
+        }
+
+        // Show last 30 days only
+        const recentData = dailyData.slice(-30);
+
+        tbody.innerHTML = recentData.reverse().map(row => `
         <tr>
             <td>${new Date(row.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
             <td><strong>${row.clicks.toLocaleString()}</strong></td>
@@ -2568,40 +2605,40 @@ function displayDailyData(dailyData) {
             <td>${row.position.toFixed(1)}</td>
         </tr>
     `).join('');
-}
+    }
 
-// Export Report
-async function exportReport() {
-    const projectId = document.getElementById('reports-project').value;
-    const months = document.getElementById('reports-months').value;
-    
-    if (!projectId) {
-        alert('Please select a project first');
-        return;
+    // Export Report
+    async function exportReport() {
+        const projectId = document.getElementById('reports-project').value;
+        const months = document.getElementById('reports-months').value;
+
+        if (!projectId) {
+            alert('Please select a project first');
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_BASE}/reports/export/${projectId}?format=json&months=${months}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            const data = await response.json();
+
+            // Create downloadable JSON file
+            const dataStr = JSON.stringify(data, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `seo-report-${projectId}-${new Date().toISOString().split('T')[0]}.json`;
+            link.click();
+
+            showNotification('Report exported successfully', 'success');
+        } catch (error) {
+            console.error('Error exporting report:', error);
+            showNotification('Failed to export report', 'error');
+        }
     }
-    
-    try {
-        const response = await fetch(`${API_BASE}/reports/export/${projectId}?format=json&months=${months}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        const data = await response.json();
-        
-        // Create downloadable JSON file
-        const dataStr = JSON.stringify(data, null, 2);
-        const dataBlob = new Blob([dataStr], { type: 'application/json' });
-        const url = URL.createObjectURL(dataBlob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `seo-report-${projectId}-${new Date().toISOString().split('T')[0]}.json`;
-        link.click();
-        
-        showNotification('Report exported successfully', 'success');
-    } catch (error) {
-        console.error('Error exporting report:', error);
-        showNotification('Failed to export report', 'error');
-    }
-}
 
 </script>
 

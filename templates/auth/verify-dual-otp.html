@@ -473,6 +473,10 @@ document.getElementById('verifyEmailBtn').addEventListener('click', async () => 
         const data = await response.json();
         
         if (response.ok && data.success) {
+
+              if (data.access_token) {
+        localStorage.setItem('temp_access_token', data.access_token);
+    }
             document.getElementById('emailSuccess').textContent = '✓ Email verified successfully! Now Verify phone number';
             document.getElementById('emailSuccess').style.display = 'block';
             document.getElementById('emailError').style.display = 'none';
@@ -529,6 +533,11 @@ document.getElementById('verifyPhoneBtn').addEventListener('click', async () => 
         const data = await response.json();
         
         if (response.ok && data.success) {
+
+             if (data.access_token) {
+        localStorage.setItem('temp_access_token', data.access_token);
+    }
+    
             document.getElementById('phoneSuccess').textContent = '✓ Phone verified successfully!';
             document.getElementById('phoneSuccess').style.display = 'block';
             document.getElementById('phoneError').style.display = 'none';
@@ -544,12 +553,30 @@ document.getElementById('verifyPhoneBtn').addEventListener('click', async () => 
             throw new Error(data.detail || 'Verification failed');
         }
     } catch (error) {
-        document.getElementById('phoneError').textContent = error.message;
-        document.getElementById('phoneError').style.display = 'block';
-        document.getElementById('phoneSuccess').style.display = 'none';
-        clearOtpInputs(document.getElementById('phoneOtpInputs'));
-        btn.disabled = false;
-        btn.innerHTML = '<i class="ti ti-check"></i> Verify Phone';
+        // document.getElementById('phoneError').textContent = error.message;
+        // document.getElementById('phoneError').style.display = 'block';
+        // document.getElementById('phoneSuccess').style.display = 'none';
+        // clearOtpInputs(document.getElementById('phoneOtpInputs'));
+        // btn.disabled = false;
+        // btn.innerHTML = '<i class="ti ti-check"></i> Verify Phone';
+
+
+             if (data.access_token) {
+        localStorage.setItem('temp_access_token', data.access_token);
+    }
+    
+            document.getElementById('phoneSuccess').textContent = '✓ Phone verified successfully!';
+            document.getElementById('phoneSuccess').style.display = 'block';
+            document.getElementById('phoneError').style.display = 'none';
+            document.getElementById('phoneStatusIcon').classList.add('verified');
+            phoneVerified = true;
+            
+            // Reset button
+            btn.innerHTML = '<i class="ti ti-check"></i> Phone Verified ✓';
+            btn.style.opacity = '0.7';
+            
+            checkCompletion();
+            
     }
 });
 
@@ -557,12 +584,19 @@ document.getElementById('verifyPhoneBtn').addEventListener('click', async () => 
 function checkCompletion() {
     if (emailVerified && phoneVerified) {
         document.getElementById('completionMessage').style.display = 'block';
+        
+        // Get the access token from the last verification response
+        const token = localStorage.getItem('temp_access_token');
+        if (token) {
+            localStorage.setItem('access_token', token);
+            localStorage.removeItem('temp_access_token');
+        }
+        
         setTimeout(() => {
             window.location.href = '/onboarding/select-package';
         }, 2000);
     }
 }
-
 // Resend Email OTP
 document.getElementById('resendEmailBtn').addEventListener('click', async () => {
     const btn = document.getElementById('resendEmailBtn');

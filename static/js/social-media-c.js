@@ -1217,8 +1217,8 @@ function showDayPosts(dateStr) {
 function switchView(view) {
     // Hide all views
    
-    document.getElementById('calendarView')?.classList.remove('active');
     document.getElementById('listView')?.classList.remove('active');
+    document.getElementById('calendarView')?.classList.remove('active');
     document.getElementById('inboxView')?.classList.remove('active');
 
     // Remove active state from all tabs

@@ -129,6 +129,8 @@ class Settings(BaseSettings):
     SEARCH_CONSOLE_SERVICE_ACCOUNT_EMAIL: Optional[str] = None
     SEARCH_CONSOLE_CREDENTIALS_JSON: Optional[str] = None
 
+    GA4_CREDENTIALS_BASE64: Optional[str] = None
+
     # Synthesia
     SYNTHESIA_API_KEY: Optional[str] = None
     SYNTHESIA_AVATAR_ID: Optional[str] = "anna_costume1_cameraA"  # Default avatar

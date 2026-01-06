@@ -15,6 +15,49 @@ let generatedContent = null;
 let currentClientId = null;
 let selectedAdCopy = null;
 
+
+
+// Platform-specific data
+const PLATFORM_DATA = {
+    meta: {
+        name: 'Meta (Facebook & Instagram)',
+        formats: [
+            { value: 'feed', label: 'Feed' },
+            { value: 'stories', label: 'Stories' },
+            { value: 'reels', label: 'Reels' },
+            { value: 'carousel', label: 'Carousel' }
+        ],
+        placements: ['Feed', 'Stories', 'Reels', 'Messenger', 'Audience Network']
+    },
+    google: {
+        name: 'Google Ads',
+        formats: [
+            { value: 'search', label: 'Search Text Ad' },
+            { value: 'display', label: 'Display Image Ad' },
+            { value: 'video', label: 'Video Ad (YouTube)' },
+            { value: 'responsive', label: 'Responsive Search Ad' }
+        ],
+        placements: ['Search Network', 'Display Network', 'YouTube', 'Gmail', 'Discover']
+    },
+    linkedin: {
+        name: 'LinkedIn',
+        formats: [
+            { value: 'sponsored_content', label: 'Sponsored Content' },
+            { value: 'message_ad', label: 'Message Ad' },
+            { value: 'text_ad', label: 'Text Ad' },
+            { value: 'dynamic_ad', label: 'Dynamic Ad' }
+        ],
+        placements: ['Feed', 'Messaging', 'Right Rail']
+    }
+};
+
+// Global state
+let currentObjectiveGuidance = null;
+let uploadedMediaAssets = [];
+let currentCampaignData = null;
+
+
+
 // =====================================================
 // INITIALIZATION
 // =====================================================
@@ -22,7 +65,462 @@ let selectedAdCopy = null;
 document.addEventListener('DOMContentLoaded', function () {
     loadClients();
     loadDashboard();
+    setupEventListeners();
+    loadCampaigns();
 });
+
+
+function setupEventListeners() {
+    // Platform change handler
+    const platformSelect = document.getElementById('campaignPlatform');
+    if (platformSelect) {
+        platformSelect.addEventListener('change', handlePlatformChange);
+    }
+    
+    // Objective change handler
+    const objectiveSelect = document.getElementById('campaignObjective');
+    if (objectiveSelect) {
+        objectiveSelect.addEventListener('change', handleObjectiveChange);
+    }
+}
+
+
+
+async function handlePlatformChange(event) {
+    const platform = event.target.value;
+    
+    if (!platform) {
+        document.getElementById('campaignObjective').innerHTML = '<option value="">Select objective...</option>';
+        hideObjectiveGuidance();
+        return;
+    }
+    
+    // Load platform-specific objectives
+    await loadPlatformObjectives(platform);
+    
+    // Show platform info
+    showPlatformInfo(platform);
+}
+
+
+async function loadPlatformObjectives(platform) {
+    try {
+        const response = await fetch(`${API_BASE}/platforms/${platform}/objectives`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!response.ok) throw new Error('Failed to load objectives');
+        
+        const data = await response.json();
+        const objectiveSelect = document.getElementById('campaignObjective');
+        
+        objectiveSelect.innerHTML = '<option value="">Select objective...</option>';
+        
+        data.objectives.forEach(obj => {
+            const option = document.createElement('option');
+            option.value = obj.value;
+            option.textContent = obj.label;
+            option.title = obj.description;
+            objectiveSelect.appendChild(option);
+        });
+        
+    } catch (error) {
+        console.error('Error loading objectives:', error);
+        showNotification('Failed to load platform objectives', 'error');
+    }
+}
+
+function showPlatformInfo(platform) {
+    const platformInfo = PLATFORM_DATA[platform];
+    if (!platformInfo) return;
+    
+    // Show format options
+    const formatContainer = document.getElementById('platformFormatsContainer');
+    if (formatContainer) {
+        formatContainer.innerHTML = `
+            <div class="form-group">
+                <label>Ad Format</label>
+                <select class="form-control" id="adFormat">
+                    <option value="">Select format...</option>
+                    ${platformInfo.formats.map(f => 
+                        `<option value="${f.value}">${f.label}</option>`
+                    ).join('')}
+                </select>
+            </div>
+        `;
+    }
+    
+    // Show placement info
+    const placementContainer = document.getElementById('platformPlacementsInfo');
+    if (placementContainer) {
+        placementContainer.innerHTML = `
+            <div style="margin-top: 1rem; padding: 1rem; background: #f8fafc; border-radius: 8px;">
+                <div style="font-weight: 600; margin-bottom: 0.5rem;">Available Placements:</div>
+                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                    ${platformInfo.placements.map(p => 
+                        `<span style="padding: 0.25rem 0.75rem; background: white; border-radius: 20px; font-size: 0.875rem;">${p}</span>`
+                    ).join('')}
+                </div>
+            </div>
+        `;
+    }
+}
+
+
+
+// ========== OBJECTIVE-BASED GUIDANCE ==========
+
+async function handleObjectiveChange(event) {
+    const objective = event.target.value;
+    const platform = document.getElementById('campaignPlatform').value;
+    const budget = parseFloat(document.getElementById('campaignBudget').value) || 0;
+    
+    if (!objective || !platform || budget < 100) {
+        hideObjectiveGuidance();
+        return;
+    }
+    
+    // Show loading
+    showGuidanceLoading();
+    
+    // Get AI guidance
+    await getObjectiveGuidance(platform, objective, budget);
+}
+
+async function getObjectiveGuidance(platform, objective, budget) {
+    try {
+        const response = await fetch(`${API_BASE}/guidance/objective`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                platform,
+                objective,
+                budget,
+                target_audience: {
+                    age_range: [18, 65],
+                    genders: ['all'],
+                    countries: ['US']
+                },
+                industry: document.getElementById('clientIndustry')?.value || null
+            })
+        });
+        
+        if (!response.ok) throw new Error('Failed to get guidance');
+        
+        const data = await response.json();
+        currentObjectiveGuidance = data.guidance;
+        
+        displayObjectiveGuidance(data.guidance);
+        
+    } catch (error) {
+        console.error('Error getting objective guidance:', error);
+        hideObjectiveGuidance();
+        showNotification('Failed to get AI guidance', 'error');
+    }
+}
+
+function showGuidanceLoading() {
+    const container = document.getElementById('objectiveGuidanceContainer');
+    if (!container) return;
+    
+    container.style.display = 'block';
+    container.innerHTML = `
+        <div style="padding: 2rem; text-align: center;">
+            <i class="ti ti-loader" style="font-size: 2rem; color: #6366f1; animation: spin 1s linear infinite;"></i>
+            <div style="margin-top: 1rem; color: #64748b;">Getting AI recommendations...</div>
+        </div>
+    `;
+}
+
+function displayObjectiveGuidance(guidance) {
+    const container = document.getElementById('objectiveGuidanceContainer');
+    if (!container) return;
+    
+    const settings = guidance.platform_specific_settings;
+    const targeting = guidance.targeting_refinements;
+    const creative = guidance.creative_guidelines;
+    const performance = guidance.performance_expectations;
+    
+    container.innerHTML = `
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 1.5rem; border-radius: 8px 8px 0 0;">
+            <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+                <i class="ti ti-sparkles"></i>
+                AI-Powered Campaign Guidance
+            </h3>
+            <p style="margin: 0.5rem 0 0 0; opacity: 0.9;">Personalized recommendations for ${guidance.platform.toUpperCase()} - ${guidance.objective}</p>
+        </div>
+        
+        <div style="background: white; padding: 1.5rem; border-radius: 0 0 8px 8px; border: 1px solid #e2e8f0;">
+            <!-- Ad Formats -->
+            <div style="margin-bottom: 1.5rem;">
+                <div style="font-weight: 600; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="ti ti-layout"></i>
+                    Recommended Ad Formats
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                    ${settings.recommended_ad_formats.map(format => `
+                        <span style="padding: 0.5rem 1rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 20px; font-size: 0.875rem;">
+                            ${format}
+                        </span>
+                    `).join('')}
+                </div>
+            </div>
+            
+            <!-- Bidding Strategy -->
+            <div style="margin-bottom: 1.5rem;">
+                <div style="font-weight: 600; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="ti ti-currency-dollar"></i>
+                    Bidding Strategy
+                </div>
+                <div style="padding: 1rem; background: #f8fafc; border-radius: 8px;">
+                    <div style="font-weight: 600; color: #6366f1; margin-bottom: 0.5rem;">
+                        ${settings.bidding_strategy}
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.75rem;">
+                        <div>
+                            <div style="font-size: 0.75rem; color: #64748b;">Daily Budget</div>
+                            <div style="font-weight: 600; font-size: 1.25rem;">$${settings.budget_allocation.daily_budget.toFixed(2)}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.75rem; color: #64748b;">Lifetime Budget</div>
+                            <div style="font-weight: 600; font-size: 1.25rem;">$${settings.budget_allocation.lifetime_budget.toFixed(2)}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Performance Expectations -->
+            <div style="margin-bottom: 1.5rem;">
+                <div style="font-weight: 600; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="ti ti-chart-line"></i>
+                    Expected Performance
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
+                    <div style="padding: 1rem; background: #f8fafc; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 0.5rem;">Estimated Reach</div>
+                        <div style="font-weight: 700; font-size: 1.5rem; color: #6366f1;">${performance.estimated_reach.toLocaleString()}</div>
+                    </div>
+                    <div style="padding: 1rem; background: #f8fafc; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 0.5rem;">Expected CTR</div>
+                        <div style="font-weight: 700; font-size: 1.5rem; color: #10b981;">${performance.estimated_ctr}%</div>
+                    </div>
+                    <div style="padding: 1rem; background: #f8fafc; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 0.5rem;">Estimated CPC</div>
+                        <div style="font-weight: 700; font-size: 1.5rem; color: #f59e0b;">$${performance.estimated_cpc.toFixed(2)}</div>
+                    </div>
+                    <div style="padding: 1rem; background: #f8fafc; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 0.5rem;">Estimated Conversions</div>
+                        <div style="font-weight: 700; font-size: 1.5rem; color: #8b5cf6;">${performance.estimated_conversions}</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Optimization Tips -->
+            <div>
+                <div style="font-weight: 600; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="ti ti-bulb"></i>
+                    Optimization Tips
+                </div>
+                <ul style="margin: 0; padding-left: 1.5rem; color: #475569;">
+                    ${guidance.optimization_tips.map(tip => `<li style="margin-bottom: 0.5rem;">${tip}</li>`).join('')}
+                </ul>
+            </div>
+        </div>
+    `;
+    
+    container.style.display = 'block';
+}
+
+function hideObjectiveGuidance() {
+    const container = document.getElementById('objectiveGuidanceContainer');
+    if (container) {
+        container.style.display = 'none';
+        container.innerHTML = '';
+    }
+    currentObjectiveGuidance = null;
+}
+
+
+
+function initializeMediaUpload(campaignId) {
+    const dropZone = document.getElementById('mediaDropZone');
+    const fileInput = document.getElementById('mediaFileInput');
+    
+    if (!dropZone || !fileInput) return;
+    
+    // Click to upload
+    dropZone.addEventListener('click', () => fileInput.click());
+    
+    // File input change
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+            handleMediaFiles(e.target.files, campaignId);
+        }
+    });
+    
+    // Drag and drop
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = '#6366f1';
+        dropZone.style.background = '#f8fafc';
+    });
+    
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.style.borderColor = '#e2e8f0';
+        dropZone.style.background = 'white';
+    });
+    
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = '#e2e8f0';
+        dropZone.style.background = 'white';
+        
+        if (e.dataTransfer.files.length > 0) {
+            handleMediaFiles(e.dataTransfer.files, campaignId);
+        }
+    });
+}
+
+async function handleMediaFiles(files, campaignId) {
+    const platform = document.getElementById('campaignPlatform').value;
+    
+    if (!platform) {
+        showNotification('Please select a platform first', 'error');
+        return;
+    }
+    
+    for (let file of files) {
+        await uploadMediaFile(file, platform, campaignId);
+    }
+}
+
+async function uploadMediaFile(file, platform, campaignId) {
+    // Validate file type
+    const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'video/mp4', 'video/quicktime'];
+    if (!validTypes.includes(file.type)) {
+        showNotification(`Invalid file type: ${file.type}`, 'error');
+        return;
+    }
+    
+    // Show upload progress
+    const uploadId = showUploadProgress(file.name);
+    
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('platform', platform);
+        formData.append('campaign_id', campaignId);
+        
+        const response = await fetch(`${API_BASE}/media/upload`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
+            body: formData
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Upload failed');
+        }
+        
+        const data = await response.json();
+        
+        // Add to uploaded assets
+        uploadedMediaAssets.push({
+            asset_id: data.asset_id,
+            media_id: data.media_id,
+            url: data.url,
+            file_name: file.name,
+            platform
+        });
+        
+        updateUploadProgress(uploadId, 'success', file.name);
+        updateMediaGallery();
+        
+        showNotification('Media uploaded successfully', 'success');
+        
+    } catch (error) {
+        console.error('Upload error:', error);
+        updateUploadProgress(uploadId, 'error', file.name);
+        showNotification(error.message, 'error');
+    }
+}
+
+function showUploadProgress(fileName) {
+    const container = document.getElementById('uploadProgressContainer');
+    if (!container) return null;
+    
+    const uploadId = `upload_${Date.now()}`;
+    const progressHTML = `
+        <div id="${uploadId}" style="padding: 0.75rem; background: #f8fafc; border-radius: 8px; margin-bottom: 0.5rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 0.875rem;">${fileName}</span>
+                <i class="ti ti-loader" style="animation: spin 1s linear infinite;"></i>
+            </div>
+        </div>
+    `;
+    
+    container.insertAdjacentHTML('beforeend', progressHTML);
+    return uploadId;
+}
+
+function updateUploadProgress(uploadId, status, fileName) {
+    const element = document.getElementById(uploadId);
+    if (!element) return;
+    
+    const icon = status === 'success' ? 
+        '<i class="ti ti-check" style="color: #10b981;"></i>' :
+        '<i class="ti ti-x" style="color: #ef4444;"></i>';
+    
+    element.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 0.875rem;">${fileName}</span>
+            ${icon}
+        </div>
+    `;
+    
+    // Remove after 3 seconds
+    setTimeout(() => element.remove(), 3000);
+}
+
+function updateMediaGallery() {
+    const gallery = document.getElementById('mediaGallery');
+    if (!gallery) return;
+    
+    if (uploadedMediaAssets.length === 0) {
+        gallery.innerHTML = '<p style="text-align: center; color: #94a3b8;">No media uploaded yet</p>';
+        return;
+    }
+    
+    gallery.innerHTML = uploadedMediaAssets.map(asset => `
+        <div style="position: relative; border-radius: 8px; overflow: hidden; border: 2px solid #e2e8f0;">
+            ${asset.url.startsWith('data:video') ?
+                `<video src="${asset.url}" style="width: 100%; height: 150px; object-fit: cover;"></video>` :
+                `<img src="${asset.url}" alt="${asset.file_name}" style="width: 100%; height: 150px; object-fit: cover;">`
+            }
+            <div style="position: absolute; top: 0.5rem; right: 0.5rem;">
+                <button onclick="removeMedia(${asset.asset_id})" style="background: rgba(0,0,0,0.7); border: none; color: white; border-radius: 50%; width: 24px; height: 24px; cursor: pointer;">
+                    <i class="ti ti-x"></i>
+                </button>
+            </div>
+            <div style="padding: 0.5rem; background: white; font-size: 0.75rem; color: #64748b;">
+                ${asset.file_name}
+            </div>
+        </div>
+    `).join('');
+}
+
+function removeMedia(assetId) {
+    uploadedMediaAssets = uploadedMediaAssets.filter(a => a.asset_id !== assetId);
+    updateMediaGallery();
+}
+
+
+
 
 // =====================================================
 // UTILITY FUNCTIONS
@@ -349,18 +847,25 @@ async function submitCampaign() {
     btn.innerHTML = '<i class="ti ti-loader"></i> Creating...';
 
     try {
+        const platform = document.getElementById('campaignPlatform').value;
+        const objective = document.getElementById('campaignObjective').value;
+        
+        if (!platform || !objective) {
+            throw new Error('Please select platform and objective');
+        }
+        
         const formData = {
             client_id: parseInt(document.getElementById('campaignClient').value),
             campaign_name: document.getElementById('campaignName').value,
-            platform: document.getElementById('campaignPlatform').value,
-            objective: document.getElementById('campaignObjective').value,
+            platform,
+            objective,
             budget: parseFloat(document.getElementById('campaignBudget').value),
             start_date: document.getElementById('campaignStartDate').value,
             end_date: document.getElementById('campaignEndDate').value || null,
-            bidding_strategy: document.getElementById('campaignBidding').value || null,
-            target_audience: {},
-            placement_settings: {},
-            ab_test_config: document.getElementById('enableABTest').checked ? {} : null
+            bidding_strategy: currentObjectiveGuidance?.platform_specific_settings?.bidding_strategy || null,
+            target_audience: currentObjectiveGuidance?.targeting_refinements || {},
+            placement_settings: currentObjectiveGuidance?.platform_specific_settings || {},
+            ab_test_config: document.getElementById('enableABTest')?.checked ? {} : null
         };
 
         const response = await fetch(`${API_BASE}/campaigns/create`, {
@@ -378,18 +883,496 @@ async function submitCampaign() {
         }
 
         const data = await response.json();
+        currentCampaignData = { campaign_id: data.campaign_id, ...formData };
+        
         showNotification('Campaign created successfully!', 'success');
-        closeCampaignModal();
-        loadCampaigns();
+        
+        // Show next step: Create Ads
+        showCreateAdsStep(data.campaign_id, platform, objective);
 
     } catch (error) {
         console.error('Error creating campaign:', error);
         showNotification(error.message, 'error');
-    } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="ti ti-check"></i> Create Campaign';
     }
 }
+
+
+// ========== CREATE ADS STEP ==========
+
+function showCreateAdsStep(campaignId, platform, objective) {
+    const modal = document.getElementById('campaignModal');
+    const modalBody = modal.querySelector('.modal-body');
+    
+    modalBody.innerHTML = `
+        <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 1.5rem; border-radius: 8px; margin-bottom: 2rem;">
+            <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+                <i class="ti ti-check"></i>
+                Campaign Created Successfully!
+            </h3>
+            <p style="margin: 0.5rem 0 0 0; opacity: 0.9;">Now let's create your first ad for this campaign</p>
+        </div>
+        
+        <form id="createAdForm" onsubmit="event.preventDefault(); submitPlatformSpecificAd(${campaignId}, '${platform}', '${objective}');">
+            <!-- Platform-Specific Fields -->
+            <div id="platformSpecificFields"></div>
+            
+            <!-- Media Upload -->
+            <div class="form-group">
+                <label>Media Assets</label>
+                <div id="mediaDropZone" style="border: 2px dashed #e2e8f0; border-radius: 8px; padding: 2rem; text-align: center; cursor: pointer; transition: all 0.3s;">
+                    <i class="ti ti-upload" style="font-size: 2rem; color: #94a3b8;"></i>
+                    <div style="margin-top: 0.5rem; color: #64748b;">Click or drag files to upload</div>
+                    <div style="font-size: 0.875rem; color: #94a3b8; margin-top: 0.25rem;">Images (JPG, PNG) or Videos (MP4)</div>
+                </div>
+                <input type="file" id="mediaFileInput" accept="image/*,video/*" multiple style="display: none;">
+                <div id="uploadProgressContainer" style="margin-top: 1rem;"></div>
+                <div id="mediaGallery" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1rem; margin-top: 1rem;"></div>
+            </div>
+            
+            <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 2rem;">
+                <button type="button" class="btn btn-secondary" onclick="skipToPublish(${campaignId})">
+                    Skip & Publish Campaign
+                </button>
+                <button type="submit" class="btn btn-primary" id="submitAdBtn">
+                    <i class="ti ti-check"></i> Create Ad
+                </button>
+            </div>
+        </form>
+    `;
+    
+    // Render platform-specific fields
+    renderPlatformSpecificAdFields(platform, objective);
+    
+    // Initialize media upload
+    initializeMediaUpload(campaignId);
+}
+
+function renderPlatformSpecificAdFields(platform, objective) {
+    const container = document.getElementById('platformSpecificFields');
+    
+    const platformData = PLATFORM_DATA[platform];
+    
+    let fieldsHTML = `
+        <div class="form-group">
+            <label>Ad Name *</label>
+            <input type="text" class="form-control" id="adName" required placeholder="e.g., Summer Sale Ad 1">
+        </div>
+    `;
+    
+    // Platform-specific fields
+    if (platform === 'meta') {
+        fieldsHTML += `
+            <div class="form-group">
+                <label>Ad Format *</label>
+                <select class="form-control" id="metaAdFormat" required>
+                    <option value="">Select format...</option>
+                    ${platformData.formats.map(f => `<option value="${f.value}">${f.label}</option>`).join('')}
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>Primary Text *</label>
+                <textarea class="form-control" id="adPrimaryText" required rows="3" 
+                    placeholder="Main ad copy (125 characters for feed, 60 for stories)"></textarea>
+                <small style="color: #64748b;">This appears above your image or video</small>
+            </div>
+            
+            <div class="form-group">
+                <label>Headline *</label>
+                <input type="text" class="form-control" id="adHeadline" required maxlength="40"
+                    placeholder="Catchy headline (max 40 characters)">
+            </div>
+            
+            <div class="form-group">
+                <label>Description</label>
+                <input type="text" class="form-control" id="adDescription" maxlength="30"
+                    placeholder="Short description (max 30 characters)">
+            </div>
+            
+            <div class="form-group">
+                <label>Destination URL *</label>
+                <input type="url" class="form-control" id="adDestinationUrl" required
+                    placeholder="https://example.com/landing-page">
+            </div>
+            
+            <div class="form-group">
+                <label>Call to Action</label>
+                <select class="form-control" id="adCTA">
+                    <option value="LEARN_MORE">Learn More</option>
+                    <option value="SHOP_NOW">Shop Now</option>
+                    <option value="SIGN_UP">Sign Up</option>
+                    <option value="DOWNLOAD">Download</option>
+                    <option value="GET_QUOTE">Get Quote</option>
+                    <option value="CONTACT_US">Contact Us</option>
+                </select>
+            </div>
+        `;
+    } else if (platform === 'google') {
+        fieldsHTML += `
+            <div class="form-group">
+                <label>Campaign Type *</label>
+                <select class="form-control" id="googleCampaignType" required>
+                    <option value="">Select type...</option>
+                    <option value="SEARCH">Search</option>
+                    <option value="DISPLAY">Display</option>
+                    <option value="VIDEO">Video (YouTube)</option>
+                    <option value="SHOPPING">Shopping</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>Headlines (3-15) *</label>
+                <div id="googleHeadlinesContainer">
+                    <input type="text" class="form-control" style="margin-bottom: 0.5rem;" maxlength="30" 
+                        placeholder="Headline 1 (max 30 characters)" data-headline="1">
+                    <input type="text" class="form-control" style="margin-bottom: 0.5rem;" maxlength="30" 
+                        placeholder="Headline 2 (max 30 characters)" data-headline="2">
+                    <input type="text" class="form-control" style="margin-bottom: 0.5rem;" maxlength="30" 
+                        placeholder="Headline 3 (max 30 characters)" data-headline="3">
+                </div>
+                <button type="button" class="btn btn-secondary" onclick="addGoogleHeadline()">
+                    <i class="ti ti-plus"></i> Add Headline
+                </button>
+            </div>
+            
+            <div class="form-group">
+                <label>Descriptions (2-4) *</label>
+                <div id="googleDescriptionsContainer">
+                    <textarea class="form-control" style="margin-bottom: 0.5rem;" maxlength="90" rows="2"
+                        placeholder="Description 1 (max 90 characters)" data-description="1"></textarea>
+                    <textarea class="form-control" style="margin-bottom: 0.5rem;" maxlength="90" rows="2"
+                        placeholder="Description 2 (max 90 characters)" data-description="2"></textarea>
+                </div>
+                <button type="button" class="btn btn-secondary" onclick="addGoogleDescription()">
+                    <i class="ti ti-plus"></i> Add Description
+                </button>
+            </div>
+            
+            <div class="form-group">
+                <label>Final URL *</label>
+                <input type="url" class="form-control" id="googleFinalUrl" required
+                    placeholder="https://example.com/landing-page">
+            </div>
+            
+            <div class="form-group">
+                <label>Keywords (for Search campaigns)</label>
+                <textarea class="form-control" id="googleKeywords" rows="3"
+                    placeholder="Enter keywords, one per line"></textarea>
+                <small style="color: #64748b;">Add keywords for search campaigns. Use broad, phrase, or exact match.</small>
+            </div>
+        `;
+    } else if (platform === 'linkedin') {
+        fieldsHTML += `
+            <div class="form-group">
+                <label>Ad Format *</label>
+                <select class="form-control" id="linkedinAdFormat" required>
+                    <option value="">Select format...</option>
+                    ${platformData.formats.map(f => `<option value="${f.value}">${f.label}</option>`).join('')}
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>Introductory Text *</label>
+                <textarea class="form-control" id="linkedinIntroText" required rows="3" maxlength="600"
+                    placeholder="Introduce your content (max 600 characters)"></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label>Headline *</label>
+                <input type="text" class="form-control" id="linkedinHeadline" required maxlength="200"
+                    placeholder="Headline (max 200 characters)">
+            </div>
+            
+            <div class="form-group">
+                <label>Destination URL *</label>
+                <input type="url" class="form-control" id="linkedinDestinationUrl" required
+                    placeholder="https://example.com/landing-page">
+            </div>
+            
+            <div class="form-group">
+                <label>Call to Action</label>
+                <select class="form-control" id="linkedinCTA">
+                    <option value="LEARN_MORE">Learn More</option>
+                    <option value="APPLY">Apply</option>
+                    <option value="DOWNLOAD">Download</option>
+                    <option value="SIGN_UP">Sign Up</option>
+                    <option value="REGISTER">Register</option>
+                </select>
+            </div>
+        `;
+    }
+    
+    container.innerHTML = fieldsHTML;
+}
+
+
+function addGoogleHeadline() {
+    const container = document.getElementById('googleHeadlinesContainer');
+    const count = container.querySelectorAll('input').length + 1;
+    
+    if (count > 15) {
+        showNotification('Maximum 15 headlines allowed', 'error');
+        return;
+    }
+    
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'form-control';
+    input.style.marginBottom = '0.5rem';
+    input.maxLength = 30;
+    input.placeholder = `Headline ${count} (max 30 characters)`;
+    input.dataset.headline = count;
+    
+    container.appendChild(input);
+}
+
+function addGoogleDescription() {
+    const container = document.getElementById('googleDescriptionsContainer');
+    const count = container.querySelectorAll('textarea').length + 1;
+    
+    if (count > 4) {
+        showNotification('Maximum 4 descriptions allowed', 'error');
+        return;
+    }
+    
+    const textarea = document.createElement('textarea');
+    textarea.className = 'form-control';
+    textarea.style.marginBottom = '0.5rem';
+    textarea.maxLength = 90;
+    textarea.rows = 2;
+    textarea.placeholder = `Description ${count} (max 90 characters)`;
+    textarea.dataset.description = count;
+    
+    container.appendChild(textarea);
+}
+
+
+
+
+// ========== SUBMIT PLATFORM-SPECIFIC AD ==========
+
+async function submitPlatformSpecificAd(campaignId, platform, objective) {
+    const btn = document.getElementById('submitAdBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader"></i> Creating Ad...';
+    
+    try {
+        // Collect media IDs
+        const mediaIds = uploadedMediaAssets.map(a => a.media_id);
+        const mediaUrls = uploadedMediaAssets.map(a => a.url);
+        
+        if (mediaIds.length === 0 && platform !== 'google') {
+            throw new Error('Please upload at least one media file');
+        }
+        
+        // Collect platform-specific data
+        let adData = {
+            campaign_id: campaignId,
+            platform,
+            objective,
+            ad_name: document.getElementById('adName').value,
+            media_ids: mediaIds,
+            media_urls: mediaUrls
+        };
+        
+        // Platform-specific fields
+        if (platform === 'meta') {
+            adData = {
+                ...adData,
+                primary_text: document.getElementById('adPrimaryText').value,
+                headline: document.getElementById('adHeadline').value,
+                description: document.getElementById('adDescription').value || '',
+                destination_url: document.getElementById('adDestinationUrl').value,
+                call_to_action: document.getElementById('adCTA').value,
+                platform_specific_data: {
+                    format: document.getElementById('metaAdFormat').value
+                }
+            };
+        } else if (platform === 'google') {
+            const headlines = Array.from(document.querySelectorAll('[data-headline]'))
+                .map(el => el.value)
+                .filter(v => v.trim());
+            
+            const descriptions = Array.from(document.querySelectorAll('[data-description]'))
+                .map(el => el.value)
+                .filter(v => v.trim());
+            
+            const keywords = document.getElementById('googleKeywords').value
+                .split('\n')
+                .filter(k => k.trim());
+            
+            if (headlines.length < 3) {
+                throw new Error('At least 3 headlines required for Google Ads');
+            }
+            if (descriptions.length < 2) {
+                throw new Error('At least 2 descriptions required for Google Ads');
+            }
+            
+            adData = {
+                ...adData,
+                primary_text: headlines[0],
+                headline: headlines.join(' | '),
+                description: descriptions.join(' | '),
+                destination_url: document.getElementById('googleFinalUrl').value,
+                platform_specific_data: {
+                    campaign_type: document.getElementById('googleCampaignType').value,
+                    headlines,
+                    descriptions,
+                    keywords
+                }
+            };
+        } else if (platform === 'linkedin') {
+            adData = {
+                ...adData,
+                primary_text: document.getElementById('linkedinIntroText').value,
+                headline: document.getElementById('linkedinHeadline').value,
+                destination_url: document.getElementById('linkedinDestinationUrl').value,
+                call_to_action: document.getElementById('linkedinCTA').value,
+                platform_specific_data: {
+                    format: document.getElementById('linkedinAdFormat').value
+                }
+            };
+        }
+        
+        // Create ad via API
+        const response = await fetch(`${API_BASE}/ads/create-platform-specific`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(adData)
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to create ad');
+        }
+        
+        const data = await response.json();
+        
+        showNotification('Ad created successfully!', 'success');
+        
+        // Show publish option
+        showPublishOption(campaignId, platform);
+        
+    } catch (error) {
+        console.error('Error creating ad:', error);
+        showNotification(error.message, 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ti ti-check"></i> Create Ad';
+    }
+}
+
+
+
+
+// ========== PUBLISH CAMPAIGN ==========
+
+function showPublishOption(campaignId, platform) {
+    const modal = document.getElementById('campaignModal');
+    const modalBody = modal.querySelector('.modal-body');
+    
+    modalBody.innerHTML = `
+        <div style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color: white; padding: 2rem; border-radius: 8px; text-align: center; margin-bottom: 2rem;">
+            <i class="ti ti-confetti" style="font-size: 3rem;"></i>
+            <h3 style="margin: 1rem 0 0.5rem 0;">Campaign Ready!</h3>
+            <p style="margin: 0; opacity: 0.9;">Your campaign is ready to go live on ${PLATFORM_DATA[platform].name}</p>
+        </div>
+        
+        <div style="background: #f8fafc; padding: 1.5rem; border-radius: 8px; margin-bottom: 2rem;">
+            <h4 style="margin: 0 0 1rem 0;">What happens when you publish?</h4>
+            <ul style="margin: 0; padding-left: 1.5rem; color: #475569;">
+                <li style="margin-bottom: 0.5rem;">Campaign will be sent to ${PLATFORM_DATA[platform].name} ad platform</li>
+                <li style="margin-bottom: 0.5rem;">Ad status will be set to PAUSED (you can activate it later)</li>
+                <li style="margin-bottom: 0.5rem;">You'll receive a confirmation with external campaign ID</li>
+                <li style="margin-bottom: 0.5rem;">You can monitor performance in real-time</li>
+            </ul>
+        </div>
+        
+        <div style="display: flex; gap: 1rem; justify-content: center;">
+            <button class="btn btn-secondary" onclick="closeCampaignModal(); loadCampaigns();">
+                Publish Later
+            </button>
+            <button class="btn btn-primary" onclick="publishCampaignNow(${campaignId})">
+                <i class="ti ti-rocket"></i> Publish to ${PLATFORM_DATA[platform].name}
+            </button>
+        </div>
+    `;
+}
+
+
+
+async function publishCampaignNow(campaignId) {
+    const btn = event.target;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader"></i> Publishing...';
+    
+    try {
+        const response = await fetch(`${API_BASE}/campaigns/${campaignId}/publish`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to publish campaign');
+        }
+        
+        const data = await response.json();
+        
+        showNotification(data.message, 'success');
+        
+        // Show success message
+        showPublishSuccess(data);
+        
+    } catch (error) {
+        console.error('Error publishing campaign:', error);
+        showNotification(error.message, 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ti ti-rocket"></i> Publish Campaign';
+    }
+}
+
+
+
+function showPublishSuccess(data) {
+    const modal = document.getElementById('campaignModal');
+    const modalBody = modal.querySelector('.modal-body');
+    
+    modalBody.innerHTML = `
+        <div style="text-align: center; padding: 2rem;">
+            <div style="width: 80px; height: 80px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem;">
+                <i class="ti ti-check" style="font-size: 3rem; color: white;"></i>
+            </div>
+            <h3 style="margin: 0 0 0.5rem 0;">Campaign Published Successfully!</h3>
+            <p style="color: #64748b; margin: 0 0 2rem 0;">Your campaign is now live on the ad platform</p>
+            
+            ${data.external_campaign_id ? `
+                <div style="background: #f8fafc; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
+                    <div style="font-size: 0.875rem; color: #64748b; margin-bottom: 0.5rem;">External Campaign ID</div>
+                    <div style="font-family: monospace; color: #475569;">${data.external_campaign_id}</div>
+                </div>
+            ` : ''}
+            
+            <button class="btn btn-primary" onclick="closeCampaignModal(); loadCampaigns();">
+                <i class="ti ti-check"></i> Done
+            </button>
+        </div>
+    `;
+}
+
+function skipToPublish(campaignId) {
+    if (!confirm('Skip creating ads and publish the campaign? You can add ads later.')) {
+        return;
+    }
+    
+    publishCampaignNow(campaignId);
+}
+
+
 
 async function publishCampaign(campaignId) {
     if (!confirm('Publish this campaign to the ad platform?')) return;
@@ -673,38 +1656,19 @@ function closeCampaignDetailsModal() {
         modal.style.display = 'none';
     }
 }
-
 async function pauseCampaign(campaignId) {
-    if (!confirm('Are you sure you want to pause this campaign?')) return;
-
-    try {
-        const response = await fetch(`${API_BASE}/campaigns/${campaignId}/control`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({ action: 'pause' })
-        });
-
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Failed to pause campaign');
-        }
-
-        showNotification('Campaign paused successfully', 'success');
-        closeCampaignDetailsModal();
-        loadCampaigns();
-
-    } catch (error) {
-        console.error('Error pausing campaign:', error);
-        showNotification(error.message, 'error');
-    }
+    await controlCampaign(campaignId, 'pause');
 }
 
 async function resumeCampaign(campaignId) {
-    if (!confirm('Resume this campaign?')) return;
+    await controlCampaign(campaignId, 'resume');
+}
 
+async function controlCampaign(campaignId, action) {
+    if (!confirm(`Are you sure you want to ${action} this campaign?`)) {
+        return;
+    }
+    
     try {
         const response = await fetch(`${API_BASE}/campaigns/${campaignId}/control`, {
             method: 'POST',
@@ -712,23 +1676,25 @@ async function resumeCampaign(campaignId) {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({ action: 'resume' })
+            body: JSON.stringify({ action })
         });
-
+        
         if (!response.ok) {
             const error = await response.json();
-            throw new Error(error.detail || 'Failed to resume campaign');
+            throw new Error(error.detail || `Failed to ${action} campaign`);
         }
-
-        showNotification('Campaign resumed successfully', 'success');
-        closeCampaignDetailsModal();
+        
+        const data = await response.json();
+        showNotification(data.message, 'success');
         loadCampaigns();
-
+        
     } catch (error) {
-        console.error('Error resuming campaign:', error);
+        console.error(`Error ${action}ing campaign:`, error);
         showNotification(error.message, 'error');
     }
 }
+
+
 
 async function openCreateAdModal(campaignId) {
     currentCampaignId = campaignId;

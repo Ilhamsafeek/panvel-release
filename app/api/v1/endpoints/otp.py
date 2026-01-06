@@ -76,11 +76,10 @@ async def send_otp(request: OTPRequest, req: Request):
             detail=result['error']
         )
 
-
 @router.post("/verify", summary="Verify OTP code")
 async def verify_otp(verification: OTPVerification):
     """
-    Verify OTP code
+    Verify OTP code and return access token
     """
     result = otp_service.verify_otp(
         identifier=verification.identifier,
@@ -89,17 +88,41 @@ async def verify_otp(verification: OTPVerification):
     )
     
     if result['success']:
+        # Get user_id from the result
+        user_id = result.get('user_id')
+        
+        # If user_id exists, create access token
+        access_token = None
+        if user_id:
+            from app.api.v1.endpoints.auth import create_access_token, get_db_connection
+            import pymysql
+            
+            # Get user details
+            connection = get_db_connection()
+            cursor = connection.cursor(pymysql.cursors.DictCursor)
+            cursor.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
+            user = cursor.fetchone()
+            cursor.close()
+            connection.close()
+            
+            if user:
+                access_token = create_access_token(
+                    data={"sub": user['email'], "user_id": user['user_id'], "role": user['role']}
+                )
+        
         return {
             "success": True,
             "message": result['message'],
-            "verified": True
+            "verified": True,
+            "access_token": access_token,
+            "token_type": "bearer"
         }
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=result['error']
         )
-
+        
 
 @router.post("/resend", summary="Resend OTP")
 async def resend_otp(request: OTPRequest, req: Request):

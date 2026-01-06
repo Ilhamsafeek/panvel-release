@@ -746,6 +746,10 @@
                     </div>
                 </div>
 
+                <!-- ✅ NEW: Platform-Specific Containers -->
+                <div id="platformFormatsContainer"></div>
+                <div id="platformPlacementsInfo"></div>
+
                 <div class="form-grid">
                     <div class="form-group">
                         <label>Campaign Objective *</label>
@@ -765,6 +769,11 @@
                         <input type="number" class="form-control" id="campaignBudget" required min="100" step="0.01"
                             placeholder="1000">
                     </div>
+                </div>
+
+                <!-- ✅ NEW: AI Objective Guidance Container -->
+                <div id="objectiveGuidanceContainer" style="display: none; margin-top: 1.5rem;">
+                    <!-- AI guidance will be injected here by JavaScript -->
                 </div>
 
                 <div class="form-grid">
@@ -1068,5 +1077,5 @@
     }
 </style>
 
-<script src="/static/js/ad-strategy.js?v=3"></script>
+<script src="/static/js/ad-strategy.js?v=5"></script>
 {% endblock %}

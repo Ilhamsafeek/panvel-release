@@ -365,30 +365,53 @@ def get_pagespeed_insights(url: str, strategy: str = "mobile") -> Dict[str, Any]
 def get_search_console_service():
     """Initialize Google Search Console API service - REAL IMPLEMENTATION"""
     try:
-        credentials_json_str = getattr(settings, 'SEARCH_CONSOLE_CREDENTIALS_JSON', None) or settings.GA4_CREDENTIALS_JSON
+        from google.oauth2 import service_account
+        from googleapiclient.discovery import build
+        import base64
         
-        if not credentials_json_str:
-            return None  # Silent fail - not configured
+        # Try base64 first, then fall back to JSON
+        credentials_json = None
         
-        credentials_json = json.loads(credentials_json_str)
+        # Option 1: Base64 encoded (RECOMMENDED)
+        if hasattr(settings, 'GA4_CREDENTIALS_BASE64') and settings.GA4_CREDENTIALS_BASE64:
+            try:
+                decoded = base64.b64decode(settings.GA4_CREDENTIALS_BASE64)
+                credentials_json = json.loads(decoded)
+                print("✅ Credentials loaded from base64")
+            except Exception as e:
+                print(f"❌ Failed to decode base64 credentials: {str(e)}")
         
-        # Fix private key newlines
-        if 'private_key' in credentials_json:
-            credentials_json['private_key'] = credentials_json['private_key'].replace('\\n', '\n')
+        # Option 2: Direct JSON (fallback)
+        if not credentials_json and hasattr(settings, 'GA4_CREDENTIALS_JSON') and settings.GA4_CREDENTIALS_JSON:
+            try:
+                credentials_json = json.loads(settings.GA4_CREDENTIALS_JSON)
+                print("✅ Credentials loaded from JSON")
+            except Exception as e:
+                print(f"❌ Failed to parse JSON credentials: {str(e)}")
         
+        if not credentials_json:
+            print("❌ No valid credentials found")
+            return None
+        
+        # Create credentials with proper scopes
         credentials = service_account.Credentials.from_service_account_info(
             credentials_json,
             scopes=['https://www.googleapis.com/auth/webmasters.readonly']
         )
+        print("✅ Service account credentials created")
+        
+        # Build and return the Search Console service
         service = build('searchconsole', 'v1', credentials=credentials)
+        print("✅ Google Search Console service initialized successfully")
         return service
         
-    except Exception:
-        # Silent fail - GSC not available, continue without it
+    except Exception as e:
+        print(f"❌ Google Search Console service initialization failed: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return None
 
-
-
+        
 def get_keyword_position_from_gsc(site_url: str, keyword: str) -> Optional[float]:
     """Get actual keyword position from Google Search Console - REAL DATA ONLY"""
     try:
@@ -614,6 +637,21 @@ async def list_seo_projects(current_user: dict = Depends(get_current_user)):
             cursor.close()
         if connection:
             connection.close()
+
+
+
+@router.get("/debug/gsc-config")
+async def debug_gsc_config(current_user: dict = Depends(get_current_user)):
+    """Debug Google Search Console configuration"""
+    return {
+        "ga4_credentials_exists": bool(getattr(settings, 'GA4_CREDENTIALS_JSON', None)),
+        "ga4_credentials_length": len(getattr(settings, 'GA4_CREDENTIALS_JSON', '')) if getattr(settings, 'GA4_CREDENTIALS_JSON', None) else 0,
+        "search_console_creds_exists": bool(getattr(settings, 'SEARCH_CONSOLE_CREDENTIALS_JSON', None)),
+        "google_api_key_exists": bool(settings.GOOGLE_API_KEY),
+        "env_check": {
+            "GA4_CREDENTIALS_JSON": "SET" if getattr(settings, 'GA4_CREDENTIALS_JSON', None) else "NOT SET"
+        }
+    }
 
 
 # ========== COMPREHENSIVE SEO AUDIT ==========
@@ -1946,6 +1984,11 @@ async def sync_seo_performance_data(
             )
         
         website_url = project['website_url']
+
+        if not website_url.startswith(('sc-domain:', 'http://', 'https://')):
+            website_url = f"https://{website_url}"
+
+
         
         # Get Google Search Console service
         search_console = get_search_console_service()

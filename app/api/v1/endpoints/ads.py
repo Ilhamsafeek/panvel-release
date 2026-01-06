@@ -11,8 +11,7 @@ COMPLETE implementation with ALL requirements from scope document:
 6. Execution & Publishing Engine (ENHANCED with A/B testing, pause/resume)
 7. Live Dashboard & Report (COMPLETE)
 """
-
-from fastapi import APIRouter, HTTPException, status, Depends, Body
+from fastapi import APIRouter, HTTPException, status, Depends, Body, UploadFile, File
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime, date, timedelta
@@ -129,6 +128,41 @@ class CampaignControlRequest(BaseModel):
     """Control campaign status"""
     action: str = Field(..., description="pause, resume, schedule")
     scheduled_at: Optional[datetime] = None  # NEW
+
+
+
+class ObjectiveGuidanceRequest(BaseModel):
+    """Request objective-based guidance"""
+    platform: str = Field(..., description="meta, google, linkedin")
+    objective: str
+    budget: float
+    target_audience: Dict[str, Any]
+    industry: Optional[str] = None
+
+
+class MediaUploadRequest(BaseModel):
+    """Media upload metadata"""
+    platform: str
+    campaign_id: int
+    description: Optional[str] = None
+
+
+class PlatformSpecificAdCreate(BaseModel):
+    """Create platform-specific ad"""
+    campaign_id: int
+    platform: str
+    objective: str
+    ad_name: str
+    primary_text: str
+    headline: str
+    description: Optional[str] = None
+    destination_url: Optional[str] = None
+    media_ids: List[str] = Field(default_factory=list)
+    media_urls: List[str] = Field(default_factory=list)
+    call_to_action: Optional[str] = None
+    
+    # Platform-specific fields
+    platform_specific_data: Optional[Dict[str, Any]] = None
 
 
 # ========== 1. ENHANCED AUDIENCE INTELLIGENCE ==========
@@ -568,17 +602,14 @@ async def list_campaigns(
 
 
 # ========== 7. ENHANCED CAMPAIGN PUBLISHING & CONTROL ==========
-
-@router.post("/campaigns/{campaign_id}/publish", summary="Publish campaign with A/B testing")
+@router.post("/campaigns/{campaign_id}/publish", summary="Publish campaign to platform")
 async def publish_campaign(
     campaign_id: int,
     current_user: dict = Depends(require_admin_or_employee)
 ):
     """
-    Publish campaign to ad platform with:
-    - Draft to live pushing
-    - A/B split test creation
-    - Automatic scheduling
+    Publish campaign to ad platform with REAL API integration
+    Activates campaign on Meta, Google, or LinkedIn
     """
     connection = None
     cursor = None
@@ -593,47 +624,48 @@ async def publish_campaign(
         if not campaign:
             raise HTTPException(status_code=404, detail="Campaign not found")
         
-        # Check for A/B test configuration
-        cursor.execute("""
-            SELECT ad_copy_suggestions FROM ai_ad_suggestions 
-            WHERE campaign_id = %s ORDER BY created_at DESC LIMIT 1
-        """, (campaign_id,))
+        if campaign['status'] == 'active':
+            return {
+                "success": True,
+                "message": "Campaign is already active"
+            }
         
-        ab_config = None
-        ab_result = cursor.fetchone()
-        if ab_result and ab_result['ad_copy_suggestions']:
-            suggestions = json.loads(ab_result['ad_copy_suggestions'])
-            ab_config = suggestions.get('ab_test')
-        
-        # Publish campaign
+        # Publish campaign with REAL API
         result = await ad_service.publish_campaign_enhanced(
             campaign=campaign,
-            ab_test_config=ab_config
+            ab_test_config=None
         )
         
-        # Update campaign status
-        cursor.execute("""
-            UPDATE ad_campaigns
-            SET status = 'active', external_campaign_id = %s
-            WHERE campaign_id = %s
-        """, (result.get('external_id'), campaign_id))
-        
-        connection.commit()
-        
-        return {
-            "success": True,
-            "external_campaign_id": result.get('external_id'),
-            "ab_test_created": result.get('ab_test_created', False),
-            "message": "Campaign published successfully"
-        }
+        if result.get('success'):
+            # Update campaign status
+            cursor.execute("""
+                UPDATE ad_campaigns
+                SET status = 'active', external_campaign_id = %s
+                WHERE campaign_id = %s
+            """, (result.get('external_id'), campaign_id))
+            
+            connection.commit()
+            
+            return {
+                "success": True,
+                "external_campaign_id": result.get('external_id'),
+                "message": result.get('message', 'Campaign published successfully')
+            }
+        else:
+            return {
+                "success": False,
+                "message": result.get('message', 'Failed to publish campaign')
+            }
         
     except HTTPException:
         raise
     except Exception as e:
         if connection:
             connection.rollback()
+        print(f"❌ Error publishing campaign: {str(e)}")
+        print(traceback.format_exc())
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail=f"Failed to publish campaign: {str(e)}"
         )
     finally:
@@ -643,17 +675,17 @@ async def publish_campaign(
             connection.close()
 
 
-@router.post("/campaigns/{campaign_id}/control", summary="Control campaign (pause/resume/schedule)")
+
+@router.post("/campaigns/{campaign_id}/control", summary="Control campaign (pause/resume)")
 async def control_campaign(
     campaign_id: int,
-    control: CampaignControlRequest,
+    action: str = Body(..., embed=True),
     current_user: dict = Depends(require_admin_or_employee)
 ):
     """
-    Campaign control actions:
-    - Pause campaign
-    - Resume campaign
-    - Schedule campaign for future date
+    Control campaign with REAL API calls:
+    - pause: Pause active campaign
+    - resume: Resume paused campaign
     """
     connection = None
     cursor = None
@@ -668,19 +700,18 @@ async def control_campaign(
         if not campaign:
             raise HTTPException(status_code=404, detail="Campaign not found")
         
-        # Execute control action
+        # Execute control action with REAL API
         result = await ad_service.control_campaign(
             campaign=campaign,
-            action=control.action,
-            scheduled_at=control.scheduled_at
+            action=action,
+            scheduled_at=None
         )
         
-        # Update campaign status
+        # Update campaign status in database
         new_status = {
             'pause': 'paused',
-            'resume': 'active',
-            'schedule': 'draft'
-        }.get(control.action, campaign['status'])
+            'resume': 'active'
+        }.get(action, campaign['status'])
         
         cursor.execute("""
             UPDATE ad_campaigns SET status = %s WHERE campaign_id = %s
@@ -690,9 +721,9 @@ async def control_campaign(
         
         return {
             "success": True,
-            "action": control.action,
+            "action": action,
             "new_status": new_status,
-            "message": f"Campaign {control.action}d successfully"
+            "message": result.get('message', f"Campaign {action}d successfully")
         }
         
     except HTTPException:
@@ -700,8 +731,10 @@ async def control_campaign(
     except Exception as e:
         if connection:
             connection.rollback()
+        print(f"❌ Error controlling campaign: {str(e)}")
+        print(traceback.format_exc())
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail=f"Failed to control campaign: {str(e)}"
         )
     finally:
@@ -709,6 +742,52 @@ async def control_campaign(
             cursor.close()
         if connection:
             connection.close()
+
+
+
+@router.get("/platforms/{platform}/objectives", summary="Get platform-specific objectives")
+async def get_platform_objectives(
+    platform: str,
+    current_user: dict = Depends(require_admin_or_employee)
+):
+    """
+    Get available objectives for specified platform
+    """
+    objectives = {
+        'meta': [
+            {'value': 'OUTCOME_AWARENESS', 'label': 'Brand Awareness', 'description': 'Increase brand recognition'},
+            {'value': 'OUTCOME_TRAFFIC', 'label': 'Traffic', 'description': 'Drive website traffic'},
+            {'value': 'OUTCOME_ENGAGEMENT', 'label': 'Engagement', 'description': 'Boost post engagement'},
+            {'value': 'OUTCOME_LEADS', 'label': 'Lead Generation', 'description': 'Collect leads'},
+            {'value': 'OUTCOME_SALES', 'label': 'Conversions', 'description': 'Drive sales/conversions'}
+        ],
+        'google': [
+            {'value': 'SEARCH', 'label': 'Search', 'description': 'Capture high-intent searches'},
+            {'value': 'DISPLAY', 'label': 'Display', 'description': 'Build awareness with visuals'},
+            {'value': 'VIDEO', 'label': 'Video', 'description': 'Engage with YouTube ads'},
+            {'value': 'SHOPPING', 'label': 'Shopping', 'description': 'Showcase products'},
+            {'value': 'DISCOVERY', 'label': 'Discovery', 'description': 'Reach new audiences'}
+        ],
+        'linkedin': [
+            {'value': 'BRAND_AWARENESS', 'label': 'Brand Awareness', 'description': 'Build professional brand'},
+            {'value': 'WEBSITE_VISITS', 'label': 'Website Visits', 'description': 'Drive B2B traffic'},
+            {'value': 'ENGAGEMENT', 'label': 'Engagement', 'description': 'Boost content engagement'},
+            {'value': 'LEAD_GENERATION', 'label': 'Lead Generation', 'description': 'Collect B2B leads'}
+        ]
+    }
+    
+    platform_objectives = objectives.get(platform.lower(), [])
+    
+    if not platform_objectives:
+        raise HTTPException(status_code=404, detail=f"Platform '{platform}' not supported")
+    
+    return {
+        "success": True,
+        "platform": platform,
+        "objectives": platform_objectives
+    }
+
+
 
 
 # ========== ADS MANAGEMENT ==========
@@ -1679,4 +1758,232 @@ def generate_basic_recommendations(
         'creative_suggestions': ['Test video ads', 'Add carousel format'],
         'estimated_improvement': '15-25%' if priority_actions else '5-10%'
     }
+
+
+
+@router.post("/guidance/objective", summary="Get objective-based campaign guidance")
+async def get_objective_guidance(
+    request: ObjectiveGuidanceRequest,
+    current_user: dict = Depends(require_admin_or_employee)
+):
+    """
+    Get AI-powered objective-based guidance for campaign creation
+    Returns platform-specific recommendations including:
+    - Ad formats
+    - Placements
+    - Bidding strategies
+    - Budget allocation
+    - Targeting refinements
+    - Performance expectations
+    """
+    try:
+        guidance = await ad_service.get_objective_based_guidance(
+            platform=request.platform,
+            objective=request.objective,
+            budget=request.budget,
+            target_audience=request.target_audience,
+            industry=request.industry
+        )
+        
+        return {
+            "success": True,
+            "guidance": guidance
+        }
+        
+    except Exception as e:
+        print(f"❌ Error getting objective guidance: {str(e)}")
+        print(traceback.format_exc())
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get guidance: {str(e)}"
+        )
+
+
+@router.post("/media/upload", summary="Upload media file for ads")
+async def upload_media(
+    file: UploadFile = File(...),
+    platform: str = Body(...),
+    campaign_id: int = Body(...),
+    current_user: dict = Depends(require_admin_or_employee)
+):
+    """
+    Upload media file (image/video) to specified platform
+    Returns media ID that can be used in ad creation
+    
+    Supported formats:
+    - Images: JPG, PNG (max 30MB)
+    - Videos: MP4, MOV (max 4GB)
+    """
+    try:
+        # Validate file size
+        file.file.seek(0, 2)
+        file_size = file.file.tell()
+        file.file.seek(0)
+        
+        max_size = 30 * 1024 * 1024  # 30MB for images
+        if file.content_type.startswith('video'):
+            max_size = 4 * 1024 * 1024 * 1024  # 4GB for videos
+        
+        if file_size > max_size:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File too large. Max size: {max_size / (1024 * 1024):.0f}MB"
+            )
+        
+        # Upload to platform
+        result = await ad_service.upload_media_file(
+            file=file,
+            platform=platform
+        )
+        
+        # Store in database
+        connection = get_db_connection()
+        cursor = connection.cursor(pymysql.cursors.DictCursor)
+        
+        cursor.execute("""
+            INSERT INTO media_assets (
+                campaign_id, platform, media_id, media_url, 
+                file_name, file_type, uploaded_by
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (
+            campaign_id,
+            platform,
+            result['media_id'],
+            result.get('url', ''),
+            file.filename,
+            file.content_type,
+            current_user['user_id']
+        ))
+        
+        connection.commit()
+        asset_id = cursor.lastrowid
+        
+        cursor.close()
+        connection.close()
+        
+        return {
+            "success": True,
+            "asset_id": asset_id,
+            "media_id": result['media_id'],
+            "url": result.get('url'),
+            "platform": platform,
+            "message": "Media uploaded successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error uploading media: {str(e)}")
+        print(traceback.format_exc())
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to upload media: {str(e)}"
+        )
+
+
+# ========== NEW ENDPOINT: PLATFORM-SPECIFIC AD CREATION ==========
+
+@router.post("/ads/create-platform-specific", summary="Create platform-specific ad")
+async def create_platform_specific_ad(
+    ad: PlatformSpecificAdCreate,
+    current_user: dict = Depends(require_admin_or_employee)
+):
+    """
+    Create ad with platform-specific structure and requirements
+    
+    Meta: Supports Feed, Stories, Reels, Carousel
+    Google: Supports Search, Display, Video, Shopping
+    LinkedIn: Supports Sponsored Content, Message Ads, Text Ads
+    """
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor(pymysql.cursors.DictCursor)
+        
+        # Get campaign details
+        cursor.execute("""
+            SELECT * FROM ad_campaigns WHERE campaign_id = %s
+        """, (ad.campaign_id,))
+        campaign = cursor.fetchone()
+        
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        
+        # Prepare ad data
+        ad_data = {
+            'ad_name': ad.ad_name,
+            'primary_text': ad.primary_text,
+            'headline': ad.headline,
+            'description': ad.description,
+            'destination_url': ad.destination_url,
+            'call_to_action': ad.call_to_action,
+            'platform_specific_data': ad.platform_specific_data
+        }
+        
+        # Create platform-specific ad
+        result = await ad_service.create_platform_specific_ad(
+            platform=ad.platform,
+            campaign_data=campaign,
+            ad_data=ad_data,
+            media_ids=ad.media_ids
+        )
+        
+        # Store ad in database
+        cursor.execute("""
+            INSERT INTO ads (
+                campaign_id, ad_name, ad_format, primary_text, headline,
+                description, media_urls, external_ad_id, status
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            ad.campaign_id,
+            ad.ad_name,
+            ad.platform_specific_data.get('format', 'standard') if ad.platform_specific_data else 'standard',
+            ad.primary_text,
+            ad.headline,
+            ad.description,
+            json.dumps(ad.media_urls),
+            result.get('ad_id'),
+            'paused'
+        ))
+        
+        connection.commit()
+        ad_id = cursor.lastrowid
+        
+        # Update campaign with external IDs
+        if result.get('campaign_id'):
+            cursor.execute("""
+                UPDATE ad_campaigns 
+                SET external_campaign_id = %s
+                WHERE campaign_id = %s
+            """, (result['campaign_id'], ad.campaign_id))
+            connection.commit()
+        
+        return {
+            "success": True,
+            "ad_id": ad_id,
+            "external_ad_id": result.get('ad_id'),
+            "platform_result": result,
+            "message": "Platform-specific ad created successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        print(f"❌ Error creating platform-specific ad: {str(e)}")
+        print(traceback.format_exc())
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create ad: {str(e)}"
+        )
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
 
